@@ -1,0 +1,55 @@
+---
+description: Định dạng commit message Conventional Commits cho dự án backend
+alwaysApply: true
+---
+
+# Commit message
+
+Dùng [Conventional Commits](https://www.conventionalcommits.org/) — tiếng Anh cho type/scope, mô tả ngắn gọn.
+
+## Cấu trúc
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+```
+
+- **subject**: imperative, ≤72 ký tự, không chấm cuối dòng
+- **scope** (tùy chọn): module — `auth`, `user`, `order`, `api`, `config`, `db`
+
+## Type
+
+| Type | Khi dùng |
+|------|----------|
+| `feat` | Tính năng mới |
+| `fix` | Sửa bug |
+| `refactor` | Đổi cấu trúc, không đổi hành vi |
+| `test` | Thêm/sửa test |
+| `docs` | Tài liệu |
+| `chore` | Build, deps, tooling |
+| `perf` | Tối ưu hiệu năng |
+| `ci` | Pipeline CI |
+
+## Ví dụ
+
+```
+feat(auth): add JWT login endpoint
+
+fix(user): prevent duplicate email on register
+
+refactor(order): extract validation to service layer
+
+test(auth): add integration test for login API
+```
+
+## Trên nhánh feature
+
+- Mỗi commit nên là một thay đổi logic rõ ràng.
+- Trước merge `dev`: có thể squash nếu team yêu cầu PR sạch (hỏi user trước khi squash/rebase interactive).
+
+## Agent tạo commit
+
+1. `git status`, `git diff`, `git log -5` để bám style repo.
+2. Không stage/commit file secrets.
+3. Message phản ánh **why**, không chỉ liệt kê file.

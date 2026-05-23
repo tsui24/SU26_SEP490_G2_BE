@@ -1,0 +1,60 @@
+---
+description: Quy trình nhánh dev/prod và merge feature cho SU26_SEP490_G2_BE
+alwaysApply: true
+---
+
+# Git branch workflow (dev / prod)
+
+## Nhánh chính
+
+| Nhánh | Mục đích |
+|-------|----------|
+| `prod` | Code sạch, sẵn sàng deploy production |
+| `dev` | Môi trường tích hợp / test trước khi lên prod |
+| `<action>/<dev>/<feature>` | Phát triển từng task, **không** commit trực tiếp lên `dev` hoặc `prod` |
+
+## Luồng feature (bắt buộc)
+
+1. **Bắt đầu feature**: `git fetch origin` → checkout `prod` → `git pull origin prod` → tạo nhánh `<action>/<tên-dev>/<tên-feature>` (xem mục Đặt tên nhánh).
+2. **Phát triển**: Commit trên nhánh feature; test local (`mvn test` hoặc theo yêu cầu task).
+3. **Merge vào dev**: Trên nhánh feature → `git fetch origin` → `git pull origin dev` (cập nhật dev mới nhất) → merge/rebase dev vào feature nếu cần → merge feature vào `dev` (qua PR hoặc merge local theo team) → push `dev`.
+4. **Test trên dev**: Chỉ khi dev OK mới chuyển bước 5.
+5. **Lên prod**: Trên nhánh feature (hoặc nhánh PR) → `git fetch origin` → **rebase lên `prod` mới nhất** (`git rebase origin/prod`) → giải quyết conflict → tạo **PR feature → `prod`** (không merge thẳng prod nếu team dùng review).
+
+## Cấm / tránh
+
+- Không commit trực tiếp lên `prod` (trừ hotfix khẩn cấp có quy ước riêng).
+- Không merge `dev` → `prod` hàng loạt nếu chưa test dev; mỗi feature lên prod qua PR đã rebase prod.
+- Không `git push --force` lên `prod` hoặc `dev` trừ khi user yêu cầu rõ và đã đồng ý team.
+- Không commit file secrets: `.env`, credentials, `application-local.properties` có mật khẩu thật.
+
+## Đặt tên nhánh
+
+Cấu trúc bắt buộc (3 cấp, phân tách `/`):
+
+```
+<action>/<tên-người-phát-triển>/<tên-feature>
+```
+
+| Phần | Giá trị | Quy tắc |
+|------|--------|---------|
+| `action` | `feature`, `fix`, `hotfix`, `chore`, … | Hành động / loại công việc |
+| tên dev | ví dụ `nguyen-van-a`, `minh.le` | Chữ thường, kebab-case hoặc username Git; **không** dấu cách |
+| tên feature | ví dụ `user-login`, `order-api` | Chữ thường, kebab-case; mô tả ngắn task |
+
+**Ví dụ**
+
+- `feature/nguyen-van-a/user-login`
+- `fix/tran-b/duplicate-email-validation`
+- `hotfix/le-c/payment-timeout` (tách từ `prod`, PR vào `prod`, sync về `dev`)
+
+Agent tạo nhánh: hỏi hoặc dùng tên dev user cung cấp; không bỏ cấp giữa (không `feature/user-login`).
+
+## Khi agent hỗ trợ Git
+
+- Luôn `git fetch` trước khi pull/rebase.
+- Trước merge vào `dev`: pull `origin dev` mới nhất.
+- Trước PR vào `prod`: rebase `origin/prod` trên nhánh feature.
+- Chỉ tạo commit khi user **yêu cầu** commit; không tự push remote trừ khi user yêu cầu.
+
+Chi tiết lệnh từng bước: skill `git-feature-workflow` trong `.cursor/skills/`.

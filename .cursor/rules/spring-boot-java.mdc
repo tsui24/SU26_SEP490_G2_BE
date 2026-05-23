@@ -1,0 +1,96 @@
+---
+description: Convention code Spring Boot Java 17 cho SU26_SEP490_G2_BE
+globs: "**/*.java"
+alwaysApply: false
+---
+
+# Spring Boot backend conventions
+
+## Stack
+
+- Java 17, Spring Boot 4.x, Maven
+- Package gốc: `com.capstone.su26_sep490_g2_be`
+- JPA, Security, Validation, Web MVC, WebClient, Lombok, MySQL, springdoc OpenAPI (Swagger UI)
+
+## Cấu trúc package
+
+```
+controller/   # REST — luôn trả ResponseEntity, có Swagger
+service/      # business logic, @Transactional
+repository/   # JpaRepository
+entity/       # @Entity — không expose ra API
+dto/
+  request/    # input — đặt tên *Request (vd. CreateUserRequest)
+  response/   # output — đặt tên *Response (vd. UserResponse); ApiResponse wrapper
+enums/        # enum dùng chung; message lỗi → ErrorCode
+util/         # hàm static/helper dùng chung (không business logic)
+api/          # gọi service bên ngoài — WebClient, build URL tại đây
+config/       # Security, OpenAPI, WebClient bean, …
+exception/    # @ControllerAdvice, BusinessException
+```
+
+## DTO naming (`dto/request`, `dto/response`)
+
+| Loại | Package | Tên class | Ví dụ |
+|------|---------|-----------|--------|
+| Input (body, form, command) | `dto.request` | `{Tên}Request` | `CreateUserRequest`, `LoginRequest` |
+| Output (data trả client) | `dto.response` | `{Tên}Response` | `UserResponse`, `OrderDetailResponse` |
+| Wrapper API | `dto.response` | `ApiResponse<T>` | `ApiResponse<UserResponse>` |
+
+- **Request**: chỉ field client gửi lên; `@Valid` + constraint (`@NotBlank`, …); `@Schema` cho Swagger.
+- **Response**: chỉ field cần trả ra; không lộ entity; map từ service → `XxxResponse`.
+- Không đặt tên `UserDto`, `UserInput` — luôn hậu tố `Request` / `Response`.
+- Một endpoint POST/PUT dùng đúng một `XxxRequest`; GET trả `XxxResponse` (trong `ApiResponse`).
+
+```java
+@PostMapping
+public ResponseEntity<ApiResponse<UserResponse>> create(
+        @Valid @RequestBody CreateUserRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(userService.create(request)));
+}
+```
+
+## Controller & ResponseEntity
+
+- Mọi endpoint public trả **`ResponseEntity<...>`** (không trả thẳng object/DTO).
+- Body thống nhất qua `ApiResponse<T>` bọc `XxxResponse` (success/error).
+- HTTP status khớp nghĩa: `201` tạo mới, `204` xóa không body, `404`/`400` qua exception + `ErrorCode`.
+
+```java
+@GetMapping("/{id}")
+public ResponseEntity<ApiResponse<UserResponse>> getById(@PathVariable Long id) {
+    return ResponseEntity.ok(ApiResponse.success(userService.getById(id)));
+}
+```
+
+## Message lỗi = enum
+
+- Không hardcode chuỗi lỗi trong controller/service.
+- Định nghĩa trong `enums.ErrorCode` (hoặc enum nhóm): `code`, `message`, `HttpStatus`.
+- Ném `BusinessException(ErrorCode.XXX)`; `GlobalExceptionHandler` map sang `ResponseEntity<ApiResponse<Void>>`.
+
+## Package `api` (external)
+
+- Mỗi integration = class riêng (vd. `PaymentGatewayApiClient`).
+- Inject `WebClient.Builder`; build URL bằng `WebClientUriBuilder` trong `util` hoặc method private có base URL từ config.
+- Không gọi WebClient trực tiếp từ `controller`/`service` nội bộ — chỉ qua lớp trong `api/`.
+
+## Swagger (bắt buộc trên controller/API)
+
+- Class: `@Tag(name = "...", description = "...")`
+- Method: `@Operation(summary = "...", description = "...")`
+- Params/body: `@Parameter`, `@io.swagger.v3.oas.annotations.parameters.RequestBody` khi cần
+- Response: `@ApiResponse` / `@ApiResponses` (200, 400, 404, …)
+- DTO: `@Schema` trên field quan trọng
+
+UI: `/swagger-ui.html` — mọi controller mới phải có đủ annotation trước khi merge `dev`.
+
+## Code style
+
+- Constructor injection; controller mỏng; `@Valid` trên request body.
+- Không commit secret trong `application.properties`.
+
+## Trước merge dev
+
+`mvn -q test` (tối thiểu).
