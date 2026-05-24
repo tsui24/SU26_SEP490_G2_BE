@@ -11,6 +11,13 @@ spring:
     properties:
       hibernate.format_sql: true
 
+# Dev: cho phép mọi origin (React/Vite/Angular/Next trên localhost bất kỳ port)
+app:
+  cors:
+    allowed-origin-patterns:
+      - "*"
+    allow-credentials: false
+
 logging:
   level:
     com.capstone.su26_sep490_g2_be: DEBUG
