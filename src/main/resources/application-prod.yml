@@ -9,6 +9,12 @@ spring:
       ddl-auto: update
     show-sql: false
 
+# Prod: chỉ định domain frontend qua env (vd. https://app.example.com)
+app:
+  cors:
+    allowed-origin-patterns:
+      - ${CORS_ALLOWED_ORIGIN:https://your-frontend-domain.com}
+
 logging:
   level:
     com.capstone.su26_sep490_g2_be: INFO
