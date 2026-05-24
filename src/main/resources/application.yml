@@ -24,6 +24,25 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   external-api:
     base-url: ${EXTERNAL_API_BASE_URL:http://localhost:8081}
+  cors:
+    allowed-origin-patterns:
+      - http://localhost:*
+      - http://127.0.0.1:*
+      - https://localhost:*
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+      - HEAD
+    allowed-headers:
+      - "*"
+    exposed-headers:
+      - Authorization
+    allow-credentials: true
+    max-age: 3600
 
 # Swagger
 springdoc:
