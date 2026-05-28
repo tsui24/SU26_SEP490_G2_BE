@@ -13,6 +13,9 @@ public enum ErrorCode {
 	COMMON_NOT_FOUND("COMMON_002", "Resource not found", HttpStatus.NOT_FOUND),
 	COMMON_INTERNAL_ERROR("COMMON_500", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
 	EXTERNAL_API_ERROR("EXT_001", "External API call failed", HttpStatus.BAD_GATEWAY),
+	RESOURCE_NOT_FOUND("COMMON_003", "Resource not found", HttpStatus.NOT_FOUND),
+	DUPLICATE_RESOURCE("COMMON_004", "Resource already exists", HttpStatus.CONFLICT),
+	INVALID_OPERATION("COMMON_005", "Operation not allowed in current state", HttpStatus.UNPROCESSABLE_ENTITY),
 
 	// Auth
 	AUTH_INVALID_CREDENTIALS("AUTH_001", "Invalid email or password", HttpStatus.UNAUTHORIZED),
