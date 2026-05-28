@@ -11,11 +11,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Tag(name = "Manager", description = "Manager APIs — requires MANAGER role")
 @SecurityRequirement(name = "bearerAuth")
@@ -32,15 +31,17 @@ public class ManagerController {
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lấy danh sách thành công"),
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền")
 	})
-	@GetMapping("accounts/staffs")
-	public ResponseEntity<ApiResponse<List<EmployeeAccountResponse>>> getStaffs(
+	@GetMapping("/accounts/staffs")
+	public ResponseEntity<ApiResponse<Page<EmployeeAccountResponse>>> getStaffs(
 			@Parameter(description = "Từ khóa tìm kiếm lọc theo tên (fullName hoặc displayName), số điện thoại hoặc email")
-			@RequestParam(required = false) String search) {
-		List<EmployeeAccountResponse> response = accountService.getStaffsByManager(search);
+			@RequestParam(required = false) String search,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		Page<EmployeeAccountResponse> response = accountService.getStaffsByManager(search, page, size);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
-	@Operation(summary = " Manager can create Staff account",
+	@Operation(summary = "Manager can create Staff account",
 			description = "Tạo Staff kèm profile cơ bản (avatar, gender, ...). Không có billiard ranking.")
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Tạo Staff thành công"),
@@ -62,10 +63,10 @@ public class ManagerController {
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Nhân viên không tồn tại")
 	})
-	@PutMapping("accounts/staffs/{id}/deactivate")
+	@PutMapping("/accounts/staffs/{id}/deactivate")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateEmployee(
 			@PathVariable Long id) {
 		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
-		return ResponseEntity.ok(ApiResponse.success("Employee account deactivated successfully", response));
+		return ResponseEntity.ok(ApiResponse.success("Staff account deactivated successfully", response));
 	}
 }
