@@ -4,7 +4,6 @@ import com.capstone.su26_sep490_g2_be.dto.request.CreateManagerAccountRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.CreateStaffAccountRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.EmployeeAccountResponse;
-import com.capstone.su26_sep490_g2_be.dto.response.UserResponse;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -13,11 +12,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Tag(name = "Owner", description = "Owner management APIs — requires OWNER role")
 @SecurityRequirement(name = "bearerAuth")
@@ -65,12 +63,14 @@ public class OwnerController {
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền")
 	})
 	@GetMapping("/employees")
-	public ResponseEntity<ApiResponse<List<EmployeeAccountResponse>>> getEmployees(
+	public ResponseEntity<ApiResponse<Page<EmployeeAccountResponse>>> getEmployees(
 			@Parameter(description = "Mã vai trò cần lọc (STAFF hoặc MANAGER)")
 			@RequestParam(required = false) String role,
 			@Parameter(description = "Từ khóa tìm kiếm theo tên (fullName hoặc displayName)")
-			@RequestParam(required = false) String search) {
-		List<EmployeeAccountResponse> response = accountService.getEmployees(role, search);
+			@RequestParam(required = false) String search,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		Page<EmployeeAccountResponse> response = accountService.getEmployees(role, search, page, size);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
