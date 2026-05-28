@@ -20,6 +20,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class AccountServiceImpl implements AccountService {
@@ -155,6 +158,66 @@ public class AccountServiceImpl implements AccountService {
 				.build();
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public List<EmployeeAccountResponse> getEmployees(String role, String search) {
+		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
+		String roleParam = (role == null || role.trim().isEmpty()) ? null : role.trim().toUpperCase();
+
+		if (roleParam != null && !roleParam.equals("STAFF") && !roleParam.equals("MANAGER")) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Role filter must be STAFF or MANAGER");
+		}
+
+		List<User> employees = userRepository.searchEmployees(roleParam, searchParam);
+
+		return employees.stream()
+				.map(user -> toEmployeeResponse(user, user.getProfile()))
+				.collect(Collectors.toList());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public EmployeeAccountResponse getEmployeeDetail(Long id) {
+		User user = userRepository.findById(id)
+				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+		validateEmployeeRole(user);
+
+		return toEmployeeResponse(user, user.getProfile());
+	}
+
+	@Override
+	@Transactional
+	public EmployeeAccountResponse deactivateEmployee(Long id) {
+		User user = userRepository.findById(id)
+				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+		validateEmployeeRole(user);
+
+		user.setStatus(UserStatus.LOCKED);
+		user = userRepository.save(user);
+
+		return toEmployeeResponse(user, user.getProfile());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<EmployeeAccountResponse> getStaffsByManager(String search) {
+		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
+		List<User> staffs = userRepository.searchStaffsByManager(searchParam);
+
+		return staffs.stream()
+				.map(user -> toEmployeeResponse(user, user.getProfile()))
+				.collect(Collectors.toList());
+	}
+
+	private void validateEmployeeRole(User user) {
+		String roleCode = user.getRole().getCode();
+		if (!"STAFF".equals(roleCode) && !"MANAGER".equals(roleCode)) {
+			throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
+		}
+	}
+
 	private EmployeeAccountResponse toEmployeeResponse(User user, UserProfile profile) {
 		return EmployeeAccountResponse.builder()
 				.id(user.getId())
@@ -162,12 +225,12 @@ public class AccountServiceImpl implements AccountService {
 				.phone(user.getPhone())
 				.role(user.getRole().getCode())
 				.status(user.getStatus().name())
-				.fullName(profile.getFullName())
-				.displayName(profile.getDisplayName())
-				.avatarUrl(profile.getAvatarUrl())
-				.dateOfBirth(profile.getDateOfBirth())
-				.gender(profile.getGender())
-				.bio(profile.getBio())
+				.fullName(profile != null ? profile.getFullName() : null)
+				.displayName(profile != null ? profile.getDisplayName() : null)
+				.avatarUrl(profile != null ? profile.getAvatarUrl() : null)
+				.dateOfBirth(profile != null ? profile.getDateOfBirth() : null)
+				.gender(profile != null ? profile.getGender() : null)
+				.bio(profile != null ? profile.getBio() : null)
 				.build();
 	}
 }

@@ -32,7 +32,12 @@ public enum ErrorCode {
 	// Profile
 	PROFILE_ALREADY_EXISTS("PROFILE_001", "Profile already exists", HttpStatus.CONFLICT),
 	PROFILE_NOT_FOUND("PROFILE_002", "Profile not found", HttpStatus.NOT_FOUND),
-	PROFILE_ONLY_FOR_PLAYER("PROFILE_003", "Only Player accounts can create a player profile", HttpStatus.FORBIDDEN);
+	PROFILE_ONLY_FOR_PLAYER("PROFILE_003", "Only Player accounts can create a player profile", HttpStatus.FORBIDDEN),
+
+	// Employee Management
+	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Employee not found", HttpStatus.NOT_FOUND),
+	INVALID_EMPLOYEE_ROLE("EMPLOYEE_002", "User is not a Staff or Manager", HttpStatus.BAD_REQUEST);
+
 	private final String code;
 	private final String message;
 	private final HttpStatus httpStatus;
