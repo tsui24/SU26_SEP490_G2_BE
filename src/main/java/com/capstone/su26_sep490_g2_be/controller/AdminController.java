@@ -5,6 +5,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.EmployeeAccountResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.UserResponse;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
+import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,7 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,21 +39,21 @@ public class AdminController {
 				.body(ApiResponse.success("Owner account created", response));
 	}
 
-	@Operation(summary = "Get, search, and filter accounts",
-			description = "Lấy danh sách các tài khoản. Có hỗ trợ lọc theo role và tìm kiếm theo tên.")
+	@Operation(summary = "Get all , search, and filter accounts",
+			description = "Lấy danh sách các tài khoản. Có hỗ trợ lọc theo role và tìm kiếm theo tên hoặc email.")
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lấy danh sách thành công"),
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền")
 	})
 	@GetMapping("/accounts")
-	public ResponseEntity<ApiResponse<Page<EmployeeAccountResponse>>> getEmployees(
+	public ResponseEntity<ApiResponse<PageResponse<EmployeeAccountResponse>>> getUsers(
 			@Parameter(description = "Mã vai trò cần lọc (STAFF hoặc MANAGER hoặc OWNER hoặc PLAYER)")
 			@RequestParam(required = false) String role,
 			@Parameter(description = "Từ khóa tìm kiếm theo tên (fullName hoặc displayName)")
 			@RequestParam(required = false) String search,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
-		Page<EmployeeAccountResponse> response = accountService.getEmployees(role, search, page, size);
+		PageResponse<EmployeeAccountResponse> response = accountService.getUsers(role, search, page, size);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
