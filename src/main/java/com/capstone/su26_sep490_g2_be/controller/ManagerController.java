@@ -55,6 +55,20 @@ public class ManagerController {
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success("Staff account created", response));
 	}
+	@Operation(summary = "View employee details",
+			description = "Xem thông tin chi tiết của một nhân viên  theo ID.")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lấy chi tiết thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Nhân viên không tồn tại")
+	})
+	@GetMapping("/employees/{id}")
+	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> getEmployeeDetail(
+			@PathVariable Long id) {
+		EmployeeAccountResponse response = accountService.getEmployeeDetail(id);
+		return ResponseEntity.ok(ApiResponse.success(response));
+	}
+
 
 	@Operation(summary = "Manager can deactivate staff account",
 			description = "Vô hiệu hóa tài khoản của một nhân viên (chuyển trạng thái sang LOCKED).")
