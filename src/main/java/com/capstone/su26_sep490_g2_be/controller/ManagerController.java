@@ -55,7 +55,7 @@ public class ManagerController {
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success("Staff account created", response));
 	}
-	@Operation(summary = "View employee details",
+	@Operation(summary = "View staff details",
 			description = "Xem thông tin chi tiết của một nhân viên  theo ID.")
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lấy chi tiết thành công"),

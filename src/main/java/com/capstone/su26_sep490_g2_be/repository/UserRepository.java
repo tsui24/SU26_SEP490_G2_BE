@@ -1,6 +1,7 @@
 package com.capstone.su26_sep490_g2_be.repository;
 
 import com.capstone.su26_sep490_g2_be.entity.User;
+import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,7 +17,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	boolean existsByEmail(String email);
 	boolean existsByPhone(String phoneNumber);
 
-
+	// Tìm user theo ID và trạng thái ACTIVE cùng một lúc
+	Optional<User> findByIdAndStatus(Long id, UserStatus status);
 	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
 			"WHERE r.code IN ('STAFF', 'MANAGER') " +
 			"AND u.status = 'ACTIVE' " +

@@ -161,7 +161,7 @@ public class AccountServiceImpl implements AccountService {
 	@Override
 	@Transactional(readOnly = true)
 	public EmployeeAccountResponse getEmployeeDetail(Long id) {
-		User user = userRepository.findById(id)
+		User user = userRepository.findByIdAndStatus(id, UserStatus.ACTIVE)
 				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
 		validateEmployeeRole(user);
 		return toEmployeeResponse(user, user.getProfile());
