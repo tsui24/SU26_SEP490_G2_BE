@@ -12,6 +12,7 @@ import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.repository.RoleRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
@@ -114,7 +115,7 @@ public class AccountServiceImpl implements AccountService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public Page<EmployeeAccountResponse> getEmployees(String role, String search, int page, int size) {
+	public PageResponse<EmployeeAccountResponse> getUsers(String role, String search, int page, int size) {
 		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
 		String roleParam = (role == null || role.trim().isEmpty()) ? null : role.trim().toUpperCase();
 
@@ -125,20 +126,36 @@ public class AccountServiceImpl implements AccountService {
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
-		return userRepository.searchUsers(roleParam, searchParam, pageable)
-				.map(user -> toEmployeeResponse(user, user.getProfile()));
+		Page<User> userPage = userRepository.searchUsers(roleParam, searchParam, pageable);
+		return PageResponse.of(userPage, user -> toEmployeeResponse(user, user.getProfile()));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public PageResponse<EmployeeAccountResponse>getEmployees(String role, String search, int page, int size) {
+		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
+		String roleParam = (role == null || role.trim().isEmpty()) ? null : role.trim().toUpperCase();
+
+		if (roleParam != null && !roleParam.equals("STAFF") && !roleParam.equals("MANAGER")) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Role filter must be STAFF or MANAGER");
+		}
+
+		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+
+		Page<User> userPage = userRepository.searchEmployees(roleParam, searchParam, pageable);
+		return PageResponse.of(userPage, user -> toEmployeeResponse(user, user.getProfile()));
 	}
 
 
 	@Override
 	@Transactional(readOnly = true)
-	public Page<EmployeeAccountResponse> getStaffsByManager(String search, int page, int size) {
+	public PageResponse<EmployeeAccountResponse> getStaffsByManager(String search, int page, int size) {
 		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
-		return userRepository.searchStaffsByManager(searchParam, pageable)
-				.map(user -> toEmployeeResponse(user, user.getProfile()));
+		Page<User> userPage = userRepository.searchStaffsByManager(searchParam, pageable);
+		return PageResponse.of(userPage, user -> toEmployeeResponse(user, user.getProfile()));
 	}
 
 	@Override
