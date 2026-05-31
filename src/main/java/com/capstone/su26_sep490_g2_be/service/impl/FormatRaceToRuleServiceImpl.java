@@ -20,7 +20,7 @@ public class FormatRaceToRuleServiceImpl implements FormatRaceToRuleService {
 
 	@Override
 	public List<FormatRaceToRule> getByFormat(String formatCode) {
-		return repository.findByFormatCodeOrderBySortOrderAsc(formatCode);
+		return repository.findByFormatCodeOrderByIdAsc(formatCode);
 	}
 
 	@Override
@@ -35,7 +35,6 @@ public class FormatRaceToRuleServiceImpl implements FormatRaceToRuleService {
 				.map(existing -> {
 					existing.setRaceTo(rule.getRaceTo());
 					existing.setBracketPhase(rule.getBracketPhase());
-					existing.setSortOrder(rule.getSortOrder());
 					return repository.save(existing);
 				})
 				.orElseGet(() -> repository.save(rule));

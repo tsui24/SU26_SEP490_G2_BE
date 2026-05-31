@@ -7,5 +7,11 @@ import java.util.List;
 
 public interface TournamentFormatDefinitionRepository extends JpaRepository<TournamentFormatDefinition, String> {
 
-	List<TournamentFormatDefinition> findByIsActiveTrueOrderBySortOrderAsc();
+	List<TournamentFormatDefinition> findByIsActiveTrueOrderByCreatedAtAsc();
+
+	List<TournamentFormatDefinition> findByIsActiveOrderByCreatedAtAsc(Boolean isActive);
+
+	List<TournamentFormatDefinition> findAllByOrderByCreatedAtAsc();
+
+	boolean existsByHandlerKey(String handlerKey);
 }

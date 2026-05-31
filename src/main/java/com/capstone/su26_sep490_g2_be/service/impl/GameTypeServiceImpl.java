@@ -19,7 +19,7 @@ public class GameTypeServiceImpl implements GameTypeService {
 
 	@Override
 	public List<GameTypeDefinition> getActiveGameTypes() {
-		return repository.findByIsActiveTrueOrderBySortOrderAsc();
+		return repository.findByIsActiveTrueOrderByCreatedAtAsc();
 	}
 
 	@Override
@@ -47,7 +47,6 @@ public class GameTypeServiceImpl implements GameTypeService {
 		existing.setDescription(definition.getDescription());
 		existing.setDefaultRaceTo(definition.getDefaultRaceTo());
 		existing.setCompatibleTableTypes(definition.getCompatibleTableTypes());
-		existing.setSortOrder(definition.getSortOrder());
 		return repository.save(existing);
 	}
 
