@@ -37,6 +37,19 @@ public enum ErrorCode {
 	PROFILE_NOT_FOUND("PROFILE_002", "Profile not found", HttpStatus.NOT_FOUND),
 	PROFILE_ONLY_FOR_PLAYER("PROFILE_003", "Only Player accounts can create a player profile", HttpStatus.FORBIDDEN),
 
+	// Tournament config
+	FORMAT_CODE_EXISTS("FORMAT_001", "Format code already exists", HttpStatus.CONFLICT),
+	FORMAT_NOT_FOUND("FORMAT_002", "Format not found", HttpStatus.NOT_FOUND),
+	FORMAT_NOT_READY("FORMAT_003", "Format default config is not ready", HttpStatus.UNPROCESSABLE_ENTITY),
+	INVALID_FIELD_KEY("FORMAT_004", "Field key is not in catalog", HttpStatus.BAD_REQUEST),
+	INVALID_FIELD_FOR_FORMAT("FORMAT_005", "Field does not belong to format", HttpStatus.BAD_REQUEST),
+	SETUP_INCOMPLETE("FORMAT_006", "Format setup is incomplete", HttpStatus.UNPROCESSABLE_ENTITY),
+	ALREADY_BOOTSTRAPPED("FORMAT_007", "Format already has default config", HttpStatus.CONFLICT),
+	CONFIG_VALIDATION_FAILED("FORMAT_008", "Tournament config validation failed", HttpStatus.BAD_REQUEST),
+	CONFIG_INCOMPLETE("FORMAT_009", "Tournament config is incomplete", HttpStatus.UNPROCESSABLE_ENTITY),
+	INVALID_STATUS_TRANSITION("FORMAT_010", "Invalid status transition", HttpStatus.UNPROCESSABLE_ENTITY),
+	GAME_TYPE_NOT_FOUND("FORMAT_011", "Game type not found", HttpStatus.NOT_FOUND),
+
 	// Employee Management
 	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Employee not found", HttpStatus.NOT_FOUND),
 	INVALID_EMPLOYEE_ROLE("EMPLOYEE_002", "User is not a Staff or Manager", HttpStatus.BAD_REQUEST);

@@ -19,7 +19,7 @@ public class TournamentFormatServiceImpl implements TournamentFormatService {
 
 	@Override
 	public List<TournamentFormatDefinition> getActiveFormats() {
-		return repository.findByIsActiveTrueOrderBySortOrderAsc();
+		return repository.findByIsActiveTrueOrderByCreatedAtAsc();
 	}
 
 	@Override
@@ -45,9 +45,10 @@ public class TournamentFormatServiceImpl implements TournamentFormatService {
 		TournamentFormatDefinition existing = getByCode(code);
 		existing.setName(definition.getName());
 		existing.setDescription(definition.getDescription());
-		existing.setDefaultConfigJson(definition.getDefaultConfigJson());
-		existing.setConfigSchemaJson(definition.getConfigSchemaJson());
-		existing.setSortOrder(definition.getSortOrder());
+		existing.setHandlerKey(definition.getHandlerKey());
+		if (definition.getSchemaVersion() != null) {
+			existing.setSchemaVersion(definition.getSchemaVersion());
+		}
 		return repository.save(existing);
 	}
 
