@@ -8,9 +8,11 @@ import java.util.Optional;
 
 public interface FormatRaceToRuleRepository extends JpaRepository<FormatRaceToRule, Long> {
 
-	List<FormatRaceToRule> findByFormatCodeOrderBySortOrderAsc(String formatCode);
+	List<FormatRaceToRule> findByFormatCodeOrderByIdAsc(String formatCode);
 
 	Optional<FormatRaceToRule> findByFormatCodeAndRoundKey(String formatCode, String roundKey);
 
-	Optional<FormatRaceToRule> findByFormatCodeAndBracketPhaseOrderBySortOrderAsc(String formatCode, String bracketPhase);
+	Optional<FormatRaceToRule> findByFormatCodeAndBracketPhaseOrderByIdAsc(String formatCode, String bracketPhase);
+
+	long countByFormatCode(String formatCode);
 }

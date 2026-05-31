@@ -19,12 +19,12 @@ public class FormatConfigFieldServiceImpl implements FormatConfigFieldService {
 
 	@Override
 	public List<FormatConfigField> getByFormat(String formatCode) {
-		return repository.findByFormatCodeOrderBySortOrderAsc(formatCode);
+		return repository.findByFormatCodeOrderByIdAsc(formatCode);
 	}
 
 	@Override
 	public List<FormatConfigField> getVisibleByFormat(String formatCode) {
-		return repository.findByFormatCodeAndIsVisibleToOwnerTrueOrderBySortOrderAsc(formatCode);
+		return repository.findByFormatCodeAndIsVisibleToOwnerTrueOrderByIdAsc(formatCode);
 	}
 
 	@Override
@@ -41,7 +41,6 @@ public class FormatConfigFieldServiceImpl implements FormatConfigFieldService {
 					existing.setDefaultValue(field.getDefaultValue());
 					existing.setIsRequired(field.getIsRequired());
 					existing.setIsVisibleToOwner(field.getIsVisibleToOwner());
-					existing.setSortOrder(field.getSortOrder());
 					return repository.save(existing);
 				})
 				.orElseGet(() -> repository.save(field));

@@ -31,6 +31,9 @@ public class FormatRaceToRule {
 	@Column(name = "round_key", length = 50, nullable = false)
 	private String roundKey;
 
+	@Column(length = 255)
+	private String label;
+
 	@Column(name = "bracket_phase", length = 30, nullable = false)
 	private String bracketPhase;
 

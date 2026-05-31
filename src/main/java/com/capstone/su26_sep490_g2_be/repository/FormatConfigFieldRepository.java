@@ -8,11 +8,13 @@ import java.util.Optional;
 
 public interface FormatConfigFieldRepository extends JpaRepository<FormatConfigField, Long> {
 
-	List<FormatConfigField> findByFormatCodeOrderBySortOrderAsc(String formatCode);
+	List<FormatConfigField> findByFormatCodeOrderByIdAsc(String formatCode);
 
-	List<FormatConfigField> findByFormatCodeAndIsVisibleToOwnerTrueOrderBySortOrderAsc(String formatCode);
+	List<FormatConfigField> findByFormatCodeAndIsVisibleToOwnerTrueOrderByIdAsc(String formatCode);
 
 	Optional<FormatConfigField> findByFormatCodeAndFieldKey(String formatCode, String fieldKey);
 
 	boolean existsByFormatCodeAndFieldKey(String formatCode, String fieldKey);
+
+	long countByFormatCode(String formatCode);
 }
