@@ -43,6 +43,8 @@ public class SecurityConfig {
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(PUBLIC_URLS).permitAll()
+						.requestMatchers("/api/vi/profile/**").authenticated()
+
 						// Role-based URL authorization
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 						.requestMatchers("/api/v1/owner/**").hasRole("OWNER")

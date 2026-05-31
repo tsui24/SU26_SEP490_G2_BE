@@ -49,6 +49,11 @@ public enum ErrorCode {
 	CONFIG_INCOMPLETE("FORMAT_009", "Tournament config is incomplete", HttpStatus.UNPROCESSABLE_ENTITY),
 	INVALID_STATUS_TRANSITION("FORMAT_010", "Invalid status transition", HttpStatus.UNPROCESSABLE_ENTITY),
 	GAME_TYPE_NOT_FOUND("FORMAT_011", "Game type not found", HttpStatus.NOT_FOUND);
+  
+	// Employee Management
+	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Employee not found", HttpStatus.NOT_FOUND),
+	INVALID_EMPLOYEE_ROLE("EMPLOYEE_002", "User is not a Staff or Manager", HttpStatus.BAD_REQUEST);
+
 	private final String code;
 	private final String message;
 	private final HttpStatus httpStatus;
