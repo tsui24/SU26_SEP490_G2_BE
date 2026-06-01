@@ -6,11 +6,13 @@ import com.capstone.su26_sep490_g2_be.enums.FormatSetupStatus;
 
 public interface AdminTournamentConfigService {
 
-	ConfigFieldCatalogListResponse getConfigFieldCatalog(String scope, Boolean isActive);
+	PageResponse<ConfigFieldCatalogItemResponse> getConfigFieldCatalog(
+			String scope, Boolean isActive, int page, int size);
 
 	ConfigFieldCatalogItemResponse getConfigFieldCatalogItem(String fieldKey);
 
-	FormatListResponse listFormats(Boolean isActive, FormatSetupStatus setupStatus);
+	PageResponse<FormatListItemResponse> listFormats(
+			Boolean isActive, FormatSetupStatus setupStatus, int page, int size);
 
 	FormatDetailResponse getFormat(String code);
 
@@ -36,7 +38,7 @@ public interface AdminTournamentConfigService {
 
 	FormatBootstrapResponse bootstrapDefaults(String code, BootstrapDefaultsRequest request);
 
-	GameTypeListResponse listGameTypes();
+	PageResponse<GameTypeDetailResponse> listGameTypes(int page, int size);
 
 	GameTypeDetailResponse updateGameType(String code, UpdateGameTypeRequest request);
 }
