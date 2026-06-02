@@ -28,6 +28,9 @@ public class ApiResponse<T> {
 	@Schema(description = "Dữ liệu trả về")
 	private T data;
 
+	@Schema(description = "Chi tiết lỗi validation (nếu có)")
+	private java.util.List<ConfigValidationDetailResponse> details;
+
 	public static <T> ApiResponse<T> success(T data) {
 		return ApiResponse.<T>builder()
 				.success(true)

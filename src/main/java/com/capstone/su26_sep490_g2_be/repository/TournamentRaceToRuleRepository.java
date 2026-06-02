@@ -13,4 +13,6 @@ public interface TournamentRaceToRuleRepository extends JpaRepository<Tournament
 	Optional<TournamentRaceToRule> findByTournamentIdAndRoundKey(Long tournamentId, String roundKey);
 
 	void deleteByTournamentId(Long tournamentId);
+
+	void deleteByTournamentIdAndRoundKey(Long tournamentId, String roundKey);
 }
