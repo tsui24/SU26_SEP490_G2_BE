@@ -14,7 +14,12 @@ import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.AdminTournamentConfigService;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
+import com.capstone.su26_sep490_g2_be.util.PageableUtil;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,15 +37,12 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	private final GameTypeDefinitionRepository gameTypeRepository;
 
 	@Override
-	public ConfigFieldCatalogListResponse getConfigFieldCatalog(String scope, Boolean isActive) {
-		List<ConfigFieldDefinition> fields = resolveCatalogFields(scope, isActive);
-		List<ConfigFieldCatalogItemResponse> items = fields.stream()
-				.map(this::toCatalogItem)
-				.toList();
-		return ConfigFieldCatalogListResponse.builder()
-				.items(items)
-				.total(items.size())
-				.build();
+	public PageResponse<ConfigFieldCatalogItemResponse> getConfigFieldCatalog(
+			String scope, Boolean isActive, int page, int size) {
+		Pageable pageable = PageableUtil.create(page, size, "fieldKey");
+		Specification<ConfigFieldDefinition> spec = buildCatalogSpecification(scope, isActive);
+		Page<ConfigFieldDefinition> result = configFieldRepository.findAll(spec, pageable);
+		return PageResponse.of(result, this::toCatalogItem);
 	}
 
 	@Override
@@ -49,20 +51,24 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	}
 
 	@Override
-	public FormatListResponse listFormats(Boolean isActive, FormatSetupStatus setupStatus) {
-		List<TournamentFormatDefinition> formats = isActive != null
-				? formatRepository.findByIsActiveOrderByCreatedAtAsc(isActive)
-				: formatRepository.findAllByOrderByCreatedAtAsc();
+	public PageResponse<FormatListItemResponse> listFormats(
+			Boolean isActive, FormatSetupStatus setupStatus, int page, int size) {
+		if (setupStatus != null) {
+			List<TournamentFormatDefinition> all = isActive != null
+					? formatRepository.findByIsActiveOrderByCreatedAtAsc(isActive)
+					: formatRepository.findAllByOrderByCreatedAtAsc();
+			List<FormatListItemResponse> filtered = all.stream()
+					.map(this::toFormatListItem)
+					.filter(item -> item.getSetupStatus() == setupStatus)
+					.toList();
+			return PageResponse.of(filtered, page, size);
+		}
 
-		List<FormatListItemResponse> items = formats.stream()
-				.map(this::toFormatListItem)
-				.filter(item -> setupStatus == null || item.getSetupStatus() == setupStatus)
-				.toList();
-
-		return FormatListResponse.builder()
-				.items(items)
-				.total(items.size())
-				.build();
+		Pageable pageable = PageableUtil.create(page, size, "createdAt");
+		Page<TournamentFormatDefinition> formatPage = isActive != null
+				? formatRepository.findByIsActive(isActive, pageable)
+				: formatRepository.findAll(pageable);
+		return PageResponse.of(formatPage, this::toFormatListItem);
 	}
 
 	@Override
@@ -340,14 +346,9 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	}
 
 	@Override
-	public GameTypeListResponse listGameTypes() {
-		List<GameTypeDetailResponse> items = gameTypeRepository.findAllByOrderByCreatedAtAsc().stream()
-				.map(this::toGameTypeDetail)
-				.toList();
-		return GameTypeListResponse.builder()
-				.items(items)
-				.total(items.size())
-				.build();
+	public PageResponse<GameTypeDetailResponse> listGameTypes(int page, int size) {
+		Pageable pageable = PageableUtil.create(page, size, "createdAt");
+		return PageResponse.of(gameTypeRepository.findAll(pageable), this::toGameTypeDetail);
 	}
 
 	@Override
@@ -366,27 +367,23 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 		return toGameTypeDetail(gameType);
 	}
 
-	private List<ConfigFieldDefinition> resolveCatalogFields(String scope, Boolean isActive) {
-		boolean activeOnly = isActive == null || isActive;
-
-		if (scope != null && !scope.isBlank()) {
-			List<String> scopes = Arrays.stream(scope.split(","))
-					.map(String::trim)
-					.filter(s -> !s.isEmpty())
-					.toList();
-			if (activeOnly) {
-				return configFieldRepository.findByIsActiveTrueAndFieldScopeInOrderByFieldScopeAsc(scopes);
+	private Specification<ConfigFieldDefinition> buildCatalogSpecification(String scope, Boolean isActive) {
+		return (root, query, cb) -> {
+			List<Predicate> predicates = new ArrayList<>();
+			if (isActive != null) {
+				predicates.add(cb.equal(root.get("isActive"), isActive));
 			}
-			return configFieldRepository.findAll().stream()
-					.filter(f -> scopes.contains(f.getFieldScope()))
-					.sorted(Comparator.comparing(ConfigFieldDefinition::getFieldScope))
-					.toList();
-		}
-
-		if (activeOnly) {
-			return configFieldRepository.findByIsActiveTrueOrderByFieldScopeAsc();
-		}
-		return configFieldRepository.findAll();
+			if (scope != null && !scope.isBlank()) {
+				List<String> scopes = Arrays.stream(scope.split(","))
+						.map(String::trim)
+						.filter(s -> !s.isEmpty())
+						.toList();
+				if (!scopes.isEmpty()) {
+					predicates.add(root.get("fieldScope").in(scopes));
+				}
+			}
+			return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+		};
 	}
 
 	private FormatSetupStatusResponse buildSetupStatusResponse(TournamentFormatDefinition format) {
