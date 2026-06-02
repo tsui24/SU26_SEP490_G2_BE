@@ -87,4 +87,28 @@ public class PageResponse<T> {
 				.isLast(page.isLast())
 				.build();
 	}
+
+	/**
+	 * Phân trang in-memory khi filter không map trực tiếp xuống DB (vd. setupStatus tính toán).
+	 */
+	public static <T> PageResponse<T> of(List<T> all, int page, int size) {
+		if (all == null) {
+			return null;
+		}
+		int safeSize = Math.max(size, 1);
+		int safePage = Math.max(page, 0);
+		int total = all.size();
+		int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+		int from = Math.min(safePage * safeSize, total);
+		int to = Math.min(from + safeSize, total);
+
+		return PageResponse.<T>builder()
+				.content(all.subList(from, to))
+				.pageNumber(safePage)
+				.pageSize(safeSize)
+				.totalElements(total)
+				.totalPages(totalPages)
+				.isLast(totalPages == 0 || safePage >= totalPages - 1)
+				.build();
+	}
 }
