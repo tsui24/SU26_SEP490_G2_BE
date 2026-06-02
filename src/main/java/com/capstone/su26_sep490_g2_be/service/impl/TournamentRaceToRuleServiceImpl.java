@@ -56,4 +56,10 @@ public class TournamentRaceToRuleServiceImpl implements TournamentRaceToRuleServ
 	public void deleteByTournament(Long tournamentId) {
 		ruleRepository.deleteByTournamentId(tournamentId);
 	}
+
+	@Override
+	@Transactional
+	public void deleteByTournamentAndRoundKey(Long tournamentId, String roundKey) {
+		ruleRepository.deleteByTournamentIdAndRoundKey(tournamentId, roundKey);
+	}
 }
