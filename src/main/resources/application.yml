@@ -2,8 +2,16 @@ spring:
   application:
     name: SU26_SEP490_G2_BE
 
+  config:
+    import: optional:file:.env[.properties]
+
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  servlet:
+    multipart:
+      max-file-size: ${MINIO_MAX_FILE_SIZE_BYTES:5242880}
+      max-request-size: ${MINIO_MAX_FILE_SIZE_BYTES:5242880}
 
   jpa:
     open-in-view: false
@@ -24,6 +32,15 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   external-api:
     base-url: ${EXTERNAL_API_BASE_URL:http://localhost:8081}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:admin}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:sep490-images}
+    secure: ${MINIO_SECURE:false}
+    default-folder: ${MINIO_DEFAULT_FOLDER:images}
+    max-file-size-bytes: ${MINIO_MAX_FILE_SIZE_BYTES:5242880}
+    presigned-url-expiry-seconds: ${MINIO_PRESIGNED_URL_EXPIRY_SECONDS:3600}
   cors:
     allowed-origin-patterns:
       - http://localhost:*

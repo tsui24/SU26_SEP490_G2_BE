@@ -48,11 +48,17 @@ public enum ErrorCode {
 	CONFIG_VALIDATION_FAILED("FORMAT_008", "Tournament config validation failed", HttpStatus.BAD_REQUEST),
 	CONFIG_INCOMPLETE("FORMAT_009", "Tournament config is incomplete", HttpStatus.UNPROCESSABLE_ENTITY),
 	INVALID_STATUS_TRANSITION("FORMAT_010", "Invalid status transition", HttpStatus.UNPROCESSABLE_ENTITY),
-	GAME_TYPE_NOT_FOUND("FORMAT_011", "Game type not found", HttpStatus.NOT_FOUND);
-  
+	GAME_TYPE_NOT_FOUND("FORMAT_011", "Game type not found", HttpStatus.NOT_FOUND),
+
 	// Employee Management
 	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Employee not found", HttpStatus.NOT_FOUND),
-	INVALID_EMPLOYEE_ROLE("EMPLOYEE_002", "User is not a Staff or Manager", HttpStatus.BAD_REQUEST);
+	INVALID_EMPLOYEE_ROLE("EMPLOYEE_002", "User is not a Staff or Manager", HttpStatus.BAD_REQUEST),
+
+	// Storage (MinIO)
+	STORAGE_UPLOAD_FAILED("STORAGE_001", "Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR),
+	STORAGE_DOWNLOAD_FAILED("STORAGE_002", "Failed to download file", HttpStatus.INTERNAL_SERVER_ERROR),
+	STORAGE_OBJECT_NOT_FOUND("STORAGE_003", "File not found in storage", HttpStatus.NOT_FOUND),
+	STORAGE_INVALID_FILE("STORAGE_004", "Invalid file type or size", HttpStatus.BAD_REQUEST);
 
 	private final String code;
 	private final String message;
