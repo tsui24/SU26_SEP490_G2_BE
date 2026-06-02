@@ -33,4 +33,15 @@ public class JsonParseUtil {
 			return null;
 		}
 	}
+
+	public static String toJson(Object value) {
+		if (value == null) {
+			return null;
+		}
+		try {
+			return MAPPER.writeValueAsString(value);
+		} catch (Exception e) {
+			return null;
+		}
+	}
 }

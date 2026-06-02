@@ -18,4 +18,6 @@ public interface TournamentRaceToRuleService {
 	int resolveRaceTo(Long tournamentId, String formatCode, String roundKey);
 
 	void deleteByTournament(Long tournamentId);
+
+	void deleteByTournamentAndRoundKey(Long tournamentId, String roundKey);
 }
