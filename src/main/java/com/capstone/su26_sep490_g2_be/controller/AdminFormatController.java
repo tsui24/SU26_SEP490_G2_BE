@@ -21,13 +21,15 @@ public class AdminFormatController {
 
 	private final AdminTournamentConfigService adminTournamentConfigService;
 
-	@Operation(summary = "Danh sách thể thức")
+	@Operation(summary = "Danh sách thể thức (phân trang server-side)")
 	@GetMapping
-	public ResponseEntity<ApiResponse<FormatListResponse>> listFormats(
+	public ResponseEntity<ApiResponse<PageResponse<FormatListItemResponse>>> listFormats(
 			@RequestParam(required = false) Boolean isActive,
-			@RequestParam(required = false) FormatSetupStatus setupStatus) {
+			@RequestParam(required = false) FormatSetupStatus setupStatus,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
 		return ResponseEntity.ok(ApiResponse.success(
-				adminTournamentConfigService.listFormats(isActive, setupStatus)));
+				adminTournamentConfigService.listFormats(isActive, setupStatus, page, size)));
 	}
 
 	@Operation(summary = "Chi tiết thể thức")
