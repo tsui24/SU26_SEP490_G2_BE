@@ -16,6 +16,16 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
 		ErrorCode errorCode = ex.getErrorCode();
+		if (ex instanceof ConfigValidationException validationEx) {
+			return ResponseEntity
+					.status(errorCode.getHttpStatus())
+					.body(ApiResponse.<Void>builder()
+							.success(false)
+							.code(errorCode.getCode())
+							.message(errorCode.getMessage())
+							.details(validationEx.getDetails())
+							.build());
+		}
 		return ResponseEntity
 				.status(errorCode.getHttpStatus())
 				.body(ApiResponse.error(errorCode));

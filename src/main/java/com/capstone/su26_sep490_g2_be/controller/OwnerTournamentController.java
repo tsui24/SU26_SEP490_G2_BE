@@ -1,0 +1,140 @@
+package com.capstone.su26_sep490_g2_be.controller;
+
+import com.capstone.su26_sep490_g2_be.dto.request.*;
+import com.capstone.su26_sep490_g2_be.dto.response.*;
+import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+@Tag(name = "Owner — Tournaments", description = "Owner tạo và cấu hình giải đấu từ template Admin — requires OWNER role")
+@SecurityRequirement(name = "bearerAuth")
+@RestController
+@RequestMapping("/api/v1/owner")
+@RequiredArgsConstructor
+public class OwnerTournamentController {
+
+	private final OwnerTournamentService ownerTournamentService;
+
+	@Operation(summary = "Danh sách giải đấu", description = "Phân trang — chỉ giải do Owner tạo")
+	@GetMapping("/tournaments")
+	public ResponseEntity<ApiResponse<PageResponse<TournamentListItemResponse>>> listTournaments(
+			Authentication authentication,
+			@RequestParam(required = false) String status,
+			@RequestParam(required = false) String search,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.listTournaments(
+						extractUserId(authentication), true, status, search, page, size)));
+	}
+
+	@Operation(summary = "Danh sách thể thức", description = "Dropdown thể thức — chỉ format active và đã setup default")
+	@GetMapping("/formats")
+	public ResponseEntity<ApiResponse<OwnerFormatListResponse>> listFormats() {
+		return ResponseEntity.ok(ApiResponse.success(ownerTournamentService.listFormats()));
+	}
+
+	@Operation(summary = "Danh sách loại bi", description = "Dropdown loại bi active")
+	@GetMapping("/game-types")
+	public ResponseEntity<ApiResponse<OwnerGameTypeListResponse>> listGameTypes() {
+		return ResponseEntity.ok(ApiResponse.success(ownerTournamentService.listGameTypes()));
+	}
+
+	@Operation(summary = "Tạo giải đấu", description = "Wizard bước 1 — chọn game type và format từ cấu hình Admin")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Tạo thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Format chưa sẵn sàng")
+	})
+	@PostMapping("/tournaments")
+	public ResponseEntity<ApiResponse<CreateTournamentResponse>> createTournament(
+			Authentication authentication,
+			@Valid @RequestBody CreateTournamentRequest request) {
+		CreateTournamentResponse response = ownerTournamentService.createTournament(
+				extractUserId(authentication), request);
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(ApiResponse.success("Tournament created", response));
+	}
+
+	@Operation(summary = "Cập nhật giải đấu", description = "Sửa thông tin cơ bản khi status=DRAFT")
+	@PutMapping("/tournaments/{id}")
+	public ResponseEntity<ApiResponse<UpdateTournamentResponse>> updateTournament(
+			Authentication authentication,
+			@PathVariable Long id,
+			@Valid @RequestBody UpdateTournamentRequest request) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.updateTournament(extractUserId(authentication), id, request, true)));
+	}
+
+	@Operation(summary = "Chi tiết giải đấu")
+	@GetMapping("/tournaments/{id}")
+	public ResponseEntity<ApiResponse<TournamentDetailResponse>> getTournament(
+			Authentication authentication,
+			@PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.getTournament(extractUserId(authentication), id, true)));
+	}
+
+	@Operation(summary = "Load form config", description = "Wizard bước 2 — pre-fill từ Admin default, Owner có thể chỉnh")
+	@GetMapping("/tournaments/{id}/config-form")
+	public ResponseEntity<ApiResponse<TournamentConfigFormResponse>> getConfigForm(
+			Authentication authentication,
+			@PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.getConfigForm(extractUserId(authentication), id, true)));
+	}
+
+	@Operation(summary = "Lưu config giải", description = "Wizard bước 2 — lưu override config và race-to")
+	@PutMapping("/tournaments/{id}/config")
+	public ResponseEntity<ApiResponse<SaveTournamentConfigResponse>> saveConfig(
+			Authentication authentication,
+			@PathVariable Long id,
+			@Valid @RequestBody SaveTournamentConfigRequest request) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.saveConfig(extractUserId(authentication), id, request, true)));
+	}
+
+	@Operation(summary = "Config đã resolve", description = "Preview config trước mở đăng ký")
+	@GetMapping("/tournaments/{id}/config")
+	public ResponseEntity<ApiResponse<TournamentConfigResolvedResponse>> getResolvedConfig(
+			Authentication authentication,
+			@PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.getResolvedConfig(extractUserId(authentication), id, true)));
+	}
+
+	@Operation(summary = "Validate config giải")
+	@PostMapping("/tournaments/{id}/config/validate")
+	public ResponseEntity<ApiResponse<TournamentConfigValidateResponse>> validateConfig(
+			Authentication authentication,
+			@PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.validateConfig(extractUserId(authentication), id, true)));
+	}
+
+	@Operation(summary = "Đổi trạng thái giải", description = "Mở đăng ký hoặc chuyển trạng thái workflow")
+	@PatchMapping("/tournaments/{id}/status")
+	public ResponseEntity<ApiResponse<PatchTournamentStatusResponse>> patchStatus(
+			Authentication authentication,
+			@PathVariable Long id,
+			@Valid @RequestBody PatchTournamentStatusRequest request) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, true)));
+	}
+
+	private Long extractUserId(Authentication authentication) {
+		if (authentication == null || !(authentication.getCredentials() instanceof Long)) {
+			throw new BusinessException(ErrorCode.AUTH_INVALID_TOKEN);
+		}
+		return (Long) authentication.getCredentials();
+	}
+}
