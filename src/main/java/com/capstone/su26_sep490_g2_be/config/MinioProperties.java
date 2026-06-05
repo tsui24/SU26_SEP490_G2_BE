@@ -26,4 +26,10 @@ public class MinioProperties {
 	private long maxFileSizeBytes = 5_242_880L;
 
 	private int presignedUrlExpirySeconds = 3600;
+
+	private int connectTimeoutMs = 3_000;
+
+	private int readTimeoutMs = 5_000;
+
+	private int writeTimeoutMs = 5_000;
 }
