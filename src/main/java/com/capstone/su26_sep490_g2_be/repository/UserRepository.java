@@ -31,7 +31,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 
 	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
-			"WHERE r.code IN ('STAFF', 'MANAGER', 'OWNER', 'PLAYER') " +
+			"WHERE r.code IN ('ADMIN', 'STAFF', 'MANAGER', 'OWNER', 'PLAYER') " +
 			"AND u.status = 'ACTIVE' " +
 			"AND (:roleCode IS NULL OR r.code = :roleCode) " +
 			"AND (:search IS NULL OR LOWER(p.fullName) LIKE LOWER(CONCAT('%', :search, '%')) " +
