@@ -40,7 +40,7 @@ Chi tiết: `.cursor/skills/git-feature-workflow/SKILL.md`
 
 | Code | Mô tả | Ai tạo |
 |------|--------|--------|
-| ADMIN | Quản trị hệ thống | Seeded |
+| ADMIN | Quản trị hệ thống | ADMIN tạo (seed ban đầu) |
 | OWNER | Chủ chuỗi quán bi-a | ADMIN tạo |
 | MANAGER | Quản lý cơ sở | OWNER tạo |
 | STAFF | Nhân viên / trọng tài | OWNER tạo |

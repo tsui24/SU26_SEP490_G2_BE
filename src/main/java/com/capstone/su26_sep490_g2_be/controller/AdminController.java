@@ -39,6 +39,20 @@ public class AdminController {
 				.body(ApiResponse.success("Owner account created", response));
 	}
 
+	@Operation(summary = "Create Admin account", description = "Admin tạo tài khoản Admin (quản trị hệ thống)")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Tạo Admin thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email đã tồn tại")
+	})
+	@PostMapping("/accounts/admin")
+	public ResponseEntity<ApiResponse<UserResponse>> createAdmin(
+			@Valid @RequestBody CreateAccountRequest request) {
+		UserResponse response = accountService.createAccount(request, RoleCode.ADMIN, RoleCode.ADMIN);
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(ApiResponse.success("Admin account created", response));
+	}
+
 	@Operation(summary = "Get all , search, and filter accounts",
 			description = "Lấy danh sách các tài khoản. Có hỗ trợ lọc theo role và tìm kiếm theo tên hoặc email.")
 	@ApiResponses({
@@ -47,7 +61,7 @@ public class AdminController {
 	})
 	@GetMapping("/accounts")
 	public ResponseEntity<ApiResponse<PageResponse<EmployeeAccountResponse>>> getUsers(
-			@Parameter(description = "Mã vai trò cần lọc (STAFF hoặc MANAGER hoặc OWNER hoặc PLAYER)")
+			@Parameter(description = "Mã vai trò cần lọc (ADMIN hoặc STAFF hoặc MANAGER hoặc OWNER hoặc PLAYER)")
 			@RequestParam(required = false) String role,
 			@Parameter(description = "Từ khóa tìm kiếm theo tên (fullName hoặc displayName)")
 			@RequestParam(required = false) String search,
