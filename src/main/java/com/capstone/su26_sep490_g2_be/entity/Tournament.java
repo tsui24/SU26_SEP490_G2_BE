@@ -77,4 +77,13 @@ public class Tournament extends BaseEntity {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "created_by", nullable = false)
 	private User createdBy;
+
+	@Column(name = "is_show_tournament")
+	private boolean isShowTournament;
+
+	@Column(name = "is_public_ratio")
+	private boolean isPublicRatio;
+
+	@Column(name = "is_register")
+	private boolean isRegister;
 }
