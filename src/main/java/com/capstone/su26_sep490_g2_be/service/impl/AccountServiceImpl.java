@@ -119,9 +119,10 @@ public class AccountServiceImpl implements AccountService {
 		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
 		String roleParam = (role == null || role.trim().isEmpty()) ? null : role.trim().toUpperCase();
 
-		if (roleParam != null && !roleParam.equals("STAFF") && !roleParam.equals("MANAGER")
-				&& !roleParam.equals("PLAYER") && !roleParam.equals("OWNER")) {
-			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Role filter must be STAFF or MANAGER or PLAYER or OWNER");
+		if (roleParam != null && !roleParam.equals("ADMIN") && !roleParam.equals("STAFF")
+				&& !roleParam.equals("MANAGER") && !roleParam.equals("PLAYER") && !roleParam.equals("OWNER")) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"Role filter must be ADMIN or STAFF or MANAGER or PLAYER or OWNER");
 		}
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
@@ -180,7 +181,7 @@ public class AccountServiceImpl implements AccountService {
 
 	private void validateRoleAssignment(RoleCode callerRole, RoleCode targetRole) {
 		boolean allowed = switch (callerRole) {
-			case ADMIN -> targetRole == RoleCode.OWNER;
+			case ADMIN -> targetRole == RoleCode.OWNER || targetRole == RoleCode.ADMIN;
 			case OWNER -> targetRole == RoleCode.MANAGER || targetRole == RoleCode.STAFF;
 			default -> false;
 		};
