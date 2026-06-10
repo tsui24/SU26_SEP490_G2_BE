@@ -9,7 +9,9 @@ import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.exception.ConfigValidationException;
 import com.capstone.su26_sep490_g2_be.repository.*;
+import com.capstone.su26_sep490_g2_be.service.AdminRegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
+import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
@@ -49,6 +51,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final UserRepository userRepository;
 	private final TournamentConfigValueService configValueService;
 	private final TournamentRaceToRuleService raceToRuleService;
+	private final AdminRegistrationFormService adminRegistrationFormService;
+	private final RegistrationFormService registrationFormService;
+	private final RegistrationFormTemplateRepository registrationFormTemplateRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -109,12 +114,20 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	@Override
+	public OwnerRegistrationFormTemplateListResponse listRegistrationFormTemplates() {
+		return adminRegistrationFormService.listActiveTemplatesForOwner();
+	}
+
+	@Override
 	@Transactional
 	public CreateTournamentResponse createTournament(Long userId, CreateTournamentRequest request) {
 		User creator = userRepository.findById(userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		validateGameType(request.getGameType());
 		validateFormatReady(request.getFormat());
+
+		boolean isRegister = Boolean.TRUE.equals(request.getIsRegister());
+		registrationFormService.validateRegistrationSettings(isRegister, request.getRegistrationFormTemplateId());
 
 		Tournament tournament = Tournament.builder()
 				.name(request.getName())
@@ -130,6 +143,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.registrationDeadline(request.getRegistrationDeadline())
 				.startAt(request.getStartAt())
 				.endAt(request.getEndAt())
+				.isRegister(isRegister)
+				.registrationFormTemplateId(isRegister ? request.getRegistrationFormTemplateId() : null)
 				.createdBy(creator)
 				.build();
 		tournament = tournamentRepository.save(tournament);
@@ -150,6 +165,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
 				.configComplete(false)
+				.isRegister(tournament.isRegister())
+				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
 				.build();
 	}
 
@@ -199,6 +216,17 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (request.getEndAt() != null) {
 			tournament.setEndAt(request.getEndAt());
 		}
+		if (request.getIsRegister() != null) {
+			tournament.setRegister(request.getIsRegister());
+			if (!request.getIsRegister()) {
+				tournament.setRegistrationFormTemplateId(null);
+			}
+		}
+		if (request.getRegistrationFormTemplateId() != null) {
+			tournament.setRegistrationFormTemplateId(request.getRegistrationFormTemplateId());
+		}
+		registrationFormService.validateRegistrationSettings(
+				tournament.isRegister(), tournament.getRegistrationFormTemplateId());
 
 		tournamentRepository.save(tournament);
 		boolean configComplete = isConfigComplete(tournamentId, tournament.getFormat());
@@ -218,6 +246,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		TournamentFormatDefinition format = formatRepository.findById(tournament.getFormat()).orElse(null);
 		TournamentConfig config = getConfig(tournamentId);
 		boolean configComplete = isConfigComplete(tournamentId, tournament.getFormat());
+		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
+				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
+				: null;
 
 		return TournamentDetailResponse.builder()
 				.id(tournament.getId())
@@ -236,8 +267,20 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.configComplete(configComplete)
+				.isRegister(tournament.isRegister())
+				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
+				.registrationFormTemplateCode(registrationTemplate != null ? registrationTemplate.getCode() : null)
+				.registrationFormTemplateName(registrationTemplate != null ? registrationTemplate.getName() : null)
 				.configSummary(buildConfigSummary(tournamentId, tournament.getFormat(), config))
 				.build();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public RegistrationFormPreviewResponse getTournamentRegistrationForm(
+			Long userId, Long tournamentId, boolean enforceOwnership) {
+		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
+		return registrationFormService.resolveTournamentForm(tournament);
 	}
 
 	@Override
@@ -464,6 +507,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			List<ConfigValidationDetailResponse> errors = collectConfigErrors(tournamentId, tournament.getFormat());
 			if (!errors.isEmpty()) {
 				throw new ConfigValidationException(ErrorCode.CONFIG_INCOMPLETE, errors);
+			}
+			if (tournament.isRegister()) {
+				registrationFormService.validateRegistrationSettings(
+						true, tournament.getRegistrationFormTemplateId());
 			}
 		}
 
