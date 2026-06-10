@@ -39,4 +39,10 @@ public class UpdateTournamentRequest {
 	private Instant startAt;
 
 	private Instant endAt;
+
+	@Schema(description = "Cho phép người chơi đăng ký")
+	private Boolean isRegister;
+
+	@Schema(description = "Template form đăng ký — bắt buộc khi isRegister=true")
+	private Long registrationFormTemplateId;
 }
