@@ -28,6 +28,10 @@ public class TournamentDetailResponse {
 	private Instant startAt;
 	private Instant endAt;
 	private Boolean configComplete;
+	private Boolean isRegister;
+	private Long registrationFormTemplateId;
+	private String registrationFormTemplateCode;
+	private String registrationFormTemplateName;
 	private ConfigSummary configSummary;
 
 	@Getter
