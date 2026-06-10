@@ -86,4 +86,11 @@ public class Tournament extends BaseEntity {
 
 	@Column(name = "is_register")
 	private boolean isRegister;
+
+	@Column(name = "registration_form_template_id")
+	private Long registrationFormTemplateId;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "registration_form_template_id", insertable = false, updatable = false)
+	private RegistrationFormTemplate registrationFormTemplate;
 }

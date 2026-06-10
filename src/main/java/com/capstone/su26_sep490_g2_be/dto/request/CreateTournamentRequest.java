@@ -57,4 +57,10 @@ public class CreateTournamentRequest {
 
 	@Schema(description = "Thời gian kết thúc")
 	private Instant endAt;
+
+	@Schema(description = "Cho phép người chơi đăng ký", example = "true")
+	private Boolean isRegister;
+
+	@Schema(description = "Template form đăng ký — bắt buộc khi isRegister=true")
+	private Long registrationFormTemplateId;
 }
