@@ -17,6 +17,8 @@ public interface OwnerTournamentService {
 
 	OwnerGameTypeListResponse listGameTypes();
 
+	OwnerRegistrationFormTemplateListResponse listRegistrationFormTemplates();
+
 	CreateTournamentResponse createTournament(Long userId, CreateTournamentRequest request);
 
 	UpdateTournamentResponse updateTournament(Long userId, Long tournamentId, UpdateTournamentRequest request,
@@ -35,4 +37,7 @@ public interface OwnerTournamentService {
 
 	PatchTournamentStatusResponse patchStatus(Long userId, Long tournamentId, PatchTournamentStatusRequest request,
 	                                          boolean enforceOwnership);
+
+	RegistrationFormPreviewResponse getTournamentRegistrationForm(
+			Long userId, Long tournamentId, boolean enforceOwnership);
 }

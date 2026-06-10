@@ -54,6 +54,19 @@ public enum ErrorCode {
 	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Employee not found", HttpStatus.NOT_FOUND),
 	INVALID_EMPLOYEE_ROLE("EMPLOYEE_002", "User is not a Staff or Manager", HttpStatus.BAD_REQUEST),
 
+	// Registration form template
+	REG_FIELD_KEY_EXISTS("REG_FORM_001", "Registration field key already exists", HttpStatus.CONFLICT),
+	REG_FIELD_NOT_FOUND("REG_FORM_002", "Registration field not found", HttpStatus.NOT_FOUND),
+	REG_FIELD_IN_USE("REG_FORM_003", "Registration field is used in templates", HttpStatus.CONFLICT),
+	REG_TEMPLATE_CODE_EXISTS("REG_FORM_004", "Registration form template code already exists", HttpStatus.CONFLICT),
+	REG_TEMPLATE_NOT_FOUND("REG_FORM_005", "Registration form template not found", HttpStatus.NOT_FOUND),
+	REG_TEMPLATE_INACTIVE("REG_FORM_006", "Registration form template is inactive", HttpStatus.UNPROCESSABLE_ENTITY),
+	REG_TEMPLATE_INCOMPLETE("REG_FORM_007", "Registration form template has no fields", HttpStatus.UNPROCESSABLE_ENTITY),
+	REG_TEMPLATE_REQUIRED("REG_FORM_008", "Registration form template is required when registration is enabled", HttpStatus.BAD_REQUEST),
+	REG_FORM_VALIDATION_FAILED("REG_FORM_009", "Registration form validation failed", HttpStatus.BAD_REQUEST),
+	REGISTRATION_NOT_OPEN("REG_FORM_010", "Tournament is not open for registration", HttpStatus.UNPROCESSABLE_ENTITY),
+	REGISTRATION_ALREADY_EXISTS("REG_FORM_011", "You have already registered for this tournament", HttpStatus.CONFLICT),
+
 	// Storage (MinIO)
 	STORAGE_UPLOAD_FAILED("STORAGE_001", "Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR),
 	STORAGE_DOWNLOAD_FAILED("STORAGE_002", "Failed to download file", HttpStatus.INTERNAL_SERVER_ERROR),
