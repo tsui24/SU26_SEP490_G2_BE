@@ -61,7 +61,7 @@ public class ManagerTournamentController {
 		CreateTournamentResponse response = ownerTournamentService.createTournament(
 				extractUserId(authentication), request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Tournament created", response));
+				.body(ApiResponse.success("Đã tạo giải đấu", response));
 	}
 
 	@Operation(summary = "Cập nhật giải đấu")

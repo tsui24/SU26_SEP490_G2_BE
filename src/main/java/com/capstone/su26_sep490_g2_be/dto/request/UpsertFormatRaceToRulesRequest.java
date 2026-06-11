@@ -15,7 +15,7 @@ import java.util.List;
 @Schema(description = "Lưu default race-to rules cho thể thức — Wizard màn 3")
 public class UpsertFormatRaceToRulesRequest {
 
-	@NotEmpty
+	@NotEmpty(message = "Danh sách quy tắc race-to không được để trống")
 	@Valid
 	private List<FormatRaceToRuleItemRequest> rules;
 
@@ -23,15 +23,15 @@ public class UpsertFormatRaceToRulesRequest {
 	@Setter
 	public static class FormatRaceToRuleItemRequest {
 
-		@NotBlank
+		@NotBlank(message = "Mã vòng đấu không được để trống")
 		private String roundKey;
 
 		private String label;
 
-		@NotBlank
+		@NotBlank(message = "Giai đoạn bracket không được để trống")
 		private String bracketPhase;
 
-		@NotNull
+		@NotNull(message = "Race-to không được để trống")
 		private Integer raceTo;
 	}
 }

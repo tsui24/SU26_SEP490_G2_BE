@@ -36,7 +36,7 @@ public class AdminController {
 			@Valid @RequestBody CreateAccountRequest request) {
 		UserResponse response = accountService.createAccount(request, RoleCode.OWNER, RoleCode.ADMIN);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Owner account created", response));
+				.body(ApiResponse.success("Đã tạo tài khoản Owner", response));
 	}
 
 	@Operation(summary = "Create Admin account", description = "Admin tạo tài khoản Admin (quản trị hệ thống)")
@@ -50,7 +50,7 @@ public class AdminController {
 			@Valid @RequestBody CreateAccountRequest request) {
 		UserResponse response = accountService.createAccount(request, RoleCode.ADMIN, RoleCode.ADMIN);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Admin account created", response));
+				.body(ApiResponse.success("Đã tạo tài khoản Admin", response));
 	}
 
 	@Operation(summary = "Get all , search, and filter accounts",
@@ -82,6 +82,6 @@ public class AdminController {
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateUser(
 			@PathVariable Long id) {
 		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
-		return ResponseEntity.ok(ApiResponse.success("User account deactivated successfully", response));
+		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa tài khoản", response));
 	}
 }

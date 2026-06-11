@@ -13,9 +13,12 @@ import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.RoleRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,6 +38,8 @@ public class AccountServiceImpl implements AccountService {
 	private final UserRepository userRepository;
 	private final RoleRepository roleRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final MinioStorageService minioStorageService;
+	private final MinioProperties minioProperties;
 
 	@Override
 	@Transactional
@@ -103,7 +108,8 @@ public class AccountServiceImpl implements AccountService {
 
 		UserProfile profile = UserProfile.builder()
 				.user(user).fullName(fullName).displayName(displayName)
-				.avatarUrl(avatarUrl).dateOfBirth(dateOfBirth)
+				.avatarUrl(AvatarUrlResolver.normalizeForStorage(avatarUrl, minioProperties.getBucket()))
+				.dateOfBirth(dateOfBirth)
 				.gender(gender).bio(bio)
 				.build();
 
@@ -122,7 +128,7 @@ public class AccountServiceImpl implements AccountService {
 		if (roleParam != null && !roleParam.equals("ADMIN") && !roleParam.equals("STAFF")
 				&& !roleParam.equals("MANAGER") && !roleParam.equals("PLAYER") && !roleParam.equals("OWNER")) {
 			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
-					"Role filter must be ADMIN or STAFF or MANAGER or PLAYER or OWNER");
+					"Bộ lọc role phải là ADMIN, STAFF, MANAGER, PLAYER hoặc OWNER");
 		}
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
@@ -138,7 +144,7 @@ public class AccountServiceImpl implements AccountService {
 		String roleParam = (role == null || role.trim().isEmpty()) ? null : role.trim().toUpperCase();
 
 		if (roleParam != null && !roleParam.equals("STAFF") && !roleParam.equals("MANAGER")) {
-			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Role filter must be STAFF or MANAGER");
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Bộ lọc role phải là STAFF hoặc MANAGER");
 		}
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
@@ -217,7 +223,10 @@ public class AccountServiceImpl implements AccountService {
 				.status(user.getStatus().name())
 				.fullName(profile != null ? profile.getFullName() : null)
 				.displayName(profile != null ? profile.getDisplayName() : null)
-				.avatarUrl(profile != null ? profile.getAvatarUrl() : null)
+				.avatarUrl(profile != null
+						? AvatarUrlResolver.resolveForResponse(
+								profile.getAvatarUrl(), minioStorageService, minioProperties.getBucket())
+						: null)
 				.dateOfBirth(profile != null ? profile.getDateOfBirth() : null)
 				.gender(profile != null ? profile.getGender() : null)
 				.bio(profile != null ? profile.getBio() : null)

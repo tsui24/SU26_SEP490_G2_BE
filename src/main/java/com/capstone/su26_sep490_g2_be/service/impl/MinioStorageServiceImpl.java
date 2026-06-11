@@ -58,7 +58,7 @@ public class MinioStorageServiceImpl implements MinioStorageService {
 	@Override
 	public String upload(String objectKey, InputStream inputStream, long size, String contentType) {
 		if (!StringUtils.hasText(objectKey)) {
-			throw new BusinessException(ErrorCode.STORAGE_INVALID_FILE, "Object key is required");
+			throw new BusinessException(ErrorCode.STORAGE_INVALID_FILE, "Object key không được để trống");
 		}
 		try {
 			minioClient.putObject(

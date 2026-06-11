@@ -17,7 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Profile", description = "User Profile management APIs")
+@Tag(name = "Profile", description = "API quản lý hồ sơ người dùng")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/api/v1/profile")
@@ -27,7 +27,7 @@ public class ProfileController {
 	private final UserProfileService userProfileService;
 
 	@Operation(
-			summary = "Get user profile",
+			summary = "Lấy hồ sơ người dùng",
 			description = "Lấy thông tin hồ sơ cá nhân của tài khoản hiện tại đang đăng nhập." +
 					" Lưu ý chỉ hiển thị field billiardRank nếu role là PLAYER"
 	)
@@ -43,7 +43,7 @@ public class ProfileController {
 	}
 
 	@Operation(
-			summary = "Edit user profile",
+			summary = "Cập nhật hồ sơ người dùng",
 			description = "Cập nhật thông tin hồ sơ cá nhân của tài khoản hiện tại, không update email" +
 					" LƯU Ý: Trường 'billiardRank' chỉ được phép thay đổi nếu người dùng có vai trò là PLAYER. " +
 					"Đối với các vai trò khác, nếu gửi kèm 'billiardRank' khác rỗng hệ thống sẽ báo lỗi."
@@ -59,7 +59,7 @@ public class ProfileController {
 			@Valid @RequestBody UserProfileRequest request) {
 		Long userId = extractUserId(authentication);
 		UserProfileResponse response = userProfileService.updateUserProfile(userId, request);
-		return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
+		return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ thành công", response));
 	}
 
 	private Long extractUserId(Authentication authentication) {

@@ -50,7 +50,7 @@ public class DataInitializer implements CommandLineRunner {
 				Role role = Role.builder()
 						.code(rc.getCode())
 						.name(rc.getDisplayName())
-						.description("System role: " + rc.getDisplayName())
+						.description("Vai trò hệ thống: " + rc.getDisplayName())
 						.isActive(true)
 						.build();
 				roleRepository.save(role);
@@ -144,7 +144,7 @@ public class DataInitializer implements CommandLineRunner {
 		}
 
 		Role adminRole = roleRepository.findByCode(RoleCode.ADMIN.getCode())
-				.orElseThrow(() -> new IllegalStateException("ADMIN role not found after seeding"));
+				.orElseThrow(() -> new IllegalStateException("Không tìm thấy vai trò ADMIN sau khi seed dữ liệu"));
 
 		User admin = User.builder()
 				.email(DEFAULT_ADMIN_EMAIL)

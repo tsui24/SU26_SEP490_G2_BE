@@ -10,7 +10,7 @@ import lombok.Setter;
 @Schema(description = "Cập nhật loại bi")
 public class UpdateGameTypeRequest {
 
-	@NotBlank
+	@NotBlank(message = "Tên loại bi không được để trống")
 	private String name;
 
 	private String description;

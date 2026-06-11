@@ -7,11 +7,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum RoleCode {
 
-	ADMIN("ADMIN", "Administrator"),
-	OWNER("OWNER", "Chain Owner"),
-	MANAGER("MANAGER", "Club Manager"),
-	STAFF("STAFF", "Staff / Referee"),
-	PLAYER("PLAYER", "Player");
+	ADMIN("ADMIN", "Quản trị viên"),
+	OWNER("OWNER", "Chủ chuỗi quán"),
+	MANAGER("MANAGER", "Quản lý cơ sở"),
+	STAFF("STAFF", "Nhân viên / Trọng tài"),
+	PLAYER("PLAYER", "Cơ thủ");
 
 	private final String code;
 	private final String displayName;

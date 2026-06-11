@@ -44,7 +44,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
 		RegisterResponse response = authService.register(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Account created. Please complete your profile.", response));
+				.body(ApiResponse.success("Đã tạo tài khoản. Vui lòng hoàn thiện hồ sơ.", response));
 	}
 
 	@Operation(summary = "Forgot Password", description = "Gửi OTP đến email để reset password")
@@ -55,7 +55,7 @@ public class AuthController {
 	@PostMapping("/forgot-password")
 	public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
 		authService.forgotPassword(request);
-		return ResponseEntity.ok(ApiResponse.success("OTP sent to your email", null));
+		return ResponseEntity.ok(ApiResponse.success("Đã gửi OTP tới email của bạn", null));
 	}
 
 	@Operation(summary = "Verify OTP", description = "Xác thực OTP đã gửi qua email")
@@ -66,7 +66,7 @@ public class AuthController {
 	@PostMapping("/verify-otp")
 	public ResponseEntity<ApiResponse<Void>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
 		authService.verifyOtp(request);
-		return ResponseEntity.ok(ApiResponse.success("OTP verified", null));
+		return ResponseEntity.ok(ApiResponse.success("Xác thực OTP thành công", null));
 	}
 
 	@Operation(summary = "Reset Password", description = "Đặt lại mật khẩu sau khi verify OTP")
@@ -77,7 +77,7 @@ public class AuthController {
 	@PostMapping("/reset-password")
 	public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
 		authService.resetPassword(request);
-		return ResponseEntity.ok(ApiResponse.success("Password reset successful", null));
+		return ResponseEntity.ok(ApiResponse.success("Đặt lại mật khẩu thành công", null));
 	}
 
 	@Operation(summary = "Change Password", description = "Đổi mật khẩu (cần đăng nhập)")
@@ -92,6 +92,6 @@ public class AuthController {
 			@Valid @RequestBody ChangePasswordRequest request) {
 		String email = authentication.getName();
 		authService.changePassword(email, request);
-		return ResponseEntity.ok(ApiResponse.success("Password changed", null));
+		return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", null));
 	}
 }
