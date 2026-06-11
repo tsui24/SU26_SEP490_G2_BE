@@ -38,7 +38,7 @@ public class OwnerController {
 			@Valid @RequestBody CreateManagerAccountRequest request) {
 		EmployeeAccountResponse response = accountService.createManagerAccount(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Manager account created", response));
+				.body(ApiResponse.success("Đã tạo tài khoản Manager", response));
 	}
 
 	@Operation(summary = "Create Staff account",
@@ -53,7 +53,7 @@ public class OwnerController {
 			@Valid @RequestBody CreateStaffAccountRequest request) {
 		EmployeeAccountResponse response = accountService.createStaffAccount(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Staff account created", response));
+				.body(ApiResponse.success("Đã tạo tài khoản Staff", response));
 	}
 
 	@Operation(summary = "Get all , search, and filter employee accounts",
@@ -99,6 +99,6 @@ public class OwnerController {
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateEmployee(
 			@PathVariable Long id) {
 		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
-		return ResponseEntity.ok(ApiResponse.success("Employee account deactivated successfully", response));
+		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa nhân viên", response));
 	}
 }

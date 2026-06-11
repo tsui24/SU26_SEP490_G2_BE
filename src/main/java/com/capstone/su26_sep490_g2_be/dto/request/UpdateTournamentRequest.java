@@ -15,7 +15,7 @@ import java.time.Instant;
 @Schema(description = "Cập nhật thông tin cơ bản giải đấu")
 public class UpdateTournamentRequest {
 
-	@Size(max = 255)
+	@Size(max = 255, message = "Tên giải tối đa 255 ký tự")
 	private String name;
 
 	private String description;
@@ -23,13 +23,13 @@ public class UpdateTournamentRequest {
 	@Schema(description = "Đổi thể thức — chỉ khi status=DRAFT")
 	private String format;
 
-	@Min(2)
+	@Min(value = 2, message = "Số người tham gia tối đa phải từ 2 trở lên")
 	private Integer maxParticipants;
 
-	@DecimalMin("0")
+	@DecimalMin(value = "0", message = "Phí đăng ký không được âm")
 	private BigDecimal entryFee;
 
-	@DecimalMin("0")
+	@DecimalMin(value = "0", message = "Tổng giải thưởng không được âm")
 	private BigDecimal prizePool;
 
 	private String prizeDescription;

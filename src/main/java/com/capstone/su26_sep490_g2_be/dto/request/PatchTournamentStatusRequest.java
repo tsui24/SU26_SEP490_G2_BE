@@ -10,7 +10,7 @@ import lombok.Setter;
 @Schema(description = "Đổi trạng thái giải đấu")
 public class PatchTournamentStatusRequest {
 
-	@NotBlank
+	@NotBlank(message = "Trạng thái mới không được để trống")
 	@Schema(description = "Trạng thái mới", example = "OPEN_FOR_REGISTRATION")
 	private String status;
 }

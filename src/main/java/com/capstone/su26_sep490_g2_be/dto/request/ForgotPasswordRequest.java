@@ -11,8 +11,8 @@ import lombok.Setter;
 @Schema(description = "Request gửi OTP reset password")
 public class ForgotPasswordRequest {
 
-	@NotBlank(message = "Email is required")
-	@Email(message = "Invalid email format")
+	@NotBlank(message = "Email không được để trống")
+	@Email(message = "Định dạng email không hợp lệ")
 	@Schema(example = "user@example.com")
 	private String email;
 }

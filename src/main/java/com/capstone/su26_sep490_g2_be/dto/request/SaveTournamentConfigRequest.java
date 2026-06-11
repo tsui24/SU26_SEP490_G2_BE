@@ -15,11 +15,11 @@ import java.util.List;
 @Schema(description = "Lưu config giải — wizard bước 2")
 public class SaveTournamentConfigRequest {
 
-	@NotBlank
+	@NotBlank(message = "Phương thức xếp hạt giống không được để trống")
 	@Schema(description = "Phương thức xếp hạt giống", example = "ELO")
 	private String seedingMethod;
 
-	@NotEmpty
+	@NotEmpty(message = "Danh sách field cấu hình không được để trống")
 	@Valid
 	private List<ConfigFieldValueItem> fields;
 
@@ -30,10 +30,10 @@ public class SaveTournamentConfigRequest {
 	@Setter
 	public static class ConfigFieldValueItem {
 
-		@NotBlank
+		@NotBlank(message = "Field key không được để trống")
 		private String fieldKey;
 
-		@NotBlank
+		@NotBlank(message = "Giá trị field không được để trống")
 		private String value;
 	}
 
@@ -41,10 +41,10 @@ public class SaveTournamentConfigRequest {
 	@Setter
 	public static class RaceToOverrideItem {
 
-		@NotBlank
+		@NotBlank(message = "Mã vòng đấu không được để trống")
 		private String roundKey;
 
-		@NotNull
+		@NotNull(message = "Race-to không được để trống")
 		private Integer raceTo;
 	}
 }
