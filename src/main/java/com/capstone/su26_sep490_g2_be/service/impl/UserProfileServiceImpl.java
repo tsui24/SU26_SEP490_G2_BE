@@ -6,9 +6,12 @@ import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.entity.UserProfile;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.UserProfileRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.UserProfileService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +22,8 @@ public class UserProfileServiceImpl implements UserProfileService {
 
 	private final UserRepository userRepository;
 	private final UserProfileRepository userProfileRepository;
+	private final MinioStorageService minioStorageService;
+	private final MinioProperties minioProperties;
 
 
 	@Override
@@ -49,12 +54,13 @@ public class UserProfileServiceImpl implements UserProfileService {
 		boolean isPlayer = "PLAYER".equals(user.getRole().getCode());
 		// Kiểm tra nếu vai trò không phải PLAYER mà cố tình set billiardRank thì báo lỗi
 		if (!isPlayer && request.getBilliardRank() != null && !request.getBilliardRank().trim().isEmpty()) {
-			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Billiard rank is only available for player profiles");
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Xếp hạng bi-a chỉ áp dụng cho hồ sơ Cơ thủ");
 		}
 
 		profile.setFullName(request.getFullName());
 		profile.setDisplayName(request.getDisplayName());
-		profile.setAvatarUrl(request.getAvatarUrl());
+		profile.setAvatarUrl(AvatarUrlResolver.normalizeForStorage(
+				request.getAvatarUrl(), minioProperties.getBucket()));
 		profile.setDateOfBirth(request.getDateOfBirth());
 		profile.setGender(request.getGender());
 		profile.setBio(request.getBio());
@@ -77,7 +83,8 @@ public class UserProfileServiceImpl implements UserProfileService {
 				.phone(user.getPhone())
 				.fullName(profile.getFullName())
 				.displayName(profile.getDisplayName())
-				.avatarUrl(profile.getAvatarUrl())
+				.avatarUrl(AvatarUrlResolver.resolveForResponse(
+						profile.getAvatarUrl(), minioStorageService, minioProperties.getBucket()))
 				.dateOfBirth(profile.getDateOfBirth())
 				.gender(profile.getGender())
 				.billiardRank(profile.getBilliardRank())

@@ -12,17 +12,17 @@ import lombok.Setter;
 @Schema(description = "Reset password sau khi verify OTP")
 public class ResetPasswordRequest {
 
-	@NotBlank(message = "Email is required")
-	@Email(message = "Invalid email format")
+	@NotBlank(message = "Email không được để trống")
+	@Email(message = "Định dạng email không hợp lệ")
 	@Schema(example = "user@example.com")
 	private String email;
 
-	@NotBlank(message = "OTP is required")
+	@NotBlank(message = "Mã OTP không được để trống")
 	@Schema(example = "123456")
 	private String otp;
 
-	@NotBlank(message = "New password is required")
-	@Size(min = 6, max = 100, message = "Password must be 6-100 characters")
+	@NotBlank(message = "Mật khẩu mới không được để trống")
+	@Size(min = 6, max = 100, message = "Mật khẩu phải từ 6-100 ký tự")
 	@Schema(example = "NewP@ssw0rd")
 	private String newPassword;
 }

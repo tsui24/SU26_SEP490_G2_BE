@@ -19,7 +19,10 @@ public class FormatBootstrapTemplates {
 					field("third_place_match", "true"),
 					field("break_rule", "ALTERNATE_BREAK"),
 					field("lag_for_break", "true"),
-					field("scoring_unit", "GAME", false)
+					field("scoring_unit", "GAME", false),
+					field("is_show_tournament", "false"),
+					field("is_public_ratio", "false"),
+					field("is_register", "false")
 			),
 			"DOUBLE_ELIMINATION", List.of(
 					field("bracket_size", "16"),
@@ -28,12 +31,18 @@ public class FormatBootstrapTemplates {
 					field("grand_final_bracket_reset", "false"),
 					field("break_rule", "ALTERNATE_BREAK"),
 					field("lag_for_break", "true"),
-					field("scoring_unit", "GAME", false)
+					field("scoring_unit", "GAME", false),
+					field("is_show_tournament", "false"),
+					field("is_public_ratio", "false"),
+					field("is_register", "false")
 			),
 			"GROUP_PLAYOFF", List.of(
 					field("break_rule", "ALTERNATE_BREAK"),
 					field("lag_for_break", "true"),
 					field("scoring_unit", "GAME", false),
+					field("is_show_tournament", "false"),
+					field("is_public_ratio", "false"),
+					field("is_register", "false"),
 					field("group_count", "4"),
 					field("players_per_group", "4"),
 					field("advance_per_group", "2"),

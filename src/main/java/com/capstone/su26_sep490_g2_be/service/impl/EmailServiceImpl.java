@@ -18,8 +18,8 @@ public class EmailServiceImpl implements EmailService {
 	public void sendOtpEmail(String to, String otp) {
 		SimpleMailMessage message = new SimpleMailMessage();
 		message.setTo(to);
-		message.setSubject("Password Reset OTP - Billiards Tournament");
-		message.setText("Your OTP code is: " + otp + "\n\nThis code expires in 5 minutes.\nDo not share it with anyone.");
+		message.setSubject("Mã OTP đặt lại mật khẩu - Giải đấu Bi-a");
+		message.setText("Mã OTP của bạn là: " + otp + "\n\nMã có hiệu lực trong 5 phút.\nVui lòng không chia sẻ mã này với bất kỳ ai.");
 
 		mailSender.send(message);
 		log.info("OTP email sent to {}", to);

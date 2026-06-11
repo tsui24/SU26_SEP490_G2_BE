@@ -14,20 +14,20 @@ import java.time.LocalDate;
 @Schema(description = "Owner tạo tài khoản Staff kèm thông tin cơ bản (không có ranking)")
 public class CreateStaffAccountRequest {
 
-	@NotBlank(message = "Email is required")
-	@Email(message = "Invalid email format")
+	@NotBlank(message = "Email không được để trống")
+	@Email(message = "Định dạng email không hợp lệ")
 	@Schema(example = "staff@example.com")
 	private String email;
 
 	@Schema(example = "0912345678")
 	private String phone;
 
-	@NotBlank(message = "Password is required")
-	@Size(min = 6, max = 100, message = "Password must be 6-100 characters")
+	@NotBlank(message = "Mật khẩu không được để trống")
+	@Size(min = 6, max = 100, message = "Mật khẩu phải từ 6-100 ký tự")
 	@Schema(example = "P@ssw0rd")
 	private String password;
 
-	@NotBlank(message = "Full name is required")
+	@NotBlank(message = "Họ tên không được để trống")
 	@Schema(example = "Le Van C")
 	private String fullName;
 

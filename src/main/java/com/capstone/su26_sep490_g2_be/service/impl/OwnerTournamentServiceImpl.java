@@ -286,7 +286,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, List.of(
 					ConfigValidationDetailResponse.builder()
 							.fieldKey("seedingMethod")
-							.message("Invalid seeding method")
+							.message("Phương thức xếp hạt giống không hợp lệ")
 							.build()));
 		}
 
@@ -308,7 +308,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				errors.add(ConfigValidationDetailResponse.builder()
 						.fieldKey(fieldKey)
 						.field(fieldKey)
-						.message("Field does not belong to format")
+						.message("Field không thuộc thể thức này")
 						.build());
 			}
 		}
@@ -330,7 +330,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				errors.add(ConfigValidationDetailResponse.builder()
 						.fieldKey(fieldKey)
 						.field(fieldKey)
-						.message("Required field is missing")
+						.message("Thiếu field bắt buộc")
 						.build());
 				continue;
 			}
@@ -570,7 +570,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (config.getSeedingMethod() == null || config.getSeedingMethod().isBlank()) {
 			errors.add(ConfigValidationDetailResponse.builder()
 					.fieldKey("seedingMethod")
-					.message("Seeding method is required")
+					.message("Phương thức xếp hạt giống là bắt buộc")
 					.build());
 		}
 
@@ -584,7 +584,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				errors.add(ConfigValidationDetailResponse.builder()
 						.fieldKey(formatField.getFieldKey())
 						.field(formatField.getFieldKey())
-						.message("Required field is missing")
+						.message("Thiếu field bắt buộc")
 						.build());
 			} else {
 				errors.addAll(validateFieldValue(formatField, value));
@@ -595,7 +595,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (raceCount == 0) {
 			errors.add(ConfigValidationDetailResponse.builder()
 					.fieldKey("raceToRules")
-					.message("Format has no race-to rules")
+					.message("Thể thức chưa có quy tắc race-to")
 					.build());
 		}
 
@@ -670,29 +670,29 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				try {
 					int intVal = Integer.parseInt(value);
 					if (def.getMinValue() != null && intVal < def.getMinValue()) {
-						errors.add(detail(fieldKey, "Value below minimum"));
+						errors.add(detail(fieldKey, "Giá trị nhỏ hơn mức tối thiểu"));
 					}
 					if (def.getMaxValue() != null && intVal > def.getMaxValue()) {
-						errors.add(detail(fieldKey, "Value above maximum"));
+						errors.add(detail(fieldKey, "Giá trị lớn hơn mức tối đa"));
 					}
 				} catch (NumberFormatException e) {
-					errors.add(detail(fieldKey, "Invalid integer value"));
+					errors.add(detail(fieldKey, "Giá trị số nguyên không hợp lệ"));
 				}
 			}
 			case "BOOLEAN" -> {
 				if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
-					errors.add(detail(fieldKey, "Invalid boolean value"));
+					errors.add(detail(fieldKey, "Giá trị boolean không hợp lệ"));
 				}
 			}
 			case "ENUM" -> {
 				List<String> options = JsonParseUtil.parseStringList(def.getEnumOptions());
 				if (options != null && !options.isEmpty() && !options.contains(value)) {
-					errors.add(detail(fieldKey, "Value not in allowed options"));
+					errors.add(detail(fieldKey, "Giá trị không nằm trong danh sách cho phép"));
 				}
 			}
 			default -> {
 				if (value.isBlank()) {
-					errors.add(detail(fieldKey, "Value cannot be blank"));
+					errors.add(detail(fieldKey, "Giá trị không được để trống"));
 				}
 			}
 		}

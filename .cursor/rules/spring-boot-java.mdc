@@ -64,11 +64,13 @@ public ResponseEntity<ApiResponse<UserResponse>> getById(@PathVariable Long id) 
 }
 ```
 
-## Message lỗi = enum
+## Message lỗi = enum (tiếng Việt)
 
-- Không hardcode chuỗi lỗi trong controller/service.
-- Định nghĩa trong `enums.ErrorCode` (hoặc enum nhóm): `code`, `message`, `HttpStatus`.
+- Xem rule `vietnamese-messages.mdc`: message user-facing **tiếng Việt**.
+- Không hardcode chuỗi lỗi tiếng Anh trong controller/service.
+- Định nghĩa trong `enums.ErrorCode` (hoặc enum nhóm): `code`, `message` (VI), `HttpStatus`.
 - Ném `BusinessException(ErrorCode.XXX)`; `GlobalExceptionHandler` map sang `ResponseEntity<ApiResponse<Void>>`.
+- Enum có nhãn UI: field `displayName` tiếng Việt; **giữ** tên constant (`ACTIVE`, `9_BALL`) cho API/DB.
 
 ## Package `api` (external)
 

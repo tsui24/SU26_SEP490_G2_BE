@@ -4,12 +4,20 @@ import com.capstone.su26_sep490_g2_be.dto.request.*;
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.enums.FormatSetupStatus;
 
+import java.util.List;
+
 public interface AdminTournamentConfigService {
 
 	PageResponse<ConfigFieldCatalogItemResponse> getConfigFieldCatalog(
-			String scope, Boolean isActive, int page, int size);
+			List<String> scope, Boolean isActive, int page, int size);
 
 	ConfigFieldCatalogItemResponse getConfigFieldCatalogItem(String fieldKey);
+
+	ConfigFieldCatalogItemResponse createConfigFieldCatalogItem(CreateConfigFieldCatalogRequest request);
+
+	ConfigFieldCatalogItemResponse updateConfigFieldCatalogItem(String fieldKey, UpdateConfigFieldCatalogRequest request);
+
+	ConfigFieldCatalogItemResponse patchConfigFieldCatalogActive(String fieldKey, PatchFormatActiveRequest request);
 
 	PageResponse<FormatListItemResponse> listFormats(
 			Boolean isActive, FormatSetupStatus setupStatus, int page, int size);
@@ -38,7 +46,14 @@ public interface AdminTournamentConfigService {
 
 	FormatBootstrapResponse bootstrapDefaults(String code, BootstrapDefaultsRequest request);
 
-	PageResponse<GameTypeDetailResponse> listGameTypes(int page, int size);
+	PageResponse<GameTypeDetailResponse> listGameTypes(
+			Boolean isActive, String search, int page, int size);
+
+	GameTypeDetailResponse getGameType(String code);
+
+	GameTypeDetailResponse createGameType(CreateGameTypeRequest request);
 
 	GameTypeDetailResponse updateGameType(String code, UpdateGameTypeRequest request);
+
+	GameTypeDetailResponse patchGameTypeActive(String code, PatchFormatActiveRequest request);
 }

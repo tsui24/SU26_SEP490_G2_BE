@@ -10,13 +10,13 @@ import lombok.Setter;
 @Schema(description = "Cập nhật metadata thể thức")
 public class UpdateFormatRequest {
 
-	@NotBlank
+	@NotBlank(message = "Tên thể thức không được để trống")
 	private String name;
 
-	@NotBlank
+	@NotBlank(message = "Mô tả không được để trống")
 	private String description;
 
-	@NotBlank
+	@NotBlank(message = "Handler key không được để trống")
 	private String handlerKey;
 
 	private String schemaVersion;

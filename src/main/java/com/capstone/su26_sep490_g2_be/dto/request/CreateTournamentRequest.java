@@ -13,36 +13,36 @@ import java.time.Instant;
 @Schema(description = "Tạo giải đấu — wizard bước 1")
 public class CreateTournamentRequest {
 
-	@NotBlank
-	@Size(max = 255)
+	@NotBlank(message = "Tên giải không được để trống")
+	@Size(max = 255, message = "Tên giải tối đa 255 ký tự")
 	@Schema(description = "Tên giải", example = "CLB Bi-a FPT — Mở rộng 9-Ball 2026")
 	private String name;
 
 	@Schema(description = "Mô tả giải")
 	private String description;
 
-	@NotBlank
+	@NotBlank(message = "Mã loại bi không được để trống")
 	@Schema(description = "Mã loại bi", example = "9_BALL")
 	private String gameType;
 
-	@NotBlank
+	@NotBlank(message = "Mã thể thức không được để trống")
 	@Schema(description = "Mã thể thức", example = "SINGLE_ELIMINATION")
 	private String format;
 
-	@NotBlank
+	@NotBlank(message = "Loại người tham gia không được để trống")
 	@Schema(description = "Loại người tham gia", example = "SINGLE")
 	private String participantType;
 
-	@NotNull
-	@Min(2)
+	@NotNull(message = "Số người tham gia tối đa không được để trống")
+	@Min(value = 2, message = "Số người tham gia tối đa phải từ 2 trở lên")
 	@Schema(description = "Số người tham gia tối đa", example = "16")
 	private Integer maxParticipants;
 
-	@DecimalMin("0")
+	@DecimalMin(value = "0", message = "Phí đăng ký không được âm")
 	@Schema(description = "Phí đăng ký", example = "200000")
 	private BigDecimal entryFee;
 
-	@DecimalMin("0")
+	@DecimalMin(value = "0", message = "Tổng giải thưởng không được âm")
 	@Schema(description = "Tổng giải thưởng", example = "8000000")
 	private BigDecimal prizePool;
 

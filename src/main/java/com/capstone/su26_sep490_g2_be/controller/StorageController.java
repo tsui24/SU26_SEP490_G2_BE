@@ -44,7 +44,7 @@ public class StorageController {
 				.objectKey(objectKey)
 				.url(url)
 				.build();
-		return ResponseEntity.ok(ApiResponse.success("Upload successful", response));
+		return ResponseEntity.ok(ApiResponse.success("Tải lên thành công", response));
 	}
 
 	@Operation(summary = "Lấy presigned URL", description = "Trả URL tạm để mở ảnh trên browser/Postman GET")

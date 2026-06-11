@@ -48,7 +48,7 @@ public class AdminFormatController {
 			@Valid @RequestBody CreateFormatRequest request) {
 		FormatCreateResponse response = adminTournamentConfigService.createFormat(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Format created", response));
+				.body(ApiResponse.success("Đã tạo thể thức", response));
 	}
 
 	@Operation(summary = "Cập nhật metadata thể thức")
@@ -129,6 +129,6 @@ public class AdminFormatController {
 			@RequestBody(required = false) BootstrapDefaultsRequest request) {
 		FormatBootstrapResponse response = adminTournamentConfigService.bootstrapDefaults(code, request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Defaults bootstrapped", response));
+				.body(ApiResponse.success("Đã khởi tạo cấu hình mặc định", response));
 	}
 }
