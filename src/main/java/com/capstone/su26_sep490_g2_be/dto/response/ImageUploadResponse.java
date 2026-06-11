@@ -9,9 +9,10 @@ import lombok.Getter;
 @Schema(description = "Kết quả upload ảnh lên MinIO")
 public class ImageUploadResponse {
 
-	@Schema(description = "Object key trong bucket — lưu vào DB", example = "images/a1b2c3.jpg")
+	@Schema(description = "Object key — gửi vào avatarUrl khi POST/PUT profile (lưu DB, không hết hạn)",
+			example = "avatars/a1b2c3.jpg")
 	private String objectKey;
 
-	@Schema(description = "Presigned URL để xem/tải ảnh (hết hạn theo config)")
+	@Schema(description = "Presigned URL tạm để preview ngay sau upload (không lưu DB, ~1h hết hạn)")
 	private String url;
 }

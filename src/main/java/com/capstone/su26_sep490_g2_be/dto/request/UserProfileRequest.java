@@ -13,7 +13,7 @@ import java.time.LocalDate;
 @Schema(description = "Yêu cầu tạo hoặc cập nhật hồ sơ người dùng")
 public class UserProfileRequest {
 
-	@NotBlank(message = "Full name is required")
+	@NotBlank(message = "Họ tên không được để trống")
 	@Schema(description = "Họ và tên đầy đủ", example = "Nguyen Van A")
 	private String fullName;
 
@@ -22,7 +22,7 @@ public class UserProfileRequest {
 
 	@Pattern(
 			regexp = "^(0[3|5|7|8|9])[0-9]{8}$",
-			message = "Phone number is invalid"
+			message = "Số điện thoại không hợp lệ"
 	)
 	@Schema(description = "Số điện thoại tài khoản")
 	private String phone;
@@ -30,7 +30,8 @@ public class UserProfileRequest {
 	@Schema(description = "Tên hiển thị", example = "Player A")
 	private String displayName;
 
-	@Schema(description = "Đường dẫn ảnh đại diện", example = "https://example.com/avatar.jpg")
+	@Schema(description = "MinIO object key ảnh đại diện (lấy từ data.objectKey sau POST /storage/images), không gửi presigned URL",
+			example = "avatars/a1b2c3d4-e5f6.jpg")
 	private String avatarUrl;
 
 	@Schema(description = "Ngày sinh", example = "1998-05-15")

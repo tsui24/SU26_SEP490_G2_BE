@@ -7,9 +7,12 @@ import com.capstone.su26_sep490_g2_be.entity.UserProfile;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.UserProfileRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.PlayerProfileService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +23,8 @@ public class PlayerProfileServiceImpl implements PlayerProfileService {
 
 	private final UserRepository userRepository;
 	private final UserProfileRepository userProfileRepository;
+	private final MinioStorageService minioStorageService;
+	private final MinioProperties minioProperties;
 
 	@Override
 	@Transactional
@@ -43,7 +48,8 @@ public class PlayerProfileServiceImpl implements PlayerProfileService {
 				.user(user)
 				.fullName(request.getFullName())
 				.displayName(request.getDisplayName())
-				.avatarUrl(request.getAvatarUrl())
+				.avatarUrl(AvatarUrlResolver.normalizeForStorage(
+						request.getAvatarUrl(), minioProperties.getBucket()))
 				.dateOfBirth(request.getDateOfBirth())
 				.gender(request.getGender())
 				.billiardRank(rank)
@@ -72,7 +78,8 @@ public class PlayerProfileServiceImpl implements PlayerProfileService {
 				.userId(profile.getUserId())
 				.fullName(profile.getFullName())
 				.displayName(profile.getDisplayName())
-				.avatarUrl(profile.getAvatarUrl())
+				.avatarUrl(AvatarUrlResolver.resolveForResponse(
+						profile.getAvatarUrl(), minioStorageService, minioProperties.getBucket()))
 				.dateOfBirth(profile.getDateOfBirth())
 				.gender(profile.getGender())
 				.billiardRank(profile.getBilliardRank())

@@ -11,12 +11,12 @@ import lombok.Setter;
 @Schema(description = "Verify OTP request")
 public class VerifyOtpRequest {
 
-	@NotBlank(message = "Email is required")
-	@Email(message = "Invalid email format")
+	@NotBlank(message = "Email không được để trống")
+	@Email(message = "Định dạng email không hợp lệ")
 	@Schema(example = "user@example.com")
 	private String email;
 
-	@NotBlank(message = "OTP is required")
+	@NotBlank(message = "Mã OTP không được để trống")
 	@Schema(example = "123456")
 	private String otp;
 }

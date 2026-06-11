@@ -10,6 +10,6 @@ import lombok.Setter;
 @Schema(description = "Bật/tắt thể thức")
 public class PatchFormatActiveRequest {
 
-	@NotNull
+	@NotNull(message = "Trạng thái active không được để trống")
 	private Boolean isActive;
 }

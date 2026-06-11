@@ -34,7 +34,7 @@ public class PlayerController {
 			@Valid @RequestBody CreatePlayerProfileRequest request) {
 		PlayerProfileResponse response = playerProfileService.createProfile(authentication.getName(), request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Profile created", response));
+				.body(ApiResponse.success("Đã tạo hồ sơ", response));
 	}
 
 //	@Operation(summary = "Get my profile", description = "Xem profile của Player đang đăng nhập")

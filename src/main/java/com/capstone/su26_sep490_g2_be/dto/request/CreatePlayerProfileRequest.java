@@ -12,14 +12,14 @@ import java.time.LocalDate;
 @Schema(description = "Tạo profile Player — bước 2 sau khi đăng ký tài khoản")
 public class CreatePlayerProfileRequest {
 
-	@NotBlank(message = "Full name is required")
+	@NotBlank(message = "Họ tên không được để trống")
 	@Schema(example = "Nguyen Van A")
 	private String fullName;
 
 	@Schema(example = "Player A")
 	private String displayName;
 
-	@Schema(example = "https://example.com/avatar.jpg")
+	@Schema(description = "MinIO object key (data.objectKey từ POST /storage/images)", example = "avatars/a1b2c3d4-e5f6.jpg")
 	private String avatarUrl;
 
 	@Schema(example = "1998-05-15")

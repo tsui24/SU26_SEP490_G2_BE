@@ -17,6 +17,7 @@ Chi tiết: `.cursor/skills/git-feature-workflow/SKILL.md`
 | `git-branch-workflow.mdc` | Nhánh dev/prod, cấm thao tác nguy hiểm |
 | `commit-message.mdc` | Conventional Commits |
 | `spring-boot-java.mdc` | Convention Java/Spring (khi sửa `*.java`) |
+| `vietnamese-messages.mdc` | Message lỗi / validation / API success — tiếng Việt |
 
 ## Skills (gọi khi cần)
 
