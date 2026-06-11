@@ -11,10 +11,10 @@
 | Loại | Bảng | Số dòng gợi ý | Ai tạo sau nếu không init |
 |------|------|---------------|---------------------------|
 | **Bắt buộc** | `roles` | 3 | — |
-| **Bắt buộc** | `config_field_definitions` | ~17 | Developer release mới |
+| **Bắt buộc** | `config_field_definitions` | ~20 | Developer release mới |
 | **Bắt buộc** | `game_type_definitions` | 3+ | Admin UC-13 |
 | **Khuyến nghị** | `tournament_format_definitions` | 3 | Admin wizard Màn 1 |
-| **Khuyến nghị** | `format_config_fields` | ~21 | Admin wizard Màn 2 |
+| **Khuyến nghị** | `format_config_fields` | ~35 | Admin wizard Màn 2 |
 | **Khuyến nghị** | `format_race_to_rules` | ~18 | Admin wizard Màn 3 |
 | **Tùy chọn** | `users` + `user_profiles` | 1 admin | Đăng ký / tạo tay |
 | **Không init** | `tournaments`, `tournament_*`, `matches`… | 0 | Owner / runtime |
@@ -41,18 +41,21 @@ Hệ thống auth không chạy nếu thiếu.
 
 **Catalog field** — mọi `format_config_fields.field_key` và `tournament_config_values.field_key` đều FK vào đây.
 
-Admin **không** tạo field mới trên UI; chỉ chọn từ catalog.
+Admin có thể **thêm field qua API** (`POST /api/v1/admin/config-field-catalog`) hoặc developer seed lần đầu; sau đó gán vào từng format qua wizard `PUT /admin/formats/{code}/config-fields`.
 
 | field_key | field_scope | Ghi chú |
 |-----------|-------------|---------|
-| `break_rule` | COMMON | |
-| `lag_for_break` | COMMON | |
-| `scoring_unit` | COMMON | |
+| `break_rule` | COMMON | ENUM / SELECT |
+| `lag_for_break` | COMMON | BOOLEAN / CHECKBOX |
+| `scoring_unit` | COMMON | ENUM / SELECT |
+| `is_show_tournament` | COMMON | BOOLEAN / CHECKBOX — hiển thị giải công khai |
+| `is_public_ratio` | COMMON | BOOLEAN / CHECKBOX — công khai tỷ lệ thắng/thua |
+| `is_register` | COMMON | BOOLEAN / CHECKBOX — cho phép đăng ký tham gia |
 | `bracket_size` | KNOCKOUT | Single/Double elim |
-| `allow_bye` | KNOCKOUT | |
-| `seeding_enabled` | KNOCKOUT | |
-| `third_place_match` | KNOCKOUT | Single elim |
-| `grand_final_bracket_reset` | DOUBLE_ELIM | Double elim |
+| `allow_bye` | KNOCKOUT | BOOLEAN / CHECKBOX |
+| `seeding_enabled` | KNOCKOUT | BOOLEAN / CHECKBOX |
+| `third_place_match` | KNOCKOUT | BOOLEAN / CHECKBOX — Single elim |
+| `grand_final_bracket_reset` | DOUBLE_ELIM | BOOLEAN / CHECKBOX — Double elim |
 | `group_count` | GROUP | Group playoff |
 | `players_per_group` | GROUP | |
 | `advance_per_group` | GROUP | |
@@ -63,7 +66,26 @@ Admin **không** tạo field mới trên UI; chỉ chọn từ catalog.
 | `playoff_bracket_size` | PLAYOFF | |
 | `playoff_bye_top_seeds` | PLAYOFF | |
 
-**Số dòng:** **17** (seed **đủ catalog** một lần, dù phase 1 chỉ dùng 2–3 format)
+**Số dòng:** **20** (seed **đủ catalog** một lần, dù phase 1 chỉ dùng 2–3 format)
+
+> Ba field `is_show_tournament`, `is_public_ratio`, `is_register` dùng scope `COMMON`, lưu giá trị runtime tại `tournament_config_values` (không phải cột trên `tournaments`). Default mỗi format: `"false"`.
+
+**Thêm field mới (không sửa `DatabaseSeedData`):**
+
+```http
+POST /api/v1/admin/config-field-catalog
+{
+  "fieldKey": "is_show_tournament",
+  "label": "Hiển thị giải đấu",
+  "description": "Hiển thị giải trên trang công khai",
+  "dataType": "BOOLEAN",
+  "fieldScope": "COMMON",
+  "uiComponent": "CHECKBOX",
+  "isActive": true
+}
+```
+
+Sau đó gán default cho từng format: `PUT /api/v1/admin/formats/{code}/config-fields` (thêm item vào mảng `fields`).
 
 Chi tiết JSON từng field: xem [`seed-SINGLE_ELIMINATION-db.md`](./seed-SINGLE_ELIMINATION-db.md) mục ① + bổ sung field GROUP/DOUBLE trong [`billiards-tournament-formats-guide.md`](./billiards-tournament-formats-guide.md) §3.3.
 
@@ -117,10 +139,12 @@ Default field **theo từng format** (FK → `config_field_definitions` + `tourn
 
 | format_code | Số dòng |
 |-------------|---------|
-| `SINGLE_ELIMINATION` | 7 |
-| `DOUBLE_ELIMINATION` | 7 |
-| `GROUP_PLAYOFF` | ~11 |
-| **Tổng** | **~25** |
+| `SINGLE_ELIMINATION` | 10 |
+| `DOUBLE_ELIMINATION` | 10 |
+| `GROUP_PLAYOFF` | 15 |
+| **Tổng** | **35** |
+
+Mỗi format đều gồm 3 field CHECKBOX chung: `is_show_tournament`, `is_public_ratio`, `is_register` (default `"false"`, `is_visible_to_owner=true`).
 
 Chi tiết Single Elim: [`seed-SINGLE_ELIMINATION-db.md`](./seed-SINGLE_ELIMINATION-db.md) mục ③.
 
@@ -201,7 +225,7 @@ users.role_id                         → roles.id
 
 **Hệ quả:** Admin **bắt buộc** wizard setup từng format trước khi Owner tạo giải.
 
-**Tổng dòng init:** ~23
+**Tổng dòng init:** ~26
 
 ---
 
@@ -211,7 +235,7 @@ users.role_id                         → roles.id
 
 **Hệ quả:** Deploy xong → Owner tạo giải ngay; Admin chỉ **sửa** default nếu cần.
 
-**Tổng dòng init:** ~23 + 3 + 25 + 19 ≈ **70 dòng**
+**Tổng dòng init:** ~26 + 3 + 35 + 19 ≈ **83 dòng**
 
 ---
 
@@ -219,10 +243,10 @@ users.role_id                         → roles.id
 
 ```text
 [ ] roles (3)
-[ ] config_field_definitions (17)
+[ ] config_field_definitions (20)
 [ ] game_type_definitions (3)
 [ ] tournament_format_definitions (3)        ← optional nếu chiến lược A
-[ ] format_config_fields (~25)               ← optional nếu chiến lược A
+[ ] format_config_fields (35)                ← optional nếu chiến lược A
 [ ] format_race_to_rules (~19)               ← optional nếu chiến lược A
 [ ] admin user (optional)
 ```
@@ -235,9 +259,9 @@ Nếu init **cả catalog + Single Elim sẵn sàng**:
 
 | Bảng | Dòng |
 |------|------|
-| `config_field_definitions` | 7 field (hoặc 17 nếu seed full catalog) |
+| `config_field_definitions` | 7 field (hoặc 20 nếu seed full catalog) |
 | `tournament_format_definitions` | 1 |
-| `format_config_fields` | 7 |
+| `format_config_fields` | 10 (gồm 3 CHECKBOX: `is_show_tournament`, `is_public_ratio`, `is_register`) |
 | `format_race_to_rules` | 5 |
 
 → Xem payload đầy đủ: [`seed-SINGLE_ELIMINATION-db.md`](./seed-SINGLE_ELIMINATION-db.md)

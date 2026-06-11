@@ -11,18 +11,18 @@ import lombok.Setter;
 @Schema(description = "Tạo thể thức giải đấu — Wizard màn 1")
 public class CreateFormatRequest {
 
-	@NotBlank
-	@Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "code must be UPPER_SNAKE_CASE")
+	@NotBlank(message = "Mã thể thức không được để trống")
+	@Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "Mã thể thức phải dạng UPPER_SNAKE_CASE")
 	@Schema(example = "SINGLE_ELIMINATION")
 	private String code;
 
-	@NotBlank
+	@NotBlank(message = "Tên thể thức không được để trống")
 	private String name;
 
-	@NotBlank
+	@NotBlank(message = "Mô tả không được để trống")
 	private String description;
 
-	@NotBlank
+	@NotBlank(message = "Handler key không được để trống")
 	@Schema(example = "pool_single_elimination_handler")
 	private String handlerKey;
 

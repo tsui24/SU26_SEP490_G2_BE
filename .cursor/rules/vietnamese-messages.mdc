@@ -1,0 +1,35 @@
+---
+description: Message hiển thị cho người dùng phải dùng tiếng Việt
+alwaysApply: true
+---
+
+# Message tiếng Việt (user-facing)
+
+Mọi nội dung **người dùng / FE đọc được** phải viết **tiếng Việt**:
+
+| Vị trí | Ví dụ |
+|--------|--------|
+| `ErrorCode.message` | `"Email đã được đăng ký"` |
+| `BusinessException` message tùy chỉnh | Tiếng Việt; ưu tiên thêm vào `ErrorCode` nếu tái sử dụng |
+| `@NotBlank`, `@Email`, `@Pattern` … trên `*Request` | `message = "Email không được để trống"` |
+| `ApiResponse.success("...")` | `"Tạo tài khoản thành công"` |
+| Enum `displayName` / nhãn hiển thị (`RoleCode`, `UserStatus`, …) | Tiếng Việt |
+
+## Giữ nguyên tiếng Anh (mã kỹ thuật)
+
+- Tên enum constant: `ACTIVE`, `KNOCKOUT`, `9_BALL` — dùng trong DB/API contract
+- `ErrorCode.code`: `AUTH_002`, `FORMAT_001`
+- Tên class, method, biến, commit message (Conventional Commits tiếng Anh theo rule repo)
+- Swagger `summary`/`description` có thể song ngữ hoặc tiếng Việt tùy team; ưu tiên tiếng Việt cho mô tả nghiệp vụ
+
+## Khi thêm API mới
+
+1. Lỗi → `ErrorCode` (message tiếng Việt) hoặc `BusinessException` với chuỗi tiếng Việt
+2. Validation DTO → `message` tiếng Việt
+3. Response success → `ApiResponse.success("...")` tiếng Việt
+4. Enum có nhãn UI → field `displayName` tiếng Việt
+
+## Không
+
+- Hardcode message lỗi tiếng Anh trong service/controller
+- Trả message kỹ thuật raw (`ex.getMessage()`) cho client trừ khi đã bọc/ dịch

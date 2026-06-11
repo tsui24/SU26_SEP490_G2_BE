@@ -29,7 +29,7 @@ public class UserProfileResponse {
 	@Schema(description = "Tên hiển thị")
 	private String displayName;
 
-	@Schema(description = "Đường dẫn ảnh đại diện")
+	@Schema(description = "Presigned URL ảnh đại diện (sinh mới mỗi lần GET, từ object key lưu DB)")
 	private String avatarUrl;
 
 	@Schema(description = "Ngày sinh")

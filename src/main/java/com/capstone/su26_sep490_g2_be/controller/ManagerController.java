@@ -53,7 +53,7 @@ public class ManagerController {
 			@Valid @RequestBody CreateStaffAccountRequest request) {
 		EmployeeAccountResponse response = accountService.createStaffAccount(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Staff account created", response));
+				.body(ApiResponse.success("Đã tạo tài khoản Staff", response));
 	}
 	@Operation(summary = "View staff details",
 			description = "Xem thông tin chi tiết của một nhân viên  theo ID.")
@@ -81,6 +81,6 @@ public class ManagerController {
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateEmployee(
 			@PathVariable Long id) {
 		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
-		return ResponseEntity.ok(ApiResponse.success("Staff account deactivated successfully", response));
+		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa tài khoản Staff", response));
 	}
 }

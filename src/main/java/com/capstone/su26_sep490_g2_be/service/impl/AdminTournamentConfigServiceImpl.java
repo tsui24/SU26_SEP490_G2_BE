@@ -38,7 +38,7 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 
 	@Override
 	public PageResponse<ConfigFieldCatalogItemResponse> getConfigFieldCatalog(
-			String scope, Boolean isActive, int page, int size) {
+			List<String> scope, Boolean isActive, int page, int size) {
 		Pageable pageable = PageableUtil.create(page, size, "fieldKey");
 		Specification<ConfigFieldDefinition> spec = buildCatalogSpecification(scope, isActive);
 		Page<ConfigFieldDefinition> result = configFieldRepository.findAll(spec, pageable);
@@ -48,6 +48,60 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	@Override
 	public ConfigFieldCatalogItemResponse getConfigFieldCatalogItem(String fieldKey) {
 		return toCatalogItem(getFieldDefinition(fieldKey));
+	}
+
+	@Override
+	@Transactional
+	public ConfigFieldCatalogItemResponse createConfigFieldCatalogItem(CreateConfigFieldCatalogRequest request) {
+		if (configFieldRepository.existsById(request.getFieldKey())) {
+			throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Mã field đã tồn tại trong catalog");
+		}
+		validateCatalogFieldTypes(request.getDataType(), request.getFieldScope(), request.getUiComponent());
+		validateCatalogFieldOptions(request.getDataType(), request.getEnumOptions(), request.getMinValue(), request.getMaxValue());
+
+		ConfigFieldDefinition field = ConfigFieldDefinition.builder()
+				.fieldKey(request.getFieldKey())
+				.label(request.getLabel())
+				.description(request.getDescription())
+				.dataType(request.getDataType().trim().toUpperCase())
+				.fieldScope(request.getFieldScope().trim().toUpperCase())
+				.uiComponent(request.getUiComponent().trim().toUpperCase())
+				.enumOptions(JsonParseUtil.toJson(request.getEnumOptions()))
+				.minValue(request.getMinValue())
+				.maxValue(request.getMaxValue())
+				.isActive(request.getIsActive() == null || request.getIsActive())
+				.build();
+		return toCatalogItem(configFieldRepository.save(field));
+	}
+
+	@Override
+	@Transactional
+	public ConfigFieldCatalogItemResponse updateConfigFieldCatalogItem(String fieldKey, UpdateConfigFieldCatalogRequest request) {
+		ConfigFieldDefinition existing = getFieldDefinition(fieldKey);
+		validateCatalogUiComponent(existing.getDataType(), request.getUiComponent());
+		if ("ENUM".equals(existing.getDataType())) {
+			validateEnumOptions(request.getEnumOptions());
+		}
+		if ("INT".equals(existing.getDataType()) && request.getMinValue() != null && request.getMaxValue() != null
+				&& request.getMinValue() > request.getMaxValue()) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Giá trị tối thiểu phải nhỏ hơn hoặc bằng giá trị tối đa");
+		}
+
+		existing.setLabel(request.getLabel());
+		existing.setDescription(request.getDescription());
+		existing.setUiComponent(request.getUiComponent().trim().toUpperCase());
+		existing.setEnumOptions(JsonParseUtil.toJson(request.getEnumOptions()));
+		existing.setMinValue(request.getMinValue());
+		existing.setMaxValue(request.getMaxValue());
+		return toCatalogItem(configFieldRepository.save(existing));
+	}
+
+	@Override
+	@Transactional
+	public ConfigFieldCatalogItemResponse patchConfigFieldCatalogActive(String fieldKey, PatchFormatActiveRequest request) {
+		ConfigFieldDefinition existing = getFieldDefinition(fieldKey);
+		existing.setIsActive(request.getIsActive());
+		return toCatalogItem(configFieldRepository.save(existing));
 	}
 
 	@Override
@@ -346,16 +400,41 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	}
 
 	@Override
-	public PageResponse<GameTypeDetailResponse> listGameTypes(int page, int size) {
+	public PageResponse<GameTypeDetailResponse> listGameTypes(
+			Boolean isActive, String search, int page, int size) {
 		Pageable pageable = PageableUtil.create(page, size, "createdAt");
-		return PageResponse.of(gameTypeRepository.findAll(pageable), this::toGameTypeDetail);
+		Specification<GameTypeDefinition> spec = buildGameTypeSpecification(isActive, search);
+		return PageResponse.of(gameTypeRepository.findAll(spec, pageable), this::toGameTypeDetail);
+	}
+
+	@Override
+	public GameTypeDetailResponse getGameType(String code) {
+		return toGameTypeDetail(getGameTypeDefinition(code));
+	}
+
+	@Override
+	@Transactional
+	public GameTypeDetailResponse createGameType(CreateGameTypeRequest request) {
+		String code = request.getCode().trim().toUpperCase();
+		if (gameTypeRepository.existsById(code)) {
+			throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Mã loại bi đã tồn tại");
+		}
+
+		GameTypeDefinition gameType = GameTypeDefinition.builder()
+				.code(code)
+				.name(request.getName())
+				.description(request.getDescription())
+				.defaultRaceTo(request.getDefaultRaceTo())
+				.compatibleTableTypes(JsonParseUtil.toJson(request.getCompatibleTableTypes()))
+				.isActive(request.getIsActive() == null || request.getIsActive())
+				.build();
+		return toGameTypeDetail(gameTypeRepository.save(gameType));
 	}
 
 	@Override
 	@Transactional
 	public GameTypeDetailResponse updateGameType(String code, UpdateGameTypeRequest request) {
-		GameTypeDefinition gameType = gameTypeRepository.findById(code)
-				.orElseThrow(() -> new BusinessException(ErrorCode.GAME_TYPE_NOT_FOUND));
+		GameTypeDefinition gameType = getGameTypeDefinition(code);
 
 		gameType.setName(request.getName());
 		gameType.setDescription(request.getDescription());
@@ -367,23 +446,65 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 		return toGameTypeDetail(gameType);
 	}
 
-	private Specification<ConfigFieldDefinition> buildCatalogSpecification(String scope, Boolean isActive) {
+	@Override
+	@Transactional
+	public GameTypeDetailResponse patchGameTypeActive(String code, PatchFormatActiveRequest request) {
+		GameTypeDefinition gameType = getGameTypeDefinition(code);
+		gameType.setIsActive(request.getIsActive());
+		return toGameTypeDetail(gameTypeRepository.save(gameType));
+	}
+
+	private GameTypeDefinition getGameTypeDefinition(String code) {
+		return gameTypeRepository.findById(code)
+				.orElseThrow(() -> new BusinessException(ErrorCode.GAME_TYPE_NOT_FOUND));
+	}
+
+	private Specification<GameTypeDefinition> buildGameTypeSpecification(Boolean isActive, String search) {
 		return (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
 			if (isActive != null) {
 				predicates.add(cb.equal(root.get("isActive"), isActive));
 			}
-			if (scope != null && !scope.isBlank()) {
-				List<String> scopes = Arrays.stream(scope.split(","))
-						.map(String::trim)
-						.filter(s -> !s.isEmpty())
-						.toList();
-				if (!scopes.isEmpty()) {
-					predicates.add(root.get("fieldScope").in(scopes));
-				}
+			if (search != null && !search.isBlank()) {
+				String pattern = "%" + search.trim().toLowerCase() + "%";
+				predicates.add(cb.or(
+						cb.like(cb.lower(root.get("code")), pattern),
+						cb.like(cb.lower(root.get("name")), pattern)
+				));
+			}
+			return cb.and(predicates.toArray(new Predicate[0]));
+		};
+	}
+
+	private Specification<ConfigFieldDefinition> buildCatalogSpecification(List<String> scope, Boolean isActive) {
+		List<String> normalizedScopes = normalizeScopeFilter(scope);
+		return (root, query, cb) -> {
+			List<Predicate> predicates = new ArrayList<>();
+			if (isActive != null) {
+				predicates.add(cb.equal(root.get("isActive"), isActive));
+			}
+			if (!normalizedScopes.isEmpty()) {
+				predicates.add(root.get("fieldScope").in(normalizedScopes));
 			}
 			return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
 		};
+	}
+
+	/**
+	 * Hỗ trợ scope=KNOCKOUT, scope=COMMON,KNOCKOUT hoặc scope=COMMON&scope=KNOCKOUT (axios multi).
+	 */
+	private List<String> normalizeScopeFilter(List<String> scopeParams) {
+		if (scopeParams == null || scopeParams.isEmpty()) {
+			return List.of();
+		}
+		return scopeParams.stream()
+				.filter(Objects::nonNull)
+				.flatMap(value -> Arrays.stream(value.split(",")))
+				.map(String::trim)
+				.filter(s -> !s.isEmpty())
+				.map(String::toUpperCase)
+				.distinct()
+				.toList();
 	}
 
 	private FormatSetupStatusResponse buildSetupStatusResponse(TournamentFormatDefinition format) {
@@ -454,19 +575,19 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	private List<String> validateSetup(List<FormatConfigField> configFields, List<FormatRaceToRule> raceToRules) {
 		List<String> errors = new ArrayList<>();
 		if (configFields.isEmpty()) {
-			errors.add("Missing config fields");
+			errors.add("Thiếu cấu hình field");
 		}
 		if (raceToRules.isEmpty()) {
-			errors.add("Missing race-to rules");
+			errors.add("Thiếu quy tắc race-to");
 		}
 		for (FormatConfigField field : configFields) {
 			if (field.getDefaultValue() == null || field.getDefaultValue().isBlank()) {
-				errors.add("Empty default value for field: " + field.getFieldKey());
+				errors.add("Giá trị mặc định trống cho field: " + field.getFieldKey());
 			}
 		}
 		for (FormatRaceToRule rule : raceToRules) {
 			if (rule.getRaceTo() == null || rule.getRaceTo() <= 0) {
-				errors.add("Invalid race-to for round: " + rule.getRoundKey());
+				errors.add("Race-to không hợp lệ cho vòng: " + rule.getRoundKey());
 			}
 		}
 		return errors;
@@ -480,6 +601,59 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	private ConfigFieldDefinition getFieldDefinition(String fieldKey) {
 		return configFieldRepository.findById(fieldKey)
 				.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_FIELD_KEY));
+	}
+
+	private static final Set<String> ALLOWED_DATA_TYPES = Set.of("INT", "BOOLEAN", "ENUM", "STRING");
+	private static final Set<String> ALLOWED_FIELD_SCOPES = Set.of("COMMON", "KNOCKOUT", "GROUP", "DOUBLE_ELIM", "PLAYOFF");
+	private static final Set<String> ALLOWED_UI_COMPONENTS = Set.of("NUMBER", "SELECT", "CHECKBOX", "TEXT");
+
+	private void validateCatalogFieldTypes(String dataType, String fieldScope, String uiComponent) {
+		String normalizedDataType = dataType != null ? dataType.trim().toUpperCase() : "";
+		String normalizedScope = fieldScope != null ? fieldScope.trim().toUpperCase() : "";
+		if (!ALLOWED_DATA_TYPES.contains(normalizedDataType)) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"dataType phải là một trong: INT, BOOLEAN, ENUM, STRING");
+		}
+		if (!ALLOWED_FIELD_SCOPES.contains(normalizedScope)) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"fieldScope phải là một trong: COMMON, KNOCKOUT, GROUP, DOUBLE_ELIM, PLAYOFF");
+		}
+		validateCatalogUiComponent(normalizedDataType, uiComponent);
+	}
+
+	private void validateCatalogUiComponent(String dataType, String uiComponent) {
+		String normalizedUi = uiComponent != null ? uiComponent.trim().toUpperCase() : "";
+		if (!ALLOWED_UI_COMPONENTS.contains(normalizedUi)) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"uiComponent phải là một trong: NUMBER, SELECT, CHECKBOX, TEXT");
+		}
+		String normalizedDataType = dataType != null ? dataType.trim().toUpperCase() : "";
+		boolean validPair = switch (normalizedDataType) {
+			case "INT" -> "NUMBER".equals(normalizedUi);
+			case "BOOLEAN" -> "CHECKBOX".equals(normalizedUi);
+			case "ENUM" -> "SELECT".equals(normalizedUi);
+			case "STRING" -> "TEXT".equals(normalizedUi);
+			default -> false;
+		};
+		if (!validPair) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"uiComponent không khớp dataType (INT→NUMBER, BOOLEAN→CHECKBOX, ENUM→SELECT, STRING→TEXT)");
+		}
+	}
+
+	private void validateCatalogFieldOptions(String dataType, List<String> enumOptions, Integer minValue, Integer maxValue) {
+		if ("ENUM".equals(dataType.trim().toUpperCase())) {
+			validateEnumOptions(enumOptions);
+		}
+		if ("INT".equals(dataType.trim().toUpperCase()) && minValue != null && maxValue != null && minValue > maxValue) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Giá trị tối thiểu phải nhỏ hơn hoặc bằng giá trị tối đa");
+		}
+	}
+
+	private void validateEnumOptions(List<String> enumOptions) {
+		if (enumOptions == null || enumOptions.isEmpty()) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "enumOptions bắt buộc khi dataType là ENUM");
+		}
 	}
 
 	private ConfigFieldCatalogItemResponse toCatalogItem(ConfigFieldDefinition field) {

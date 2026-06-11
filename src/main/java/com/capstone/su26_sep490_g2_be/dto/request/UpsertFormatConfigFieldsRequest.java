@@ -14,7 +14,7 @@ import java.util.List;
 @Schema(description = "Lưu default config fields cho thể thức — Wizard màn 2")
 public class UpsertFormatConfigFieldsRequest {
 
-	@NotEmpty
+	@NotEmpty(message = "Danh sách field cấu hình không được để trống")
 	@Valid
 	private List<FormatConfigFieldItemRequest> fields;
 
@@ -22,10 +22,10 @@ public class UpsertFormatConfigFieldsRequest {
 	@Setter
 	public static class FormatConfigFieldItemRequest {
 
-		@NotBlank
+		@NotBlank(message = "Field key không được để trống")
 		private String fieldKey;
 
-		@NotBlank
+		@NotBlank(message = "Giá trị mặc định không được để trống")
 		private String defaultValue;
 
 		private Boolean isRequired;

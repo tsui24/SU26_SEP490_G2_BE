@@ -11,12 +11,12 @@ import lombok.Setter;
 @Schema(description = "Đổi mật khẩu (cần đăng nhập)")
 public class ChangePasswordRequest {
 
-	@NotBlank(message = "Current password is required")
+	@NotBlank(message = "Mật khẩu hiện tại không được để trống")
 	@Schema(example = "OldP@ssw0rd")
 	private String oldPassword;
 
-	@NotBlank(message = "New password is required")
-	@Size(min = 6, max = 100, message = "Password must be 6-100 characters")
+	@NotBlank(message = "Mật khẩu mới không được để trống")
+	@Size(min = 6, max = 100, message = "Mật khẩu phải từ 6-100 ký tự")
 	@Schema(example = "NewP@ssw0rd")
 	private String newPassword;
 }
