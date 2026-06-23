@@ -79,13 +79,16 @@ public class Tournament extends BaseEntity {
 	private User createdBy;
 
 	@Column(name = "is_show_tournament")
-	private boolean isShowTournament;
+	@Builder.Default
+	private Boolean isShowTournament = false;
 
 	@Column(name = "is_public_ratio")
-	private boolean isPublicRatio;
+	@Builder.Default
+	private Boolean isPublicRatio = false;
 
 	@Column(name = "is_register")
-	private boolean isRegister;
+	@Builder.Default
+	private Boolean isRegister = false;
 
 	@Column(name = "registration_form_template_id")
 	private Long registrationFormTemplateId;

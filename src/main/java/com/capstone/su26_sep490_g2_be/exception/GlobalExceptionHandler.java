@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.exception;
 
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -49,6 +51,7 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
+		log.error("Unhandled exception: {}", ex.getMessage(), ex);
 		return ResponseEntity
 				.status(ErrorCode.COMMON_INTERNAL_ERROR.getHttpStatus())
 				.body(ApiResponse.error(ErrorCode.COMMON_INTERNAL_ERROR));

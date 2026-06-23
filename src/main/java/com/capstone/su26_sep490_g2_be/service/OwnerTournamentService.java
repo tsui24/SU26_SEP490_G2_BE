@@ -40,4 +40,8 @@ public interface OwnerTournamentService {
 
 	RegistrationFormPreviewResponse getTournamentRegistrationForm(
 			Long userId, Long tournamentId, boolean enforceOwnership);
+
+	PageResponse<TournamentListItemResponse> listPlayerTournaments(String status, String search, int page, int size);
+
+	TournamentDetailResponse getPlayerTournamentDetail(Long tournamentId);
 }

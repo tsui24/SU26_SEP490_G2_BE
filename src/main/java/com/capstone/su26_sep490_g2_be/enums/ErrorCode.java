@@ -67,6 +67,16 @@ public enum ErrorCode {
 	REGISTRATION_NOT_OPEN("REG_FORM_010", "Tournament is not open for registration", HttpStatus.UNPROCESSABLE_ENTITY),
 	REGISTRATION_ALREADY_EXISTS("REG_FORM_011", "You have already registered for this tournament", HttpStatus.CONFLICT),
 
+	// Tournament participation
+	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),
+
+	// Payment
+	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),
+	PAYMENT_NOT_FOUND("PAYMENT_002", "Không tìm thấy thông tin thanh toán", HttpStatus.NOT_FOUND),
+	PAYMENT_ALREADY_PAID("PAYMENT_003", "Đăng ký này đã được thanh toán", HttpStatus.CONFLICT),
+	PAYMENT_NOT_REQUIRED("PAYMENT_004", "Giải đấu này miễn phí — không cần thanh toán", HttpStatus.BAD_REQUEST),
+	PAYMENT_INVALID_SIGNATURE("PAYMENT_005", "Chữ ký thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
+
 	// Storage (MinIO)
 	STORAGE_UPLOAD_FAILED("STORAGE_001", "Tải file lên thất bại", HttpStatus.INTERNAL_SERVER_ERROR),
 	STORAGE_DOWNLOAD_FAILED("STORAGE_002", "Tải file xuống thất bại", HttpStatus.INTERNAL_SERVER_ERROR),

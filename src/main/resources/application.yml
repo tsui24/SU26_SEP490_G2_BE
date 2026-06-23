@@ -44,6 +44,13 @@ app:
     connect-timeout-ms: ${MINIO_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${MINIO_READ_TIMEOUT_MS:5000}
     write-timeout-ms: ${MINIO_WRITE_TIMEOUT_MS:5000}
+  payos:
+    client-id: ${PAYOS_CLIENT_ID:}
+    api-key: ${PAYOS_API_KEY:}
+    checksum-key: ${PAYOS_CHECKSUM_KEY:}
+    api-url: https://api-merchant.payos.vn
+    return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/success}
+    cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/cancel}
   cors:
     allowed-origin-patterns:
       - http://localhost:*

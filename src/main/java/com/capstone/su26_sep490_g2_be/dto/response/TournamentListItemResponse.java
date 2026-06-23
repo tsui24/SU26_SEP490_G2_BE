@@ -17,10 +17,14 @@ public class TournamentListItemResponse {
 	private String gameType;
 	private String format;
 	private String formatName;
+	private String participantType;
 	private String status;
 	private Integer maxParticipants;
 	private BigDecimal entryFee;
+	private Boolean isRegister;
 	private Boolean configComplete;
+	private Long approvedCount;
+	private Instant registrationDeadline;
 	private Instant startAt;
 	private Instant endAt;
 	private Instant createdAt;

@@ -37,14 +37,14 @@ public class PlayerController {
 				.body(ApiResponse.success("Đã tạo hồ sơ", response));
 	}
 
-//	@Operation(summary = "Get my profile", description = "Xem profile của Player đang đăng nhập")
-//	@ApiResponses({
-//			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Thành công"),
-//			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Chưa tạo profile")
-//	})
-//	@GetMapping("/profile")
-//	public ResponseEntity<ApiResponse<PlayerProfileResponse>> getMyProfile(Authentication authentication) {
-//		PlayerProfileResponse response = playerProfileService.getMyProfile(authentication.getName());
-//		return ResponseEntity.ok(ApiResponse.success(response));
-//	}
+	@Operation(summary = "Get my profile", description = "Xem profile của Player đang đăng nhập")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Chưa tạo profile")
+	})
+	@GetMapping("/profile")
+	public ResponseEntity<ApiResponse<PlayerProfileResponse>> getMyProfile(Authentication authentication) {
+		PlayerProfileResponse response = playerProfileService.getMyProfile(authentication.getName());
+		return ResponseEntity.ok(ApiResponse.success(response));
+	}
 }

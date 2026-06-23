@@ -29,6 +29,8 @@ public class TournamentDetailResponse {
 	private Instant endAt;
 	private Boolean configComplete;
 	private Boolean isRegister;
+	private Long approvedCount;
+	private Integer remainingSlots;
 	private Long registrationFormTemplateId;
 	private String registrationFormTemplateCode;
 	private String registrationFormTemplateName;

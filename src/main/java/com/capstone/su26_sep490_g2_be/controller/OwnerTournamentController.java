@@ -35,7 +35,7 @@ public class OwnerTournamentController {
 			@RequestParam(defaultValue = "10") int size) {
 		return ResponseEntity.ok(ApiResponse.success(
 				ownerTournamentService.listTournaments(
-						extractUserId(authentication), true, status, search, page, size)));
+						extractUserId(authentication), false, status, search, page, size)));
 	}
 
 	@Operation(summary = "Danh sách thể thức", description = "Dropdown thể thức — chỉ format active và đã setup default")
@@ -72,7 +72,7 @@ public class OwnerTournamentController {
 			@PathVariable Long id,
 			@Valid @RequestBody UpdateTournamentRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.updateTournament(extractUserId(authentication), id, request, true)));
+				ownerTournamentService.updateTournament(extractUserId(authentication), id, request, false)));
 	}
 
 	@Operation(summary = "Chi tiết giải đấu")
@@ -81,7 +81,7 @@ public class OwnerTournamentController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getTournament(extractUserId(authentication), id, true)));
+				ownerTournamentService.getTournament(extractUserId(authentication), id, false)));
 	}
 
 	@Operation(summary = "Load form config", description = "Wizard bước 2 — pre-fill từ Admin default, Owner có thể chỉnh")
@@ -90,7 +90,7 @@ public class OwnerTournamentController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getConfigForm(extractUserId(authentication), id, true)));
+				ownerTournamentService.getConfigForm(extractUserId(authentication), id, false)));
 	}
 
 	@Operation(summary = "Lưu config giải", description = "Wizard bước 2 — lưu override config và race-to")
@@ -100,7 +100,7 @@ public class OwnerTournamentController {
 			@PathVariable Long id,
 			@Valid @RequestBody SaveTournamentConfigRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.saveConfig(extractUserId(authentication), id, request, true)));
+				ownerTournamentService.saveConfig(extractUserId(authentication), id, request, false)));
 	}
 
 	@Operation(summary = "Config đã resolve", description = "Preview config trước mở đăng ký")
@@ -109,7 +109,7 @@ public class OwnerTournamentController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getResolvedConfig(extractUserId(authentication), id, true)));
+				ownerTournamentService.getResolvedConfig(extractUserId(authentication), id, false)));
 	}
 
 	@Operation(summary = "Validate config giải")
@@ -118,7 +118,7 @@ public class OwnerTournamentController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.validateConfig(extractUserId(authentication), id, true)));
+				ownerTournamentService.validateConfig(extractUserId(authentication), id, false)));
 	}
 
 	@Operation(summary = "Đổi trạng thái giải", description = "Mở đăng ký hoặc chuyển trạng thái workflow")
@@ -128,7 +128,7 @@ public class OwnerTournamentController {
 			@PathVariable Long id,
 			@Valid @RequestBody PatchTournamentStatusRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, true)));
+				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, false)));
 	}
 
 	private Long extractUserId(Authentication authentication) {

@@ -4,10 +4,13 @@ import com.capstone.su26_sep490_g2_be.dto.request.SubmitTournamentRegistrationRe
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.RegistrationFormPreviewResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.TournamentDetailResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.TournamentListItemResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +34,26 @@ public class PlayerRegistrationController {
 	private final RegistrationService registrationService;
 	private final RegistrationFormService registrationFormService;
 	private final TournamentRepository tournamentRepository;
+	private final OwnerTournamentService ownerTournamentService;
+
+	@Operation(summary = "Danh sách giải đấu đang mở / sắp mở")
+	@GetMapping("/tournaments")
+	public ResponseEntity<ApiResponse<PageResponse<TournamentListItemResponse>>> listTournaments(
+			@RequestParam(required = false) String status,
+			@RequestParam(required = false) String search,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.listPlayerTournaments(status, search, page, size)));
+	}
+
+	@Operation(summary = "Chi tiết giải đấu")
+	@GetMapping("/tournaments/{tournamentId}")
+	public ResponseEntity<ApiResponse<TournamentDetailResponse>> getTournamentDetail(
+			@PathVariable Long tournamentId) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.getPlayerTournamentDetail(tournamentId)));
+	}
 
 	@Operation(summary = "Xem form đăng ký của giải")
 	@GetMapping("/tournaments/{tournamentId}/registration-form")
@@ -39,6 +62,16 @@ public class PlayerRegistrationController {
 		var tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 		return ResponseEntity.ok(ApiResponse.success(registrationFormService.resolveTournamentForm(tournament)));
+	}
+
+	@Operation(summary = "Kiểm tra đăng ký của tôi cho một giải — null nếu chưa đăng ký")
+	@GetMapping("/tournaments/{tournamentId}/my-registration")
+	public ResponseEntity<ApiResponse<TournamentRegistrationResponse>> getMyRegistrationForTournament(
+			Authentication authentication,
+			@PathVariable Long tournamentId) {
+		Long userId = extractUserId(authentication);
+		TournamentRegistrationResponse reg = registrationService.getMyRegistrationForTournament(tournamentId, userId);
+		return ResponseEntity.ok(ApiResponse.success(reg));
 	}
 
 	@Operation(summary = "Đăng ký giải đấu")
