@@ -49,7 +49,7 @@ public class RegistrationFormServiceImpl implements RegistrationFormService {
 	@Override
 	@Transactional(readOnly = true)
 	public RegistrationFormPreviewResponse resolveTournamentForm(Tournament tournament) {
-		if (!tournament.isRegister() || tournament.getRegistrationFormTemplateId() == null) {
+		if (!Boolean.TRUE.equals(tournament.getIsRegister()) || tournament.getRegistrationFormTemplateId() == null) {
 			throw new BusinessException(ErrorCode.REG_TEMPLATE_REQUIRED);
 		}
 		RegistrationFormTemplate template = loadTemplate(tournament.getRegistrationFormTemplateId());
@@ -62,6 +62,7 @@ public class RegistrationFormServiceImpl implements RegistrationFormService {
 				.tournamentId(tournament.getId())
 				.tournamentName(tournament.getName())
 				.participantType(tournament.getParticipantType())
+				.entryFee(tournament.getEntryFee())
 				.isReady(preview.getIsReady())
 				.fields(preview.getFields())
 				.build();
@@ -197,7 +198,8 @@ public class RegistrationFormServiceImpl implements RegistrationFormService {
 		return definition != null ? definition.getLabel() : templateField.getFieldKey();
 	}
 
-	private String resolveDescription(RegistrationFormTemplateField templateField, RegistrationFieldDefinition definition) {
+	private String resolveDescription(RegistrationFormTemplateField templateField,
+			RegistrationFieldDefinition definition) {
 		if (templateField.getDescriptionOverride() != null && !templateField.getDescriptionOverride().isBlank()) {
 			return templateField.getDescriptionOverride();
 		}

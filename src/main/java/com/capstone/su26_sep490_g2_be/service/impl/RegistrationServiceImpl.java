@@ -2,16 +2,19 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.request.RejectRegistrationRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.SubmitTournamentRegistrationRequest;
+import com.capstone.su26_sep490_g2_be.dto.response.CheckoutResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationResponse;
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldDefinitionRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldValueRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.PayOSService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationService;
 import com.capstone.su26_sep490_g2_be.util.PageableUtil;
@@ -21,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +44,8 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private final RegistrationFormService registrationFormService;
 	private final RegistrationFieldValueRepository fieldValueRepository;
 	private final RegistrationFieldDefinitionRepository fieldDefinitionRepository;
+	private final PaymentRepository paymentRepository;
+	private final PayOSService payOSService;
 
 	@Override
 	@Transactional
@@ -69,7 +75,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		}
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-		if (!tournament.isRegister()) {
+		if (!Boolean.TRUE.equals(tournament.getIsRegister())) {
 			throw new BusinessException(ErrorCode.INVALID_OPERATION);
 		}
 		if (!"OPEN_FOR_REGISTRATION".equals(tournament.getStatus())) {
@@ -98,6 +104,14 @@ public class RegistrationServiceImpl implements RegistrationService {
 		registration = registrationRepository.save(registration);
 		registrationFormService.saveFieldValues(
 				registration, tournament.getRegistrationFormTemplateId(), normalizedValues);
+
+		// Giải miễn phí → tự động xét duyệt ngay (slot check + pessimistic lock)
+		BigDecimal fee = tournament.getEntryFee();
+		if (fee == null || fee.compareTo(BigDecimal.ZERO) <= 0) {
+			approveOrRejectBySlot(registration);
+			registration = registrationRepository.findById(registration.getId()).orElse(registration);
+		}
+
 		return toResponse(registration);
 	}
 
@@ -191,21 +205,21 @@ public class RegistrationServiceImpl implements RegistrationService {
 	}
 
 	private TournamentRegistrationResponse toResponse(Registration registration) {
-		List<TournamentRegistrationResponse.FieldValueItem> fieldValues =
-				fieldValueRepository.findByRegistrationIdOrderByIdAsc(registration.getId()).stream()
-						.map(value -> {
-							RegistrationFieldDefinition definition = value.getFieldDefinition();
-							if (definition == null) {
-								definition = fieldDefinitionRepository
-										.findById(value.getId().getFieldKey()).orElse(null);
-							}
-							return TournamentRegistrationResponse.FieldValueItem.builder()
-									.fieldKey(value.getId().getFieldKey())
-									.label(definition != null ? definition.getLabel() : value.getId().getFieldKey())
-									.value(value.getValue())
-									.build();
-						})
-						.toList();
+		List<TournamentRegistrationResponse.FieldValueItem> fieldValues = fieldValueRepository
+				.findByRegistrationIdOrderByIdAsc(registration.getId()).stream()
+				.map(value -> {
+					RegistrationFieldDefinition definition = value.getFieldDefinition();
+					if (definition == null) {
+						definition = fieldDefinitionRepository
+								.findById(value.getId().getFieldKey()).orElse(null);
+					}
+					return TournamentRegistrationResponse.FieldValueItem.builder()
+							.fieldKey(value.getId().getFieldKey())
+							.label(definition != null ? definition.getLabel() : value.getId().getFieldKey())
+							.value(value.getValue())
+							.build();
+				})
+				.toList();
 
 		return TournamentRegistrationResponse.builder()
 				.id(registration.getId())
@@ -220,6 +234,119 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.createdAt(registration.getCreatedAt())
 				.fieldValues(fieldValues)
 				.build();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public TournamentRegistrationResponse getMyRegistrationForTournament(Long tournamentId, Long userId) {
+		return registrationRepository.findByTournamentIdAndUserId(tournamentId, userId)
+				.map(this::toResponse)
+				.orElse(null);
+	}
+
+	@Override
+	@Transactional
+	public CheckoutResponse checkout(Long registrationId, Long userId) {
+		Registration reg = getById(registrationId);
+		if (!reg.getUser().getId().equals(userId)) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		if ("PAID".equals(reg.getStatus()) || "APPROVED".equals(reg.getStatus())) {
+			throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PAID);
+		}
+		Tournament tournament = reg.getTournament();
+		BigDecimal fee = tournament.getEntryFee();
+		if (fee == null || fee.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new BusinessException(ErrorCode.PAYMENT_NOT_REQUIRED);
+		}
+
+		// Tìm payment PENDING hiện có (để tái sử dụng checkout URL)
+		Payment existing = paymentRepository.findByRegistrationId(registrationId).stream()
+				.filter(p -> "PENDING".equals(p.getStatus()) && p.getCheckoutUrl() != null)
+				.findFirst()
+				.orElse(null);
+		if (existing != null) {
+			return CheckoutResponse.builder()
+					.paymentId(existing.getId())
+					.registrationId(registrationId)
+					.orderCode(Long.parseLong(existing.getTransactionCode() != null
+							? existing.getTransactionCode().split(":")[0] : String.valueOf(existing.getId())))
+					.amount(fee)
+					.checkoutUrl(existing.getCheckoutUrl())
+					.description(tournament.getName())
+					.build();
+		}
+
+		// Tạo payment record trước để lấy ID dùng làm orderCode
+		Payment payment = Payment.builder()
+				.user(reg.getUser())
+				.registration(reg)
+				.amount(fee)
+				.paymentMethod("PAYOS")
+				.status("PENDING")
+				.build();
+		payment = paymentRepository.save(payment);
+
+		long orderCode = payment.getId();
+		String desc = tournament.getName().length() > 25
+				? tournament.getName().substring(0, 25)
+				: tournament.getName();
+
+		String checkoutUrl = payOSService.createPaymentLink(orderCode, fee.longValue(), desc);
+
+		payment.setCheckoutUrl(checkoutUrl);
+		paymentRepository.save(payment);
+
+		return CheckoutResponse.builder()
+				.paymentId(payment.getId())
+				.registrationId(registrationId)
+				.orderCode(orderCode)
+				.amount(fee)
+				.checkoutUrl(checkoutUrl)
+				.description(tournament.getName())
+				.build();
+	}
+
+	@Override
+	@Transactional
+	public void markAsPaid(long orderCode, String transactionRef) {
+		// orderCode == payment.id
+		Payment payment = paymentRepository.findById(orderCode).orElse(null);
+		if (payment == null) return;
+		if ("SUCCESS".equals(payment.getStatus())) return; // idempotent
+
+		payment.setStatus("SUCCESS");
+		payment.setTransactionCode(transactionRef != null ? transactionRef : String.valueOf(orderCode));
+		payment.setPaidAt(Instant.now());
+		paymentRepository.save(payment);
+
+		Registration reg = payment.getRegistration();
+		if (reg == null || !"PENDING_PAYMENT".equals(reg.getStatus())) return;
+
+		approveOrRejectBySlot(reg);
+	}
+
+	/**
+	 * Kiểm tra slot còn trống (pessimistic lock) rồi tự động APPROVED hoặc REJECTED.
+	 * Phải gọi trong @Transactional.
+	 */
+	private void approveOrRejectBySlot(Registration reg) {
+		Tournament tournament = tournamentRepository
+				.findByIdWithLock(reg.getTournament().getId())
+				.orElse(reg.getTournament());
+
+		long approved = registrationRepository.countByTournamentIdAndStatus(
+				tournament.getId(), "APPROVED");
+
+		if (approved < tournament.getMaxParticipants()) {
+			reg.setStatus("APPROVED");
+		} else {
+			reg.setStatus("REJECTED");
+			reg.setRejectedReason("Giải đã đủ " + tournament.getMaxParticipants()
+					+ " người tham gia. Liên hệ ban tổ chức để được hoàn tiền (nếu có).");
+			reg.setRejectedAt(Instant.now());
+		}
+		registrationRepository.save(reg);
 	}
 
 	private String resolveValue(Map<String, String> values, List<String> keys, String fallback) {

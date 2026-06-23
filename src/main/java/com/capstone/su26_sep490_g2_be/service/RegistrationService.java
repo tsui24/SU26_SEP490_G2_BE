@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service;
 
 import com.capstone.su26_sep490_g2_be.dto.request.RejectRegistrationRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.SubmitTournamentRegistrationRequest;
+import com.capstone.su26_sep490_g2_be.dto.response.CheckoutResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationResponse;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
@@ -35,4 +36,10 @@ public interface RegistrationService {
 	TournamentRegistrationResponse reject(Long registrationId, RejectRegistrationRequest request);
 
 	void cancel(Long registrationId, Long requestingUserId);
+
+	TournamentRegistrationResponse getMyRegistrationForTournament(Long tournamentId, Long userId);
+
+	CheckoutResponse checkout(Long registrationId, Long userId);
+
+	void markAsPaid(long orderCode, String transactionRef);
 }

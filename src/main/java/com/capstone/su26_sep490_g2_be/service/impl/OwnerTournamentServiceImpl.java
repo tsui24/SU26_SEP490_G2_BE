@@ -15,11 +15,13 @@ import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +40,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			"OPEN_FOR_REGISTRATION", Set.of("REGISTRATION_CLOSED", "CANCELLED"),
 			"REGISTRATION_CLOSED", Set.of("DRAW_DONE", "CANCELLED"),
 			"DRAW_DONE", Set.of("IN_PROGRESS", "CANCELLED"),
-			"IN_PROGRESS", Set.of("COMPLETED", "CANCELLED")
-	);
+			"IN_PROGRESS", Set.of("COMPLETED", "CANCELLED"));
 
 	private final TournamentRepository tournamentRepository;
 	private final TournamentConfigRepository tournamentConfigRepository;
@@ -54,6 +55,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final AdminRegistrationFormService adminRegistrationFormService;
 	private final RegistrationFormService registrationFormService;
 	private final RegistrationFormTemplateRepository registrationFormTemplateRepository;
+	private final RegistrationRepository registrationRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -68,17 +70,14 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String searchParam = (search == null || search.isBlank()) ? null : search.trim();
 		Long createdById = filterByOwner ? userId : null;
 
-		if (size < 1) {
+		if (size < 1)
 			size = 10;
-		}
-		if (page < 0) {
+		if (page < 0)
 			page = 0;
-		}
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-		Page<Tournament> tournamentPage = tournamentRepository.searchTournaments(
-				createdById, statusParam, searchParam, pageable);
-
+		Specification<Tournament> spec = buildSpec(createdById, statusParam, searchParam, null);
+		Page<Tournament> tournamentPage = tournamentRepository.findAll(spec, pageable);
 		return PageResponse.of(tournamentPage, this::toListItem);
 	}
 
@@ -165,7 +164,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
 				.configComplete(false)
-				.isRegister(tournament.isRegister())
+				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
 				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
 				.build();
 	}
@@ -173,8 +172,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	@Transactional
 	public UpdateTournamentResponse updateTournament(Long userId, Long tournamentId,
-	                                                 UpdateTournamentRequest request,
-	                                                 boolean enforceOwnership) {
+			UpdateTournamentRequest request,
+			boolean enforceOwnership) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		assertEditableStatus(tournament);
 
@@ -217,7 +216,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			tournament.setEndAt(request.getEndAt());
 		}
 		if (request.getIsRegister() != null) {
-			tournament.setRegister(request.getIsRegister());
+			tournament.setIsRegister(request.getIsRegister());
 			if (!request.getIsRegister()) {
 				tournament.setRegistrationFormTemplateId(null);
 			}
@@ -226,7 +225,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			tournament.setRegistrationFormTemplateId(request.getRegistrationFormTemplateId());
 		}
 		registrationFormService.validateRegistrationSettings(
-				tournament.isRegister(), tournament.getRegistrationFormTemplateId());
+				Boolean.TRUE.equals(tournament.getIsRegister()), tournament.getRegistrationFormTemplateId());
 
 		tournamentRepository.save(tournament);
 		boolean configComplete = isConfigComplete(tournamentId, tournament.getFormat());
@@ -249,6 +248,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
 				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
 				: null;
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, "APPROVED");
+		int remaining = Math.max(0, tournament.getMaxParticipants() - (int) approved);
 
 		return TournamentDetailResponse.builder()
 				.id(tournament.getId())
@@ -267,7 +268,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.configComplete(configComplete)
-				.isRegister(tournament.isRegister())
+				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+				.approvedCount(approved)
+				.remainingSlots(remaining)
 				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
 				.registrationFormTemplateCode(registrationTemplate != null ? registrationTemplate.getCode() : null)
 				.registrationFormTemplateName(registrationTemplate != null ? registrationTemplate.getName() : null)
@@ -281,6 +284,65 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			Long userId, Long tournamentId, boolean enforceOwnership) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		return registrationFormService.resolveTournamentForm(tournament);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public PageResponse<TournamentListItemResponse> listPlayerTournaments(
+			String status, String search, int page, int size) {
+		String statusParam = (status == null || status.isBlank()) ? null : status.trim();
+		String searchParam = (search == null || search.isBlank()) ? null : search.trim();
+		if (size < 1)
+			size = 10;
+		if (page < 0)
+			page = 0;
+
+		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+		Specification<Tournament> spec = buildSpec(null, statusParam, searchParam,
+				List.of("DRAFT", "CANCELLED"));
+		Page<Tournament> result = tournamentRepository.findAll(spec, pageable);
+		return PageResponse.of(result, this::toPublicListItem);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public TournamentDetailResponse getPlayerTournamentDetail(Long tournamentId) {
+		Tournament tournament = tournamentRepository.findById(tournamentId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		if ("DRAFT".equals(tournament.getStatus()) || "CANCELLED".equals(tournament.getStatus())) {
+			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+		}
+		TournamentFormatDefinition format = formatRepository.findById(tournament.getFormat()).orElse(null);
+		TournamentConfig config = getConfig(tournamentId);
+		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
+				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
+				: null;
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, "APPROVED");
+		int remaining = Math.max(0, tournament.getMaxParticipants() - (int) approved);
+
+		return TournamentDetailResponse.builder()
+				.id(tournament.getId())
+				.name(tournament.getName())
+				.description(tournament.getDescription())
+				.gameType(tournament.getGameType())
+				.format(tournament.getFormat())
+				.formatName(format != null ? format.getName() : null)
+				.participantType(tournament.getParticipantType())
+				.status(tournament.getStatus())
+				.maxParticipants(tournament.getMaxParticipants())
+				.entryFee(tournament.getEntryFee())
+				.prizePool(tournament.getPrizePool())
+				.prizeDescription(tournament.getPrizeDescription())
+				.registrationDeadline(tournament.getRegistrationDeadline())
+				.startAt(tournament.getStartAt())
+				.endAt(tournament.getEndAt())
+				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+				.approvedCount(approved)
+				.remainingSlots(remaining)
+				.registrationFormTemplateCode(registrationTemplate != null ? registrationTemplate.getCode() : null)
+				.registrationFormTemplateName(registrationTemplate != null ? registrationTemplate.getName() : null)
+				.configSummary(buildConfigSummary(tournamentId, tournament.getFormat(), config))
+				.build();
 	}
 
 	@Override
@@ -320,8 +382,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	@Transactional
 	public SaveTournamentConfigResponse saveConfig(Long userId, Long tournamentId,
-	                                               SaveTournamentConfigRequest request,
-	                                               boolean enforceOwnership) {
+			SaveTournamentConfigRequest request,
+			boolean enforceOwnership) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		assertEditableStatus(tournament);
 
@@ -429,7 +491,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	@Transactional(readOnly = true)
 	public TournamentConfigResolvedResponse getResolvedConfig(Long userId, Long tournamentId,
-	                                                          boolean enforceOwnership) {
+			boolean enforceOwnership) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		TournamentFormatDefinition format = getFormatDefinition(tournament.getFormat());
 		TournamentConfig config = getConfig(tournamentId);
@@ -466,7 +528,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	@Transactional(readOnly = true)
 	public TournamentConfigValidateResponse validateConfig(Long userId, Long tournamentId,
-	                                                       boolean enforceOwnership) {
+			boolean enforceOwnership) {
 		loadTournament(userId, tournamentId, enforceOwnership);
 		List<ConfigValidationDetailResponse> errors = collectConfigErrors(tournamentId,
 				tournamentRepository.findById(tournamentId).orElseThrow().getFormat());
@@ -484,8 +546,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	@Transactional
 	public PatchTournamentStatusResponse patchStatus(Long userId, Long tournamentId,
-	                                               PatchTournamentStatusRequest request,
-	                                               boolean enforceOwnership) {
+			PatchTournamentStatusRequest request,
+			boolean enforceOwnership) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		String previousStatus = tournament.getStatus();
 		String newStatus = request.getStatus();
@@ -508,7 +570,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			if (!errors.isEmpty()) {
 				throw new ConfigValidationException(ErrorCode.CONFIG_INCOMPLETE, errors);
 			}
-			if (tournament.isRegister()) {
+			if (Boolean.TRUE.equals(tournament.getIsRegister())) {
 				registrationFormService.validateRegistrationSettings(
 						true, tournament.getRegistrationFormTemplateId());
 			}
@@ -528,6 +590,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String formatName = formatRepository.findById(tournament.getFormat())
 				.map(TournamentFormatDefinition::getName)
 				.orElse(null);
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), "APPROVED");
 
 		return TournamentListItemResponse.builder()
 				.id(tournament.getId())
@@ -535,10 +598,39 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.gameType(tournament.getGameType())
 				.format(tournament.getFormat())
 				.formatName(formatName)
+				.participantType(tournament.getParticipantType())
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
 				.entryFee(tournament.getEntryFee())
+				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
 				.configComplete(isConfigComplete(tournament.getId(), tournament.getFormat()))
+				.approvedCount(approved)
+				.registrationDeadline(tournament.getRegistrationDeadline())
+				.startAt(tournament.getStartAt())
+				.endAt(tournament.getEndAt())
+				.createdAt(tournament.getCreatedAt())
+				.build();
+	}
+
+	private TournamentListItemResponse toPublicListItem(Tournament tournament) {
+		String formatName = formatRepository.findById(tournament.getFormat())
+				.map(TournamentFormatDefinition::getName)
+				.orElse(null);
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), "APPROVED");
+
+		return TournamentListItemResponse.builder()
+				.id(tournament.getId())
+				.name(tournament.getName())
+				.gameType(tournament.getGameType())
+				.format(tournament.getFormat())
+				.formatName(formatName)
+				.participantType(tournament.getParticipantType())
+				.status(tournament.getStatus())
+				.maxParticipants(tournament.getMaxParticipants())
+				.entryFee(tournament.getEntryFee())
+				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+				.approvedCount(approved)
+				.registrationDeadline(tournament.getRegistrationDeadline())
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.createdAt(tournament.getCreatedAt())
@@ -656,7 +748,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	private TournamentConfigFormResponse.ConfigFieldItem toConfigFieldItem(Long tournamentId,
-	                                                                       FormatConfigField formatField) {
+			FormatConfigField formatField) {
 		ConfigFieldDefinition def = formatField.getFieldDefinition();
 		if (def == null) {
 			def = configFieldRepository.findById(formatField.getFieldKey()).orElse(null);
@@ -754,6 +846,28 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.build();
 	}
 
+	private Specification<Tournament> buildSpec(
+			Long createdById, String status, String search, List<String> excludeStatuses) {
+		return (root, query, cb) -> {
+			List<Predicate> predicates = new ArrayList<>();
+			if (createdById != null) {
+				predicates.add(cb.equal(root.get("createdBy").get("id"), createdById));
+			}
+			if (excludeStatuses != null && !excludeStatuses.isEmpty()) {
+				predicates.add(root.get("status").in(excludeStatuses).not());
+			}
+			if (status != null) {
+				predicates.add(cb.equal(root.get("status"), status));
+			}
+			if (search != null) {
+				predicates.add(cb.like(
+						cb.lower(root.get("name")),
+						"%" + search.toLowerCase() + "%"));
+			}
+			return cb.and(predicates.toArray(new Predicate[0]));
+		};
+	}
+
 	private Map<String, Object> buildResolvedFields(Long tournamentId, String formatCode) {
 		Map<String, Object> result = new LinkedHashMap<>();
 		List<FormatConfigField> formatFields = formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(formatCode);
@@ -799,7 +913,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	private TournamentDetailResponse.ConfigSummary buildConfigSummary(Long tournamentId, String formatCode,
-	                                                                  TournamentConfig config) {
+			TournamentConfig config) {
 		Map<String, Object> fields = buildResolvedFields(tournamentId, formatCode);
 		Integer bracketSize = fields.get("bracket_size") instanceof Integer i ? i : null;
 		Boolean thirdPlace = fields.get("third_place_match") instanceof Boolean b ? b : null;

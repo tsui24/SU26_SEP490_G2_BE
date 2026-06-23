@@ -41,6 +41,9 @@ public class Payment {
 	@Column(name = "transaction_code")
 	private String transactionCode;
 
+	@Column(name = "checkout_url", length = 1000)
+	private String checkoutUrl;
+
 	@Column(name = "paid_at")
 	private Instant paidAt;
 

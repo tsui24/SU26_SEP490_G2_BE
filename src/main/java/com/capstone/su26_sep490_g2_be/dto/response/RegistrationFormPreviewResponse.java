@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Getter
@@ -18,6 +19,7 @@ public class RegistrationFormPreviewResponse {
 	private Long tournamentId;
 	private String tournamentName;
 	private String participantType;
+	private BigDecimal entryFee;
 	private Boolean isReady;
 	private List<FormFieldItem> fields;
 
