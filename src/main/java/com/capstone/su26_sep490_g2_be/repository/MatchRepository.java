@@ -9,7 +9,35 @@ import java.util.List;
 
 public interface MatchRepository extends JpaRepository<Match, Long> {
 
-	List<Match> findByStageIdOrderByRoundNoAscPositionNoAsc(Long stageId);
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.stage
+		LEFT JOIN FETCH m.player1
+		LEFT JOIN FETCH m.player2
+		LEFT JOIN FETCH m.winner
+		LEFT JOIN FETCH m.loser
+		LEFT JOIN FETCH m.nextMatchWin
+		LEFT JOIN FETCH m.nextMatchLose
+		WHERE m.stage.id = :stageId
+		ORDER BY m.roundNo ASC, m.positionNo ASC
+		""")
+	List<Match> findByStageIdOrderByRoundNoAscPositionNoAsc(@Param("stageId") Long stageId);
+
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.stage
+		LEFT JOIN FETCH m.player1
+		LEFT JOIN FETCH m.player2
+		LEFT JOIN FETCH m.winner
+		LEFT JOIN FETCH m.loser
+		LEFT JOIN FETCH m.nextMatchWin
+		LEFT JOIN FETCH m.nextMatchLose
+		WHERE m.tournament.id = :tournamentId
+		ORDER BY m.roundNo ASC, m.positionNo ASC
+		""")
+	List<Match> findByTournamentIdOrderByRoundNoAscPositionNoAsc(@Param("tournamentId") Long tournamentId);
 
 	List<Match> findByTournamentIdAndStatus(Long tournamentId, String status);
 
@@ -19,6 +47,29 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 			@Param("stageId") Long stageId,
 			@Param("roundNo") Integer roundNo);
 
-	@Query("SELECT m FROM Match m WHERE m.player1.id = :participantId OR m.player2.id = :participantId")
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.stage
+		LEFT JOIN FETCH m.player1
+		LEFT JOIN FETCH m.player2
+		LEFT JOIN FETCH m.winner
+		LEFT JOIN FETCH m.loser
+		WHERE m.player1.id = :participantId OR m.player2.id = :participantId
+		""")
 	List<Match> findByParticipantId(@Param("participantId") Long participantId);
+
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.stage
+		LEFT JOIN FETCH m.player1
+		LEFT JOIN FETCH m.player2
+		LEFT JOIN FETCH m.winner
+		LEFT JOIN FETCH m.loser
+		LEFT JOIN FETCH m.nextMatchWin
+		LEFT JOIN FETCH m.nextMatchLose
+		WHERE m.id = :id
+		""")
+	java.util.Optional<Match> findByIdWithDetails(@Param("id") Long id);
 }

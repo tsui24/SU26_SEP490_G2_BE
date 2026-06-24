@@ -8,6 +8,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationRespons
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldDefinitionRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldValueRepository;
@@ -46,6 +47,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private final RegistrationFieldDefinitionRepository fieldDefinitionRepository;
 	private final PaymentRepository paymentRepository;
 	private final PayOSService payOSService;
+	private final ParticipantRepository participantRepository;
 
 	@Override
 	@Transactional
@@ -180,7 +182,9 @@ public class RegistrationServiceImpl implements RegistrationService {
 		reg.setStatus("APPROVED");
 		reg.setApprovedBy(approver);
 		reg.setApprovedAt(Instant.now());
-		return toResponse(registrationRepository.save(reg));
+		registrationRepository.save(reg);
+		autoCreateParticipant(reg);
+		return toResponse(reg);
 	}
 
 	@Override
@@ -340,13 +344,28 @@ public class RegistrationServiceImpl implements RegistrationService {
 
 		if (approved < tournament.getMaxParticipants()) {
 			reg.setStatus("APPROVED");
+			registrationRepository.save(reg);
+			// UC-28: Auto-create Participant từ Registration được duyệt
+			autoCreateParticipant(reg);
 		} else {
 			reg.setStatus("REJECTED");
 			reg.setRejectedReason("Giải đã đủ " + tournament.getMaxParticipants()
 					+ " người tham gia. Liên hệ ban tổ chức để được hoàn tiền (nếu có).");
 			reg.setRejectedAt(Instant.now());
+			registrationRepository.save(reg);
 		}
-		registrationRepository.save(reg);
+	}
+
+	private void autoCreateParticipant(Registration reg) {
+		if (participantRepository.existsByRegistrationId(reg.getId())) return;
+		Participant participant = Participant.builder()
+				.tournament(reg.getTournament())
+				.registration(reg)
+				.participantType(reg.getTournament().getParticipantType())
+				.displayName(reg.getPlayerFullName())
+				.status("ACTIVE")
+				.build();
+		participantRepository.save(participant);
 	}
 
 	private String resolveValue(Map<String, String> values, List<String> keys, String fallback) {

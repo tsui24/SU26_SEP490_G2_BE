@@ -69,6 +69,7 @@ public enum ErrorCode {
 
 	// Tournament participation
 	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),
+	PARTICIPANT_INVALID_EXCEL("TOURNAMENT_002", "File không hợp lệ. Vui lòng tải mẫu từ nút \"Tải template\" hoặc upload file .xlsx / .csv", HttpStatus.BAD_REQUEST),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),

@@ -93,6 +93,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs")) {
 			return true;
 		}
+		// WebSocket STOMP handshake — không gửi JWT trên HTTP upgrade
+		if (path.equals("/ws") || path.startsWith("/ws/")) {
+			return true;
+		}
 		for (String pattern : PUBLIC_URLS) {
 			if (path.equals(pattern)) {
 				return true;

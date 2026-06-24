@@ -54,7 +54,9 @@ public class DataInitializer implements CommandLineRunner {
 		seedAdminAccount();
 		seedOwnerAccount();
 		seedRegistrationTestData();
+		seedManyPlayers();
 		seedSampleTournaments();
+		seedLargeTournamentRegistrations();
 		log.info("Database seed completed (Strategy B)");
 	}
 
@@ -424,32 +426,29 @@ public class DataInitializer implements CommandLineRunner {
 	}
 
 	private void seedSampleTournaments() {
-		if (tournamentRepository.count() > 0)
-			return;
+		User owner = userRepository.findByEmail("owner@gmail.com").orElse(null);
+		if (owner == null) return;
 
-		User owner = userRepository.findByEmail("owner@gmail.com")
-				.orElse(null);
-		if (owner == null)
-			return;
+		Long templateId = registrationFormTemplateRepository.findByCode("PLAYER_REG_BASIC")
+				.map(t -> t.getId()).orElse(null);
 
 		Instant now = Instant.now();
 
 		record TData(String name, String desc, String gameType, String format,
 				String status, int max, BigDecimal fee, BigDecimal prize,
-				String prizDesc, Instant regDeadline, Instant start, Instant end,
+				String prizeDesc, Instant regDeadline, Instant start, Instant end,
 				boolean isRegister) {
 		}
 
 		var list = java.util.List.of(
+				// ── Giải cũ (16 người) ──────────────────────────────────────────────────
 				new TData(
 						"FPT 9-Ball Open 2026",
 						"Giải đấu 9-Ball mở rộng — dành cho mọi cơ thủ. Alternate break, race-to-7.",
 						"9_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 16,
 						BigDecimal.valueOf(200000), BigDecimal.valueOf(8000000),
 						"Vô địch 4.000.000đ · Á quân 2.400.000đ · Hạng 3-4 800.000đ",
-						now.plus(10, ChronoUnit.DAYS),
-						now.plus(20, ChronoUnit.DAYS),
-						now.plus(22, ChronoUnit.DAYS),
+						now.plus(10, ChronoUnit.DAYS), now.plus(20, ChronoUnit.DAYS), now.plus(22, ChronoUnit.DAYS),
 						true),
 				new TData(
 						"Giải Loại Kép 8-Ball FPT 2026",
@@ -457,19 +456,7 @@ public class DataInitializer implements CommandLineRunner {
 						"8_BALL", "DOUBLE_ELIMINATION", "REGISTRATION_CLOSED", 16,
 						BigDecimal.valueOf(150000), BigDecimal.valueOf(6000000),
 						"Vô địch 3.000.000đ · Á quân 1.800.000đ · Hạng 3-4 600.000đ",
-						now.minus(2, ChronoUnit.DAYS),
-						now.plus(5, ChronoUnit.DAYS),
-						now.plus(7, ChronoUnit.DAYS),
-						false),
-				new TData(
-						"Vietnam 9-Ball Masters 2026",
-						"Giải đấu đẳng cấp với 32 cơ thủ hàng đầu. Single elimination race-to-9.",
-						"9_BALL", "SINGLE_ELIMINATION", "IN_PROGRESS", 32,
-						BigDecimal.valueOf(500000), BigDecimal.valueOf(20000000),
-						"Vô địch 10.000.000đ · Á quân 5.000.000đ · Hạng 3-4 2.000.000đ · Hạng 5-8 750.000đ",
-						now.minus(10, ChronoUnit.DAYS),
-						now.minus(3, ChronoUnit.DAYS),
-						now.plus(2, ChronoUnit.DAYS),
+						now.minus(2, ChronoUnit.DAYS), now.plus(5, ChronoUnit.DAYS), now.plus(7, ChronoUnit.DAYS),
 						false),
 				new TData(
 						"Giải 10-Ball Đà Nẵng Open 2026",
@@ -477,9 +464,7 @@ public class DataInitializer implements CommandLineRunner {
 						"10_BALL", "GROUP_PLAYOFF", "COMPLETED", 16,
 						BigDecimal.valueOf(100000), BigDecimal.valueOf(4000000),
 						"Vô địch 2.000.000đ · Á quân 1.200.000đ · Hạng 3-4 400.000đ",
-						now.minus(30, ChronoUnit.DAYS),
-						now.minus(20, ChronoUnit.DAYS),
-						now.minus(18, ChronoUnit.DAYS),
+						now.minus(30, ChronoUnit.DAYS), now.minus(20, ChronoUnit.DAYS), now.minus(18, ChronoUnit.DAYS),
 						false),
 				new TData(
 						"CLB FPT — Giải Nội Bộ Q3/2026",
@@ -487,13 +472,88 @@ public class DataInitializer implements CommandLineRunner {
 						"8_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 8,
 						BigDecimal.ZERO, BigDecimal.valueOf(1000000),
 						"Vô địch 600.000đ · Á quân 250.000đ · Hạng 3 150.000đ",
-						now.plus(7, ChronoUnit.DAYS),
-						now.plus(14, ChronoUnit.DAYS),
-						now.plus(14, ChronoUnit.DAYS),
-						true));
+						now.plus(7, ChronoUnit.DAYS), now.plus(14, ChronoUnit.DAYS), now.plus(14, ChronoUnit.DAYS),
+						true),
+
+				// ── Giải 32 cơ thủ ──────────────────────────────────────────────────────
+				new TData(
+						"Vietnam 9-Ball Masters 2026",
+						"Giải đấu đỉnh cao với 32 cơ thủ hàng đầu. Single elimination race-to-9.",
+						"9_BALL", "SINGLE_ELIMINATION", "IN_PROGRESS", 32,
+						BigDecimal.valueOf(500000), BigDecimal.valueOf(20000000),
+						"Vô địch 10.000.000đ · Á quân 5.000.000đ · Hạng 3-4 2.000.000đ · Hạng 5-8 750.000đ",
+						now.minus(10, ChronoUnit.DAYS), now.minus(3, ChronoUnit.DAYS), now.plus(2, ChronoUnit.DAYS),
+						false),
+				new TData(
+						"Hanoi 8-Ball Grand Prix 2026",
+						"Giải đấu 8-Ball tại Hà Nội — 32 cơ thủ tranh tài. Race-to-7.",
+						"8_BALL", "SINGLE_ELIMINATION", "REGISTRATION_CLOSED", 32,
+						BigDecimal.valueOf(300000), BigDecimal.valueOf(15000000),
+						"Vô địch 7.500.000đ · Á quân 4.000.000đ · Hạng 3-4 1.750.000đ",
+						now.minus(1, ChronoUnit.DAYS), now.plus(3, ChronoUnit.DAYS), now.plus(5, ChronoUnit.DAYS),
+						false),
+				new TData(
+						"Miền Trung 10-Ball Masters 2026",
+						"Giải đấu 10-Ball tại Đà Nẵng — 32 cơ thủ, vòng bảng + playoff.",
+						"10_BALL", "GROUP_PLAYOFF", "IN_PROGRESS", 32,
+						BigDecimal.valueOf(200000), BigDecimal.valueOf(12000000),
+						"Vô địch 6.000.000đ · Á quân 3.000.000đ · Hạng 3-4 1.500.000đ",
+						now.minus(5, ChronoUnit.DAYS), now.minus(2, ChronoUnit.DAYS), now.plus(1, ChronoUnit.DAYS),
+						false),
+				new TData(
+						"Hà Nội 9-Ball Open 2026",
+						"Giải 9-Ball mở rộng tại Hà Nội — 32 cơ thủ, alternate break, race-to-7.",
+						"9_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 32,
+						BigDecimal.valueOf(250000), BigDecimal.valueOf(14000000),
+						"Vô địch 7.000.000đ · Á quân 4.000.000đ · Hạng 3-4 1.500.000đ",
+						now.plus(12, ChronoUnit.DAYS), now.plus(20, ChronoUnit.DAYS), now.plus(22, ChronoUnit.DAYS),
+						true),
+				new TData(
+						"FPT 8-Ball Group Stage 2026",
+						"Giải 8-Ball nội bộ FPT — 32 cơ thủ, vòng bảng round-robin + knockout.",
+						"8_BALL", "GROUP_PLAYOFF", "IN_PROGRESS", 32,
+						BigDecimal.valueOf(200000), BigDecimal.valueOf(10000000),
+						"Vô địch 5.000.000đ · Á quân 2.500.000đ · Hạng 3-4 1.250.000đ",
+						now.minus(7, ChronoUnit.DAYS), now.minus(3, ChronoUnit.DAYS), now.plus(1, ChronoUnit.DAYS),
+						false),
+
+				// ── Giải 64 cơ thủ ──────────────────────────────────────────────────────
+				new TData(
+						"Vietnam Open 9-Ball Championship 2026",
+						"Giải vô địch 9-Ball lớn nhất năm — 64 cơ thủ, single elimination race-to-9.",
+						"9_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 64,
+						BigDecimal.valueOf(500000), BigDecimal.valueOf(40000000),
+						"Vô địch 20.000.000đ · Á quân 10.000.000đ · Hạng 3-4 5.000.000đ · Hạng 5-8 1.250.000đ",
+						now.plus(15, ChronoUnit.DAYS), now.plus(25, ChronoUnit.DAYS), now.plus(27, ChronoUnit.DAYS),
+						true),
+				new TData(
+						"HCMC Double Elimination 9-Ball 2026",
+						"Giải đấu double elimination tại TP.HCM — 64 cơ thủ, 2 nhánh thắng/thua.",
+						"9_BALL", "DOUBLE_ELIMINATION", "REGISTRATION_CLOSED", 64,
+						BigDecimal.valueOf(400000), BigDecimal.valueOf(30000000),
+						"Vô địch 15.000.000đ · Á quân 7.500.000đ · Hạng 3-4 3.750.000đ",
+						now.minus(2, ChronoUnit.DAYS), now.plus(4, ChronoUnit.DAYS), now.plus(7, ChronoUnit.DAYS),
+						false),
+				new TData(
+						"FPT Double Elimination Cup 2026",
+						"FPT Cup — double elimination 8-Ball, 64 cơ thủ tranh tài, race-to-7.",
+						"8_BALL", "DOUBLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 64,
+						BigDecimal.valueOf(350000), BigDecimal.valueOf(25000000),
+						"Vô địch 12.500.000đ · Á quân 6.250.000đ · Hạng 3-4 3.125.000đ",
+						now.plus(8, ChronoUnit.DAYS), now.plus(18, ChronoUnit.DAYS), now.plus(21, ChronoUnit.DAYS),
+						true),
+				new TData(
+						"Giải Vô Địch 9-Ball Toàn Quốc 2026",
+						"Giải vô địch toàn quốc 9-Ball — 64 cơ thủ tốt nhất cả nước. Đã kết thúc.",
+						"9_BALL", "SINGLE_ELIMINATION", "COMPLETED", 64,
+						BigDecimal.valueOf(500000), BigDecimal.valueOf(50000000),
+						"Vô địch 25.000.000đ · Á quân 12.500.000đ · Hạng 3-4 6.250.000đ · Hạng 5-8 1.562.500đ",
+						now.minus(40, ChronoUnit.DAYS), now.minus(30, ChronoUnit.DAYS), now.minus(27, ChronoUnit.DAYS),
+						false));
 
 		int count = 0;
 		for (var d : list) {
+			if (findTournamentByName(d.name()).isPresent()) continue;
 			Tournament t = Tournament.builder()
 					.name(d.name())
 					.description(d.desc())
@@ -504,11 +564,12 @@ public class DataInitializer implements CommandLineRunner {
 					.maxParticipants(d.max())
 					.entryFee(d.fee())
 					.prizePool(d.prize())
-					.prizeDescription(d.prizDesc())
+					.prizeDescription(d.prizeDesc())
 					.registrationDeadline(d.regDeadline())
 					.startAt(d.start())
 					.endAt(d.end())
 					.isRegister(d.isRegister())
+					.registrationFormTemplateId(d.isRegister() ? templateId : null)
 					.createdBy(owner)
 					.build();
 			t = tournamentRepository.save(t);
@@ -521,6 +582,133 @@ public class DataInitializer implements CommandLineRunner {
 			tournamentConfigRepository.save(cfg);
 			count++;
 		}
-		log.info("Seeded {} sample tournaments", count);
+		if (count > 0) log.info("Seeded {} sample tournaments", count);
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Seed 64 cơ thủ (player1-3 đã được tạo bởi seedTestPlayers)
+	// ─────────────────────────────────────────────────────────────────────────
+	private void seedManyPlayers() {
+		record P(String email, String name, String phone) {}
+		var players = java.util.List.of(
+				new P("player4@gmail.com",  "Nguyễn Văn Hùng",   "0912000004"),
+				new P("player5@gmail.com",  "Trần Minh Tuấn",    "0912000005"),
+				new P("player6@gmail.com",  "Lê Hoàng Nam",      "0912000006"),
+				new P("player7@gmail.com",  "Phạm Đức Anh",      "0912000007"),
+				new P("player8@gmail.com",  "Hoàng Quốc Việt",   "0912000008"),
+				new P("player9@gmail.com",  "Vũ Thanh Bình",     "0912000009"),
+				new P("player10@gmail.com", "Phan Trọng Khôi",   "0912000010"),
+				new P("player11@gmail.com", "Trương Xuân Long",  "0912000011"),
+				new P("player12@gmail.com", "Bùi Hữu Phúc",     "0912000012"),
+				new P("player13@gmail.com", "Đặng Đình Khoa",    "0912000013"),
+				new P("player14@gmail.com", "Đỗ Công Danh",      "0912000014"),
+				new P("player15@gmail.com", "Hồ Quang Minh",     "0912000015"),
+				new P("player16@gmail.com", "Ngô Thành Trung",   "0912000016"),
+				new P("player17@gmail.com", "Dương Bảo Khánh",   "0912000017"),
+				new P("player18@gmail.com", "Nguyễn Nhật Huy",   "0912000018"),
+				new P("player19@gmail.com", "Trần Tiến Đạt",     "0912000019"),
+				new P("player20@gmail.com", "Lê Mạnh Hào",       "0912000020"),
+				new P("player21@gmail.com", "Phạm Văn Tài",      "0912000021"),
+				new P("player22@gmail.com", "Hoàng Đức Lợi",     "0912000022"),
+				new P("player23@gmail.com", "Vũ Minh Phát",      "0912000023"),
+				new P("player24@gmail.com", "Phan Quang Thắng",  "0912000024"),
+				new P("player25@gmail.com", "Trương Văn Toản",   "0912000025"),
+				new P("player26@gmail.com", "Bùi Thanh Liêm",    "0912000026"),
+				new P("player27@gmail.com", "Đặng Hoàng Sơn",    "0912000027"),
+				new P("player28@gmail.com", "Đỗ Minh Dũng",      "0912000028"),
+				new P("player29@gmail.com", "Hồ Văn Phong",      "0912000029"),
+				new P("player30@gmail.com", "Ngô Hữu Lộc",       "0912000030"),
+				new P("player31@gmail.com", "Dương Công Tâm",    "0912000031"),
+				new P("player32@gmail.com", "Nguyễn Quốc Bảo",  "0912000032"),
+				new P("player33@gmail.com", "Trần Hoàng Vũ",     "0912000033"),
+				new P("player34@gmail.com", "Lê Đức Toàn",       "0912000034"),
+				new P("player35@gmail.com", "Phạm Thanh Tùng",   "0912000035"),
+				new P("player36@gmail.com", "Hoàng Minh Châu",   "0912000036"),
+				new P("player37@gmail.com", "Vũ Đình Kiên",      "0912000037"),
+				new P("player38@gmail.com", "Phan Văn Nghĩa",    "0912000038"),
+				new P("player39@gmail.com", "Trương Quốc Hải",   "0912000039"),
+				new P("player40@gmail.com", "Bùi Công Quý",      "0912000040"),
+				new P("player41@gmail.com", "Đặng Nhật Linh",    "0912000041"),
+				new P("player42@gmail.com", "Đỗ Hoàng Tùng",     "0912000042"),
+				new P("player43@gmail.com", "Hồ Đức Hữu",        "0912000043"),
+				new P("player44@gmail.com", "Ngô Minh Lâm",      "0912000044"),
+				new P("player45@gmail.com", "Dương Văn Thọ",     "0912000045"),
+				new P("player46@gmail.com", "Nguyễn Trọng Toán", "0912000046"),
+				new P("player47@gmail.com", "Trần Xuân Phú",     "0912000047"),
+				new P("player48@gmail.com", "Lê Bảo Lộc",        "0912000048"),
+				new P("player49@gmail.com", "Phạm Hữu Trọng",    "0912000049"),
+				new P("player50@gmail.com", "Hoàng Văn Lực",     "0912000050"),
+				new P("player51@gmail.com", "Vũ Quốc Duy",       "0912000051"),
+				new P("player52@gmail.com", "Phan Đức Tín",      "0912000052"),
+				new P("player53@gmail.com", "Trương Minh Hải",   "0912000053"),
+				new P("player54@gmail.com", "Bùi Văn Linh",      "0912000054"),
+				new P("player55@gmail.com", "Đặng Quang Tuấn",   "0912000055"),
+				new P("player56@gmail.com", "Đỗ Trọng Nghĩa",    "0912000056"),
+				new P("player57@gmail.com", "Hồ Thanh Phong",    "0912000057"),
+				new P("player58@gmail.com", "Ngô Đức Hùng",      "0912000058"),
+				new P("player59@gmail.com", "Dương Minh Triết",  "0912000059"),
+				new P("player60@gmail.com", "Nguyễn Công Hiếu",  "0912000060"),
+				new P("player61@gmail.com", "Trần Hoàng Phát",   "0912000061"),
+				new P("player62@gmail.com", "Lê Minh Sang",      "0912000062"),
+				new P("player63@gmail.com", "Phạm Đình Luân",    "0912000063"),
+				new P("player64@gmail.com", "Hoàng Bảo Thắng",  "0912000064"));
+		int count = 0;
+		for (var p : players) {
+			if (!userRepository.existsByEmail(p.email())) {
+				seedPlayer(p.email(), "player123", p.name(), p.phone());
+				count++;
+			}
+		}
+		if (count > 0) log.info("Seeded {} extra player accounts (player4–64)", count);
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Seed đăng ký cho các giải 32/64 người
+	// ─────────────────────────────────────────────────────────────────────────
+	private void seedLargeTournamentRegistrations() {
+		User owner = userRepository.findByEmail("owner@gmail.com").orElse(null);
+		if (owner == null) return;
+		Instant approvedAt = Instant.now().minus(2, ChronoUnit.HOURS);
+
+		java.util.List<User> allPlayers = new java.util.ArrayList<>();
+		for (int i = 1; i <= 64; i++) {
+			userRepository.findByEmail("player" + i + "@gmail.com").ifPresent(allPlayers::add);
+		}
+		if (allPlayers.isEmpty()) return;
+
+		record RegConfig(String name, int count, String status) {}
+		var configs = java.util.List.of(
+				new RegConfig("Giải Vô Địch 9-Ball Toàn Quốc 2026",       64, "APPROVED"),
+				new RegConfig("HCMC Double Elimination 9-Ball 2026",       64, "APPROVED"),
+				new RegConfig("Vietnam 9-Ball Masters 2026",               32, "APPROVED"),
+				new RegConfig("Hanoi 8-Ball Grand Prix 2026",              32, "APPROVED"),
+				new RegConfig("Miền Trung 10-Ball Masters 2026",           32, "APPROVED"),
+				new RegConfig("FPT 8-Ball Group Stage 2026",               32, "APPROVED"),
+				new RegConfig("Vietnam Open 9-Ball Championship 2026",     45, "APPROVED"),
+				new RegConfig("Hà Nội 9-Ball Open 2026",                   22, "APPROVED"),
+				new RegConfig("FPT Double Elimination Cup 2026",           30, "APPROVED"));
+
+		int totalSeeded = 0;
+		for (var cfg : configs) {
+			Tournament tournament = findTournamentByName(cfg.name()).orElse(null);
+			if (tournament == null) continue;
+			java.util.List<User> subset = allPlayers.stream().limit(cfg.count()).toList();
+			for (User player : subset) {
+				seedRegistrationFromUser(tournament, player, cfg.status(), owner, approvedAt);
+				totalSeeded++;
+			}
+		}
+		if (totalSeeded > 0) log.info("Seeded {} registrations for large tournaments", totalSeeded);
+	}
+
+	private void seedRegistrationFromUser(Tournament tournament, User user,
+			String status, User approvedBy, Instant approvedAt) {
+		if (registrationRepository.existsByTournamentIdAndUserId(tournament.getId(), user.getId())) {
+			return;
+		}
+		UserProfile profile = user.getProfile();
+		String fullName = (profile != null && profile.getFullName() != null) ? profile.getFullName() : user.getEmail();
+		String phone = (user.getPhone() != null) ? user.getPhone() : "0900000000";
+		seedRegistration(tournament, user, "SINGLE", fullName, phone, null, status, approvedBy, approvedAt);
 	}
 }
