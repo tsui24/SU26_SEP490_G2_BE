@@ -1,23 +1,55 @@
 package com.capstone.su26_sep490_g2_be.repository;
 
 import com.capstone.su26_sep490_g2_be.entity.Participant;
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ParticipantRepository extends JpaRepository<Participant, Long> {
 
-	@EntityGraph(attributePaths = { "tournament", "registration" })
-	List<Participant> findByTournamentId(Long tournamentId);
+    @Query("""
+        SELECT p FROM Participant p
+        LEFT JOIN FETCH p.tournament
+        LEFT JOIN FETCH p.registration r
+        LEFT JOIN FETCH r.user
+        WHERE p.tournament.id = :tournamentId
+        ORDER BY p.id ASC
+        """)
+    List<Participant> findByTournamentId(@Param("tournamentId") Long tournamentId);
 
-	@EntityGraph(attributePaths = { "tournament", "registration" })
-	List<Participant> findByTournamentIdAndStatus(Long tournamentId, String status);
+    @Query("""
+        SELECT p FROM Participant p
+        LEFT JOIN FETCH p.tournament
+        LEFT JOIN FETCH p.registration r
+        LEFT JOIN FETCH r.user
+        WHERE p.tournament.id = :tournamentId AND p.status = :status
+        """)
+    List<Participant> findByTournamentIdAndStatus(
+            @Param("tournamentId") Long tournamentId,
+            @Param("status") String status);
 
-	@EntityGraph(attributePaths = { "tournament", "registration" })
-	java.util.Optional<Participant> findById(Long id);
+    @Query("""
+        SELECT p FROM Participant p
+        LEFT JOIN FETCH p.tournament
+        LEFT JOIN FETCH p.registration r
+        LEFT JOIN FETCH r.user
+        WHERE p.id = :id
+        """)
+    Optional<Participant> findByIdWithDetails(@Param("id") Long id);
 
-	long countByTournamentIdAndStatus(Long tournamentId, String status);
+    long countByTournamentIdAndStatus(Long tournamentId, String status);
 
-	boolean existsByRegistrationId(Long registrationId);
+    boolean existsByRegistrationId(Long registrationId);
+
+    @Query("""
+        SELECT p FROM Participant p
+        LEFT JOIN FETCH p.tournament
+        LEFT JOIN FETCH p.registration r
+        LEFT JOIN FETCH r.user
+        WHERE r.user.id = :userId
+        """)
+    List<Participant> findByRegistrationUserId(@Param("userId") Long userId);
 }

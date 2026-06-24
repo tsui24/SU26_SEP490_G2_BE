@@ -36,6 +36,9 @@ public class SecurityConfig {
 			"/api/v1/tournaments/**",
 			"/api/v1/news",
 			"/api/v1/news/**",
+			"/api/v1/matches/**",
+			"/ws",
+			"/ws/**",
 			"/api/v1/payments/payos/webhook"
 	};
 

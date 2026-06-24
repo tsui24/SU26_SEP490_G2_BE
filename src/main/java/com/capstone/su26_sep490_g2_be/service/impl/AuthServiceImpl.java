@@ -33,6 +33,29 @@ public class AuthServiceImpl implements AuthService {
 	private final EmailService emailService;
 
 	@Override
+	@Transactional(readOnly = true)
+	public UserResponse getMe(Long userId) {
+		User user = userRepository.findById(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+
+		if (user.getStatus() == UserStatus.LOCKED) {
+			throw new BusinessException(ErrorCode.AUTH_ACCOUNT_LOCKED);
+		}
+		if (user.getStatus() == UserStatus.DELETED) {
+			throw new BusinessException(ErrorCode.AUTH_INVALID_TOKEN);
+		}
+
+		return UserResponse.builder()
+				.id(user.getId())
+				.email(user.getEmail())
+				.phone(user.getPhone())
+				.role(user.getRole().getCode())
+				.status(user.getStatus().name())
+				.profileCompleted(user.getProfile() != null)
+				.build();
+	}
+
+	@Override
 	public LoginResponse login(LoginRequest request) {
 		User user = userRepository.findByEmail(request.getEmail())
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS));

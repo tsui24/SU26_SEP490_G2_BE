@@ -4,9 +4,13 @@ import com.capstone.su26_sep490_g2_be.dto.request.*;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.LoginResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.RegisterResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.UserResponse;
+import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +36,18 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
 		LoginResponse response = authService.login(request);
 		return ResponseEntity.ok(ApiResponse.success(response));
+	}
+
+	@Operation(summary = "Thông tin tài khoản hiện tại", description = "Lấy thông tin user đang đăng nhập từ JWT")
+	@SecurityRequirement(name = "bearerAuth")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lấy thông tin thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Chưa đăng nhập hoặc token không hợp lệ")
+	})
+	@GetMapping("/me")
+	public ResponseEntity<ApiResponse<UserResponse>> me(Authentication authentication) {
+		Long userId = extractUserId(authentication);
+		return ResponseEntity.ok(ApiResponse.success(authService.getMe(userId)));
 	}
 
 	@Operation(summary = "Register Player account",
@@ -93,5 +109,12 @@ public class AuthController {
 		String email = authentication.getName();
 		authService.changePassword(email, request);
 		return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", null));
+	}
+
+	private Long extractUserId(Authentication authentication) {
+		if (authentication == null || !(authentication.getCredentials() instanceof Long)) {
+			throw new BusinessException(ErrorCode.AUTH_INVALID_TOKEN);
+		}
+		return (Long) authentication.getCredentials();
 	}
 }
