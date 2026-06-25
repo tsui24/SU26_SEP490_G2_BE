@@ -24,7 +24,7 @@ import java.time.temporal.ChronoUnit;
 public class DataInitializer implements CommandLineRunner {
 
 	private static final String DEFAULT_ADMIN_EMAIL = "admin@gmail.com";
-	private static final String DEFAULT_ADMIN_PASSWORD = "admin";
+	private static final String DEFAULT_ADMIN_PASSWORD = "admin1";
 
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;

@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -128,6 +129,11 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		boolean isRegister = Boolean.TRUE.equals(request.getIsRegister());
 		registrationFormService.validateRegistrationSettings(isRegister, request.getRegistrationFormTemplateId());
 
+		validateTournamentDates(
+				request.getRegistrationDeadline(),
+				request.getStartAt(),
+				request.getEndAt());
+
 		Tournament tournament = Tournament.builder()
 				.name(request.getName())
 				.description(request.getDescription())
@@ -226,6 +232,11 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 		registrationFormService.validateRegistrationSettings(
 				Boolean.TRUE.equals(tournament.getIsRegister()), tournament.getRegistrationFormTemplateId());
+
+		validateTournamentDates(
+				tournament.getRegistrationDeadline(),
+				tournament.getStartAt(),
+				tournament.getEndAt());
 
 		tournamentRepository.save(tournament);
 		boolean configComplete = isConfigComplete(tournamentId, tournament.getFormat());
@@ -836,6 +847,43 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			}
 		}
 		return errors;
+	}
+
+	/**
+	 * Validate 3 trường ngày của giải đấu:
+	 * 1. Không được là thời điểm trong quá khứ.
+	 * 2. startAt và endAt phải sau registrationDeadline.
+	 * 3. endAt >= startAt (cho phép cùng ngày).
+	 */
+	private void validateTournamentDates(Instant registrationDeadline, Instant startAt, Instant endAt) {
+		Instant now = Instant.now();
+		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
+
+		if (registrationDeadline != null && !registrationDeadline.isAfter(now)) {
+			errors.add(detail("registrationDeadline", "Hạn đăng ký không được là thời điểm trong quá khứ"));
+		}
+
+		if (startAt != null) {
+			if (!startAt.isAfter(now)) {
+				errors.add(detail("startAt", "Ngày bắt đầu thi đấu không được là thời điểm trong quá khứ"));
+			} else if (registrationDeadline != null && !startAt.isAfter(registrationDeadline)) {
+				errors.add(detail("startAt", "Ngày bắt đầu thi đấu phải sau hạn đăng ký"));
+			}
+		}
+
+		if (endAt != null) {
+			if (!endAt.isAfter(now)) {
+				errors.add(detail("endAt", "Ngày kết thúc không được là thời điểm trong quá khứ"));
+			} else if (registrationDeadline != null && !endAt.isAfter(registrationDeadline)) {
+				errors.add(detail("endAt", "Ngày kết thúc phải sau hạn đăng ký"));
+			} else if (startAt != null && endAt.isBefore(startAt)) {
+				errors.add(detail("endAt", "Ngày kết thúc phải từ ngày bắt đầu thi đấu trở đi"));
+			}
+		}
+
+		if (!errors.isEmpty()) {
+			throw new ConfigValidationException(ErrorCode.TOURNAMENT_DATE_INVALID, errors);
+		}
 	}
 
 	private ConfigValidationDetailResponse detail(String fieldKey, String message) {
