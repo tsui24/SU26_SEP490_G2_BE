@@ -7,11 +7,14 @@ import com.capstone.su26_sep490_g2_be.dto.response.ParticipantResponse;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
+import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
+import org.springframework.security.core.Authentication;
 import com.capstone.su26_sep490_g2_be.service.ParticipantExcelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -40,6 +43,7 @@ public class ParticipantController {
     private final ParticipantRepository participantRepository;
     private final RegistrationRepository registrationRepository;
     private final ParticipantExcelService participantExcelService;
+    private final SecurityUtil securityUtil;
 
     /* ── Shared: list participants ── */
     @Operation(summary = "Danh sách người tham gia (Owner)")
@@ -66,18 +70,20 @@ public class ParticipantController {
     @PostMapping("/api/v1/owner/tournaments/{id}/participants/manual")
     public ResponseEntity<ApiResponse<ParticipantResponse>> addManualOwner(
             @PathVariable Long id,
-            @Valid @RequestBody ManualAddParticipantRequest request) {
+            @Valid @RequestBody ManualAddParticipantRequest request,
+            Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Đã thêm người tham gia", addManual(id, request)));
+                .body(ApiResponse.success("Đã thêm người tham gia", addManual(id, request, authentication)));
     }
 
     @Operation(summary = "Thêm người tham gia thủ công (Manager)")
     @PostMapping("/api/v1/manager/tournaments/{id}/participants/manual")
     public ResponseEntity<ApiResponse<ParticipantResponse>> addManualManager(
             @PathVariable Long id,
-            @Valid @RequestBody ManualAddParticipantRequest request) {
+            @Valid @RequestBody ManualAddParticipantRequest request,
+            Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Đã thêm người tham gia", addManual(id, request)));
+                .body(ApiResponse.success("Đã thêm người tham gia", addManual(id, request, authentication)));
     }
 
     /* ── Excel template / import ── */
@@ -187,19 +193,41 @@ public class ParticipantController {
         }
     }
 
-    private ParticipantResponse addManual(Long tournamentId, ManualAddParticipantRequest request) {
+    private ParticipantResponse addManual(Long tournamentId, ManualAddParticipantRequest request,
+                                          Authentication authentication) {
         Tournament tournament = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
+        User approver = securityUtil.resolveCurrentUser(authentication);
+
+        String phone = request.getPhone();
+        if (phone != null) phone = phone.trim().isEmpty() ? null : phone.trim();
+
+        Registration registration = Registration.builder()
+                .tournament(tournament)
+                .user(null)
+                .registrationType("MANUAL")
+                .playerFullName(request.getDisplayName().trim())
+                .playerPhone(phone)
+                .note(request.getNote())
+                .status("APPROVED")
+                .approvedBy(approver)
+                .approvedAt(java.time.Instant.now())
+                .build();
+        registration = registrationRepository.save(registration);
+
         Participant participant = Participant.builder()
                 .tournament(tournament)
+                .registration(registration)
                 .participantType(tournament.getParticipantType())
                 .displayName(request.getDisplayName().trim())
+                .seedNo(request.getSeedNo())
                 .status("ACTIVE")
                 .build();
         participant = participantRepository.save(participant);
         return toResponse(findParticipantWithDetails(participant.getId()));
     }
+
 
     private ParticipantResponse withdraw(Long participantId) {
         Participant participant = findParticipantWithDetails(participantId);
@@ -214,21 +242,21 @@ public class ParticipantController {
     }
 
     private ParticipantResponse toResponse(Participant p) {
-        String phone = null;
-        if (p.getRegistration() != null) {
-            phone = p.getRegistration().getPlayerPhone();
-        }
+        Registration reg = p.getRegistration();
+        String source = (reg != null && "MANUAL".equals(reg.getRegistrationType()))
+                ? "MANUAL"
+                : (reg != null ? "ONLINE_REGISTRATION" : "MANUAL");
         return ParticipantResponse.builder()
                 .id(p.getId())
                 .tournamentId(p.getTournament().getId())
                 .tournamentName(p.getTournament().getName())
-                .registrationId(p.getRegistration() != null ? p.getRegistration().getId() : null)
+                .registrationId(reg != null ? reg.getId() : null)
                 .participantType(p.getParticipantType())
                 .displayName(p.getDisplayName())
-                .phone(phone)
+                .phone(reg != null ? reg.getPlayerPhone() : null)
                 .seedNo(p.getSeedNo())
                 .status(p.getStatus())
-                .source(p.getRegistration() != null ? "ONLINE_REGISTRATION" : "MANUAL")
+                .source(source)
                 .build();
     }
 }
