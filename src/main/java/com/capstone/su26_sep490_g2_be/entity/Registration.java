@@ -24,7 +24,7 @@ public class Registration extends BaseEntity {
 	private Tournament tournament;
 
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "user_id", nullable = false)
+	@JoinColumn(name = "user_id")
 	private User user;
 
 	@Column(name = "registration_type", length = 30, nullable = false)
@@ -33,7 +33,7 @@ public class Registration extends BaseEntity {
 	@Column(name = "player_full_name", nullable = false)
 	private String playerFullName;
 
-	@Column(name = "player_phone", length = 20, nullable = false)
+	@Column(name = "player_phone", length = 20)
 	private String playerPhone;
 
 	@Column(length = 50, nullable = false)
