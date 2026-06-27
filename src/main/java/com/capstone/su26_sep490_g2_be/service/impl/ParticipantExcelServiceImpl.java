@@ -2,10 +2,12 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.response.ImportParticipantResultResponse;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
+import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
+import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.ParticipantExcelService;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +40,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
 	private final TournamentRepository tournamentRepository;
+	private final RegistrationRepository registrationRepository;
 	private final ParticipantRepository participantRepository;
 
 	@Override
@@ -48,7 +51,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 
 			CellStyle textStyle = workbook.createCellStyle();
 			textStyle.setDataFormat(workbook.createDataFormat().getFormat("@"));
-			// Áp dụng format Text cho cả cột B trước khi tạo dòng — Excel giữ số 0 đầu
+			// Áp dụng format Text cho cột SĐT để Excel giữ số 0 đầu
 			sheet.setDefaultColumnStyle(1, textStyle);
 
 			Row header = sheet.createRow(0);
@@ -56,15 +59,18 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 			Cell headerPhone = header.createCell(1);
 			headerPhone.setCellStyle(textStyle);
 			headerPhone.setCellValue("Số điện thoại");
+			header.createCell(2).setCellValue("Hạt giống");
 
 			Row sample = sheet.createRow(1);
 			sample.createCell(0).setCellValue("Nguyễn Văn A");
 			Cell phoneCell = sample.createCell(1);
 			phoneCell.setCellStyle(textStyle);
 			phoneCell.setCellValue("0901234567");
+			sample.createCell(2).setCellValue(1);
 
 			sheet.setColumnWidth(0, 20 * 256);
 			sheet.setColumnWidth(1, 18 * 256);
+			sheet.setColumnWidth(2, 12 * 256);
 
 			workbook.write(out);
 			return out.toByteArray();
@@ -74,7 +80,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	@Override
 	public byte[] buildImportTemplateCsv() {
 		// Công thức Excel ="..." để khi mở CSV, cột SĐT vẫn là text và giữ số 0 đầu
-		String csv = "Tên hiển thị,Số điện thoại\nNguyễn Văn A,=\"0901234567\"\n";
+		String csv = "Tên hiển thị,Số điện thoại,Hạt giống\nNguyễn Văn A,=\"0901234567\",1\n";
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		try {
 			out.write(UTF8_BOM);
@@ -161,10 +167,40 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				continue;
 			}
 
+			Integer seedNo = null;
+			String seedRaw = normalizeCell(cols, 2);
+			if (seedRaw != null && !seedRaw.isBlank()) {
+				try {
+					int parsed = Integer.parseInt(seedRaw.trim());
+					if (parsed >= 1) {
+						seedNo = parsed;
+					} else {
+						errors.add("Hàng " + rowNo + ": Hạt giống phải từ 1 trở lên");
+						skipped++;
+						continue;
+					}
+				} catch (NumberFormatException e) {
+					errors.add("Hàng " + rowNo + ": Hạt giống phải là số nguyên");
+					skipped++;
+					continue;
+				}
+			}
+
+			Registration registration = registrationRepository.save(Registration.builder()
+					.tournament(tournament)
+					.user(null)
+					.registrationType("MANUAL")
+					.playerFullName(displayName)
+					.playerPhone(phone)
+					.status("APPROVED")
+					.build());
+
 			participantRepository.save(Participant.builder()
 					.tournament(tournament)
+					.registration(registration)
 					.participantType(tournament.getParticipantType())
 					.displayName(displayName)
+					.seedNo(seedNo)
 					.status("ACTIVE")
 					.build());
 			imported++;
@@ -191,7 +227,8 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				}
 				rows.add(new String[] {
 						getCellString(row, 0),
-						getCellString(row, 1)
+						getCellString(row, 1),
+						getCellString(row, 2)
 				});
 			}
 		}
@@ -275,7 +312,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		if (cols == null || cols.length == 0) {
 			return true;
 		}
-		for (int i = 0; i <= 1; i++) {
+		for (int i = 0; i <= 2; i++) {
 			if (i < cols.length) {
 				String value = normalizeCell(cols, i);
 				if (value != null && !value.isBlank()) {

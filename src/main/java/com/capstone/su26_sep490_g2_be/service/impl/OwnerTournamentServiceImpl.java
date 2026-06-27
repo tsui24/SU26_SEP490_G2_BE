@@ -506,7 +506,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		TournamentFormatDefinition format = getFormatDefinition(tournament.getFormat());
 		TournamentConfig config = getConfig(tournamentId);
-
+		// lấy ra các field đã lưu config và các field default từ format, merge lại thành 1 map
 		Map<String, Object> fields = buildResolvedFields(tournamentId, tournament.getFormat());
 		List<FormatRaceToRule> formatRules = formatRaceToRuleRepository
 				.findByFormatCodeOrderByIdAsc(tournament.getFormat());
