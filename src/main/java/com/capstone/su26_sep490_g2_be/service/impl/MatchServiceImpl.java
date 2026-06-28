@@ -61,6 +61,11 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match startMatch(Long matchId, Long updatedByUserId) {
         Match match = getById(matchId);
+        // DRAW_DONE = DE/Group matches; FINAL_BRACKET_READY = SE phase matches (CUT_TO_SE)
+        String ts = match.getTournament().getStatus();
+        if (!"DRAW_DONE".equals(ts) && !"FINAL_BRACKET_READY".equals(ts)) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
         if (!"PENDING".equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }

@@ -1,14 +1,14 @@
 package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.CompleteMatchRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.EliminateBottomRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.SwapPlayersRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.UpdateScoreRequest;
+import com.capstone.su26_sep490_g2_be.dto.response.StandingsEntryResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
-import com.capstone.su26_sep490_g2_be.entity.TournamentStage;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
-import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
-import com.capstone.su26_sep490_g2_be.repository.TournamentStageRepository;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
 import com.capstone.su26_sep490_g2_be.service.MatchBroadcastService;
 import com.capstone.su26_sep490_g2_be.service.MatchService;
@@ -35,8 +35,6 @@ public class MatchController {
     private final BracketGenerationServiceImpl bracketHelper;
     private final MatchService matchService;
     private final MatchBroadcastService broadcastService;
-    private final TournamentStageRepository stageRepository;
-    private final ParticipantRepository participantRepository;
 
     /* ─── Bracket generation ─────────────────────────────────── */
 
@@ -54,6 +52,40 @@ public class MatchController {
     public ResponseEntity<ApiResponse<DrawResultResponse>> drawManager(@PathVariable Long id) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Bốc thăm thành công", bracketGenerationService.generate(id)));
+    }
+
+    @Operation(summary = "Xác nhận bracket — DRAW_PREVIEW → DRAW_DONE (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/owner/tournaments/{id}/draw/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmDrawOwner(@PathVariable Long id) {
+        bracketGenerationService.confirmDraw(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã xác nhận bracket", null));
+    }
+
+    @Operation(summary = "Xác nhận bracket — DRAW_PREVIEW → DRAW_DONE (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/manager/tournaments/{id}/draw/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmDrawManager(@PathVariable Long id) {
+        bracketGenerationService.confirmDraw(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã xác nhận bracket", null));
+    }
+
+    @Operation(summary = "Đổi chỗ 2 người chơi R1 trong DRAW_PREVIEW (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/owner/tournaments/{id}/draw/swap")
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> swapOwner(
+            @PathVariable Long id, @Valid @RequestBody SwapPlayersRequest req) {
+        bracketGenerationService.swapPlayers(id, req.getMatchId1(), req.getSlot1(), req.getMatchId2(), req.getSlot2());
+        return ResponseEntity.ok(ApiResponse.success("Đã đổi chỗ", buildStageResponse(id)));
+    }
+
+    @Operation(summary = "Đổi chỗ 2 người chơi R1 trong DRAW_PREVIEW (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/manager/tournaments/{id}/draw/swap")
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> swapManager(
+            @PathVariable Long id, @Valid @RequestBody SwapPlayersRequest req) {
+        bracketGenerationService.swapPlayers(id, req.getMatchId1(), req.getSlot1(), req.getMatchId2(), req.getSlot2());
+        return ResponseEntity.ok(ApiResponse.success("Đã đổi chỗ", buildStageResponse(id)));
     }
 
     /* ─── View stages + matches ──────────────────────────────── */
@@ -76,6 +108,55 @@ public class MatchController {
     @GetMapping("/tournaments/{id}/stages")
     public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> stagesPublic(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(buildStageResponse(id)));
+    }
+
+    /* ─── CUT_TO_SE: populate SE bracket từ DE survivors ─────── */
+
+    @Operation(summary = "[CUT_TO_SE] Điền SE bracket từ W+L survivors (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/owner/tournaments/{id}/populate-final-bracket")
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> populateFinalOwner(@PathVariable Long id) {
+        bracketGenerationService.populateFinalBracket(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã điền bracket loại trực tiếp", buildStageResponse(id)));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/manager/tournaments/{id}/populate-final-bracket")
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> populateFinalManager(@PathVariable Long id) {
+        bracketGenerationService.populateFinalBracket(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã điền bracket loại trực tiếp", buildStageResponse(id)));
+    }
+
+    /* ─── GROUP_PLAYOFF: progressive elimination ──────────────── */
+
+    @Operation(summary = "Xếp hạng vòng tròn — Public")
+    @GetMapping("/tournaments/{id}/standings")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> standingsPublic(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.getLeagueStandings(id)));
+    }
+
+    @Operation(summary = "Xếp hạng vòng tròn — Owner")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/owner/tournaments/{id}/standings")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> standingsOwner(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.getLeagueStandings(id)));
+    }
+
+    @Operation(summary = "[GROUP_PLAYOFF] Loại bottom — giữ keepCount người (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/owner/tournaments/{id}/eliminate-bottom")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> eliminateOwner(
+            @PathVariable Long id, @Valid @RequestBody EliminateBottomRequest req) {
+        bracketGenerationService.eliminateBottomParticipants(id, req.getKeepCount());
+        return ResponseEntity.ok(ApiResponse.success("Đã loại bottom", bracketGenerationService.getLeagueStandings(id)));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/manager/tournaments/{id}/eliminate-bottom")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> eliminateManager(
+            @PathVariable Long id, @Valid @RequestBody EliminateBottomRequest req) {
+        bracketGenerationService.eliminateBottomParticipants(id, req.getKeepCount());
+        return ResponseEntity.ok(ApiResponse.success("Đã loại bottom", bracketGenerationService.getLeagueStandings(id)));
     }
 
     @Operation(summary = "Tất cả trận đấu của một giải (Owner/Manager)")
