@@ -20,6 +20,14 @@ public class UpdateTournamentRequest {
 
 	private String description;
 
+	@Size(max = 1000, message = "URL thumbnail tối đa 1000 ký tự")
+	@Schema(description = "Ảnh đại diện giải")
+	private String thumbnailUrl;
+
+	@Size(max = 1000, message = "URL banner tối đa 1000 ký tự")
+	@Schema(description = "Ảnh banner giải")
+	private String bannerUrl;
+
 	@Schema(description = "Đổi thể thức — chỉ khi status=DRAFT")
 	private String format;
 

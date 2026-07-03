@@ -6,6 +6,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PaymentHistoryResponse;
 import com.capstone.su26_sep490_g2_be.entity.Payment;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.service.PayOSService;
 import com.capstone.su26_sep490_g2_be.service.PaymentService;
@@ -72,7 +73,7 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<Void>> confirmReturn(
             @RequestParam long orderCode,
             @RequestParam(defaultValue = "PAID") String status) {
-        if ("PAID".equals(status)) {
+        if (RegistrationStatus.PAID.getValue().equals(status)) {
             registrationService.markAsPaid(orderCode, null);
             log.info("Payment confirmed via return URL: orderCode={}", orderCode);
         }
