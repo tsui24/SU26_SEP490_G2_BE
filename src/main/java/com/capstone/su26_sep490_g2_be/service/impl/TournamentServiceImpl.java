@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.TournamentService;
@@ -64,7 +65,8 @@ public class TournamentServiceImpl implements TournamentService {
 	@Transactional
 	public void delete(Long id) {
 		Tournament existing = getById(id);
-		if (!"DRAFT".equals(existing.getStatus()) && !"CANCELLED".equals(existing.getStatus())) {
+		if (!TournamentStatus.DRAFT.getValue().equals(existing.getStatus())
+				&& !TournamentStatus.CANCELLED.getValue().equals(existing.getStatus())) {
 			throw new BusinessException(ErrorCode.INVALID_OPERATION);
 		}
 		tournamentRepository.delete(existing);

@@ -14,6 +14,7 @@ public class TournamentListItemResponse {
 
 	private Long id;
 	private String name;
+	private String thumbnailUrl;
 	private String gameType;
 	private String format;
 	private String formatName;

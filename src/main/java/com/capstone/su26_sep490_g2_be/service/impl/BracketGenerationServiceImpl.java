@@ -3,6 +3,11 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStageStatus;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
@@ -41,11 +46,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
         String currentStatus = tournament.getStatus();
-        if (!"REGISTRATION_CLOSED".equals(currentStatus) && !"DRAW_PREVIEW".equals(currentStatus)) {
+        if (!TournamentStatus.REGISTRATION_CLOSED.getValue().equals(currentStatus)
+                && !TournamentStatus.DRAW_PREVIEW.getValue().equals(currentStatus)) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
 
-        if ("DRAW_PREVIEW".equals(currentStatus)) {
+        if (TournamentStatus.DRAW_PREVIEW.getValue().equals(currentStatus)) {
             clearExistingBracket(tournamentId);
         } else {
             if (!stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId).isEmpty()) {
@@ -53,13 +59,13 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             }
         }
 
-        List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, "ACTIVE");
+        List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
         if (participants.size() < 2) throw new BusinessException(ErrorCode.INVALID_OPERATION);
 
         TournamentConfig config = tournamentConfigRepository.findById(tournamentId).orElse(null);
-        String seedingMethod = config != null ? config.getSeedingMethod() : "RANDOM";
+        String seedingMethod = config != null ? config.getSeedingMethod() : SeedingMethod.RANDOM.name();
 
-        if ("RANDOM".equals(seedingMethod)) {
+        if (SeedingMethod.RANDOM.name().equals(seedingMethod)) {
             Collections.shuffle(participants);
         } else {
             participants.sort(Comparator.comparingInt(p -> p.getSeedNo() != null ? p.getSeedNo() : Integer.MAX_VALUE));
@@ -72,7 +78,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             default                   -> generateSingleElimination(tournament, participants);
         };
 
-        tournament.setStatus("DRAW_PREVIEW");
+        tournament.setStatus(TournamentStatus.DRAW_PREVIEW.getValue());
         tournamentRepository.save(tournament);
 
         List<StageWithMatchesResponse> stageResponses = result.stages().stream()
@@ -88,7 +94,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         return DrawResultResponse.builder()
                 .tournamentId(tournamentId).tournamentFormat(format)
                 .participantsUsed(participants.size()).stagesCreated(result.stages().size())
-                .matchesCreated(result.matches().size()).newStatus("DRAW_PREVIEW")
+                .matchesCreated(result.matches().size()).newStatus(TournamentStatus.DRAW_PREVIEW.getValue())
                 .stages(stageResponses).build();
     }
 
@@ -108,7 +114,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         TournamentStage stage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Loại trực tiếp").stageType("KNOCKOUT")
-                .orderNo(1).status("PENDING").build());
+                .orderNo(1).status(TournamentStageStatus.PENDING.getValue()).build());
 
         // grid[round][pos] — 1-indexed
         Match[][] grid = new Match[totalRounds + 1][(bracketSize / 2) + 1];
@@ -123,7 +129,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(round).positionNo(pos)
                         .matchCode("R%d-M%d".formatted(round, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
 
@@ -144,7 +150,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         for (int i = 0; i < numByes; i++) {
             Match m = grid[1][i + 1];
             m.setPlayer1(participants.get(i));
-            m.setIsBye(true); m.setStatus("BYE"); m.setWinner(m.getPlayer1());
+            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
             matchRepository.save(m);
             placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
         }
@@ -163,7 +169,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                     .tournament(t).stage(stage).bracketType("KNOCKOUT")
                     .roundNo(totalRounds).positionNo(2).matchCode("3RD")
                     .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "third_place"))
-                    .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                    .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             int sfMc = bracketSize >> sfRound;
             if (sfMc >= 2) {
                 grid[sfRound][1].setNextMatchLose(thirdPlace); grid[sfRound][1].setLoseSlot("player1");
@@ -214,20 +220,20 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         TournamentStage wStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Nhánh thắng").stageType("WINNERS")
-                .orderNo(1).status("PENDING").build());
+                .orderNo(1).status(TournamentStageStatus.PENDING.getValue()).build());
         TournamentStage lStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Nhánh thua").stageType("LOSERS")
-                .orderNo(2).status("PENDING").build());
+                .orderNo(2).status(TournamentStageStatus.PENDING.getValue()).build());
         TournamentStage gfStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Chung kết lớn").stageType("GRAND_FINAL")
-                .orderNo(3).status("PENDING").build());
+                .orderNo(3).status(TournamentStageStatus.PENDING.getValue()).build());
 
         // ── Grand Final ───────────────────────────────────────
         Match grandFinal = matchRepository.save(Match.builder()
                 .tournament(t).stage(gfStage).bracketType("GRAND_FINAL")
                 .roundNo(1).positionNo(1).matchCode("GF")
                 .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "grand_final"))
-                .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
 
         // ── Winners bracket ───────────────────────────────────
         // wGrid[round][pos] 1-indexed; max pos = bracketSize/2
@@ -241,7 +247,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(wr).positionNo(pos)
                         .matchCode("W-R%d-M%d".formatted(wr, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "winners_r" + wr))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
 
@@ -275,7 +281,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(lr).positionNo(pos)
                         .matchCode("L-R%d-M%d".formatted(lr, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
 
@@ -309,7 +315,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         for (int i = 0; i < numByes; i++) {
             Match m = wGrid[1][i + 1];
             m.setPlayer1(participants.get(i));
-            m.setIsBye(true); m.setStatus("BYE"); m.setWinner(m.getPlayer1());
+            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
             matchRepository.save(m);
             placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
         }
@@ -389,7 +395,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         // ── GROUP stage (Round-Robin, circle method) ──────────
         TournamentStage groupStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Vòng tròn").stageType("GROUP")
-                .orderNo(1).status("PENDING").build());
+                .orderNo(1).status(TournamentStageStatus.PENDING.getValue()).build());
 
         // Circle-method schedule: totalRounds = n (odd) or n-1 (even)
         List<Participant> roster = new ArrayList<>(participants);
@@ -417,7 +423,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .tournament(t).stage(groupStage).bracketType("GROUP")
                         .roundNo(round).positionNo(posNo)
                         .matchCode("GS-R%d-M%d".formatted(round, posNo))
-                        .raceTo(raceTo).status("PENDING").isBye(false)
+                        .raceTo(raceTo).status(MatchStatus.PENDING.getValue()).isBye(false)
                         .player1(p1).player2(p2)
                         .player1Score(0).player2Score(0).build());
                 groupMatches.add(m);
@@ -431,7 +437,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         // ── PLAYOFF stage (blank — filled after group stage) ──
         TournamentStage playoffStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Vòng playoff").stageType("PLAYOFF")
-                .orderNo(2).status("PENDING").build());
+                .orderNo(2).status(TournamentStageStatus.PENDING.getValue()).build());
 
         int pTotalRounds = log2(nextPowerOf2(playoffSize));
         Match[][] pGrid = new Match[pTotalRounds + 1][(playoffSize / 2) + 1];
@@ -446,7 +452,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(pr).positionNo(pos)
                         .matchCode("PO-R%d-M%d".formatted(pr, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
                 pGrid[pr][pos] = m;
                 playoffMatches.add(m);
             }
@@ -487,7 +493,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         if (groupStageIds.isEmpty()) return List.of();
 
-        List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, "ACTIVE");
+        List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
 
         // Accumulate stats per participant
         record Stats(int wins, int losses, int framesWon, int framesLost) {}
@@ -499,7 +505,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         for (Long stageId : groupStageIds) {
             List<Match> matches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(stageId);
             for (Match m : matches) {
-                if (!"COMPLETED".equals(m.getStatus()) && !"WALKOVER".equals(m.getStatus())) continue;
+                if (!MatchStatus.COMPLETED.getValue().equals(m.getStatus())
+                        && !MatchStatus.WALKOVER.getValue().equals(m.getStatus())) continue;
                 if (m.getWinner() == null || m.getLoser() == null) continue;
 
                 Long wId = m.getWinner().getId();
@@ -564,8 +571,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         // All group matches must be finished
         List<Match> groupMatches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(groupStage.getId());
         boolean allDone = groupMatches.stream()
-                .allMatch(m -> "COMPLETED".equals(m.getStatus()) || "WALKOVER".equals(m.getStatus())
-                            || "BYE".equals(m.getStatus()));
+                .allMatch(m -> MatchStatus.COMPLETED.getValue().equals(m.getStatus())
+                            || MatchStatus.WALKOVER.getValue().equals(m.getStatus())
+                            || MatchStatus.BYE.getValue().equals(m.getStatus()));
         if (!allDone) throw new BusinessException(ErrorCode.INVALID_OPERATION);
 
         // Get standings, take top K
@@ -584,7 +592,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         // Assign top-seeded to R1 in standard bracket order:
         // Seed 1 vs Seed K, Seed 2 vs Seed K-1, etc. (alternating top/bottom)
-        Map<Long, Participant> ptcpMap = participantRepository.findByTournamentIdAndStatus(tournamentId, "ACTIVE")
+        Map<Long, Participant> ptcpMap = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue())
                 .stream().collect(Collectors.toMap(Participant::getId, p -> p));
 
         int lo = 0, hi = advancers.size() - 1;
@@ -594,14 +602,14 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             Participant p2 = (lo < hi) ? ptcpMap.get(advancers.get(hi).getParticipantId()) : null;
             m.setPlayer1(p1);
             m.setPlayer2(p2);
-            if (p2 == null) { m.setIsBye(true); m.setStatus("BYE"); m.setWinner(p1); }
+            if (p2 == null) { m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(p1); }
             matchRepository.save(m);
             if (p2 == null) placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), p1);
             lo++;
             if (lo <= hi) hi--;
         }
 
-        groupStage.setStatus("COMPLETED");
+        groupStage.setStatus(TournamentStageStatus.COMPLETED.getValue());
         stageRepository.save(groupStage);
     }
 
@@ -614,8 +622,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public void confirmDraw(Long tournamentId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"DRAW_PREVIEW".equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
-        t.setStatus("DRAW_DONE");
+        if (!TournamentStatus.DRAW_PREVIEW.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        t.setStatus(TournamentStatus.DRAW_DONE.getValue());
         tournamentRepository.save(t);
     }
 
@@ -628,7 +636,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public void swapPlayers(Long tournamentId, Long matchId1, String slot1, Long matchId2, String slot2) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"DRAW_PREVIEW".equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        if (!TournamentStatus.DRAW_PREVIEW.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
 
         Match m1 = matchRepository.findByIdWithDetails(matchId1)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
@@ -775,9 +783,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
     private void updateByeStatus(Match m) {
         if (m.getPlayer1() != null && m.getPlayer2() == null) {
-            m.setIsBye(true); m.setStatus("BYE"); m.setWinner(m.getPlayer1());
+            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
         } else {
-            m.setIsBye(false); m.setStatus("PENDING"); m.setWinner(null);
+            m.setIsBye(false); m.setStatus(MatchStatus.PENDING.getValue()); m.setWinner(null);
         }
     }
 
@@ -858,15 +866,15 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         // ── Stages ───────────────────────────────────────────────────
         TournamentStage wStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Nhánh thắng").stageType("WINNERS")
-                .orderNo(1).status("PENDING").build());
+                .orderNo(1).status(TournamentStageStatus.PENDING.getValue()).build());
 
         TournamentStage lStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Nhánh thua").stageType("LOSERS")
-                .orderNo(2).status("PENDING").build());
+                .orderNo(2).status(TournamentStageStatus.PENDING.getValue()).build());
 
         TournamentStage seStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Last " + seSize + " — Loại trực tiếp").stageType("FINAL_BRACKET")
-                .orderNo(3).status("PENDING").build());
+                .orderNo(3).status(TournamentStageStatus.PENDING.getValue()).build());
 
         // ── W Bracket (rounds 1..cutoffRound) ───────────────────────
         int maxWPos = (bracketSize >> 1) + 2;
@@ -880,7 +888,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(wr).positionNo(pos)
                         .matchCode("W-R%d-M%d".formatted(wr, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "de_winners_r" + wr))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
         // W win-advancement (rounds 1..cutoffRound-1, last round survivors → SE)
@@ -908,7 +916,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(lr).positionNo(pos)
                         .matchCode("L-R%d-M%d".formatted(lr, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
         // L win-advancement (same parity logic as FULL_DE)
@@ -945,7 +953,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .roundNo(sr).positionNo(pos)
                         .matchCode("SE-R%d-M%d".formatted(sr, pos))
                         .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status("PENDING").isBye(false).player1Score(0).player2Score(0).build());
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
         // SE win-advancement
@@ -965,7 +973,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         for (int i = 0; i < numByes; i++) {
             Match m = wGrid[1][i + 1];
             m.setPlayer1(participants.get(i));
-            m.setIsBye(true); m.setStatus("BYE"); m.setWinner(m.getPlayer1());
+            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
             matchRepository.save(m);
             placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
         }
@@ -1017,7 +1025,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public void populateFinalBracket(Long tournamentId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!"DRAW_DONE".equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        if (!TournamentStatus.DRAW_DONE.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
 
         List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);
 
@@ -1034,11 +1042,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         List<Match> wFinal = wMatches.stream()
                 .filter(m -> m.getRoundNo() == wLastRound
-                          && !"BYE".equals(m.getStatus()))
+                          && !MatchStatus.BYE.getValue().equals(m.getStatus()))
                 .sorted(Comparator.comparing(Match::getPositionNo)).toList();
 
         boolean wDone = wFinal.stream()
-                .allMatch(m -> "COMPLETED".equals(m.getStatus()) || "WALKOVER".equals(m.getStatus()));
+                .allMatch(m -> MatchStatus.COMPLETED.getValue().equals(m.getStatus())
+                        || MatchStatus.WALKOVER.getValue().equals(m.getStatus()));
         if (!wDone) throw new BusinessException(ErrorCode.INVALID_OPERATION);
 
         List<Participant> wSurvivors = wFinal.stream()
@@ -1049,10 +1058,11 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             List<Match> lMatches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(lStage.getId());
             int lLastRound = lMatches.stream().mapToInt(Match::getRoundNo).max().orElse(0);
             List<Match> lFinal = lMatches.stream()
-                    .filter(m -> m.getRoundNo() == lLastRound && !"BYE".equals(m.getStatus()))
+                    .filter(m -> m.getRoundNo() == lLastRound && !MatchStatus.BYE.getValue().equals(m.getStatus()))
                     .sorted(Comparator.comparing(Match::getPositionNo)).toList();
             boolean lDone = lFinal.stream()
-                    .allMatch(m -> "COMPLETED".equals(m.getStatus()) || "WALKOVER".equals(m.getStatus()));
+                    .allMatch(m -> MatchStatus.COMPLETED.getValue().equals(m.getStatus())
+                        || MatchStatus.WALKOVER.getValue().equals(m.getStatus()));
             if (!lDone) throw new BusinessException(ErrorCode.INVALID_OPERATION);
             lSurvivors = lFinal.stream()
                     .map(Match::getWinner).filter(Objects::nonNull).collect(Collectors.toList());
@@ -1070,17 +1080,17 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             if ((half - 1 - k) < lSurvivors.size())   m.setPlayer2(lSurvivors.get(half - 1 - k));
             // Xử lý BYE nếu một bên không có người (edge case)
             if (m.getPlayer1() != null && m.getPlayer2() == null) {
-                m.setIsBye(true); m.setStatus("BYE"); m.setWinner(m.getPlayer1());
+                m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
                 placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
             }
             matchRepository.save(m);
         }
 
         // Đánh dấu DE stages hoàn thành
-        wStage.setStatus("COMPLETED"); stageRepository.save(wStage);
-        if (lStage != null) { lStage.setStatus("COMPLETED"); stageRepository.save(lStage); }
+        wStage.setStatus(TournamentStageStatus.COMPLETED.getValue()); stageRepository.save(wStage);
+        if (lStage != null) { lStage.setStatus(TournamentStageStatus.COMPLETED.getValue()); stageRepository.save(lStage); }
 
-        t.setStatus("FINAL_BRACKET_READY");
+        t.setStatus(TournamentStatus.FINAL_BRACKET_READY.getValue());
         tournamentRepository.save(t);
     }
 
@@ -1105,7 +1115,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         // Đánh dấu INACTIVE
         List<Participant> toElim = participantRepository.findAllById(eliminatedIds);
-        toElim.forEach(p -> p.setStatus("INACTIVE"));
+        toElim.forEach(p -> p.setStatus(ParticipantStatus.INACTIVE.getValue()));
         participantRepository.saveAll(toElim);
 
         // Auto-WALKOVER tất cả PENDING matches có người bị loại
@@ -1113,16 +1123,16 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         for (TournamentStage stage : stages) {
             if (!"GROUP".equals(stage.getStageType())) continue;
             matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(stage.getId()).stream()
-                    .filter(m -> "PENDING".equals(m.getStatus()))
+                    .filter(m -> MatchStatus.PENDING.getValue().equals(m.getStatus()))
                     .forEach(m -> {
                         boolean p1Elim = m.getPlayer1() != null && eliminatedIds.contains(m.getPlayer1().getId());
                         boolean p2Elim = m.getPlayer2() != null && eliminatedIds.contains(m.getPlayer2().getId());
                         if (p1Elim && p2Elim) {
-                            m.setStatus("BYE"); m.setIsBye(true);
+                            m.setStatus(MatchStatus.BYE.getValue()); m.setIsBye(true);
                         } else if (p1Elim && m.getPlayer2() != null) {
-                            m.setStatus("WALKOVER"); m.setWinner(m.getPlayer2()); m.setLoser(m.getPlayer1());
+                            m.setStatus(MatchStatus.WALKOVER.getValue()); m.setWinner(m.getPlayer2()); m.setLoser(m.getPlayer1());
                         } else if (p2Elim && m.getPlayer1() != null) {
-                            m.setStatus("WALKOVER"); m.setWinner(m.getPlayer1()); m.setLoser(m.getPlayer2());
+                            m.setStatus(MatchStatus.WALKOVER.getValue()); m.setWinner(m.getPlayer1()); m.setLoser(m.getPlayer2());
                         }
                         matchRepository.save(m);
                     });

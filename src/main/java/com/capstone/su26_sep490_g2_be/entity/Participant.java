@@ -36,4 +36,7 @@ public class Participant {
 	@Column(length = 30, nullable = false)
 	@Builder.Default
 	private String status = "ACTIVE";
+
+	@Column(name = "avtar_url", length = 1000)
+	private String avtarUrl;
 }

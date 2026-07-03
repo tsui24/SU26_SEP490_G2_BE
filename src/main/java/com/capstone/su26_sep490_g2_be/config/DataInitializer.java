@@ -2,7 +2,12 @@ package com.capstone.su26_sep490_g2_be.config;
 
 import com.capstone.su26_sep490_g2_be.config.bootstrap.DatabaseSeedData;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
+import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -336,8 +341,8 @@ public class DataInitializer implements CommandLineRunner {
 				.description(description)
 				.gameType(gameType)
 				.format(format)
-				.participantType("SINGLE")
-				.status("OPEN_FOR_REGISTRATION")
+				.participantType(ParticipantType.SINGLE.getValue())
+				.status(TournamentStatus.OPEN_FOR_REGISTRATION.getValue())
 				.maxParticipants(maxParticipants)
 				.entryFee(entryFee)
 				.prizePool(prizePool)
@@ -354,7 +359,7 @@ public class DataInitializer implements CommandLineRunner {
 		TournamentConfig config = TournamentConfig.builder()
 				.tournament(tournament)
 				.formatCode(format)
-				.seedingMethod("RANDOM")
+				.seedingMethod(SeedingMethod.RANDOM.name())
 				.build();
 		tournamentConfigRepository.save(config);
 		log.info("Seeded registration tournament: {}", name);
@@ -369,12 +374,12 @@ public class DataInitializer implements CommandLineRunner {
 		User player1 = userRepository.findByEmail("player1@gmail.com").orElse(null);
 		User player2 = userRepository.findByEmail("player2@gmail.com").orElse(null);
 		if (player1 != null) {
-			seedRegistration(paidTournament, player1, "SINGLE", "Player One", "0900000001",
-					"Seed pending payment", "PENDING_PAYMENT", null, null);
+			seedRegistration(paidTournament, player1, RegistrationType.SINGLE.getValue(), "Player One", "0900000001",
+					"Seed pending payment", RegistrationStatus.PENDING_PAYMENT.getValue(), null, null);
 		}
 		if (player2 != null) {
-			seedRegistration(paidTournament, player2, "SINGLE", "Player Two", "0900000002",
-					"Seed approved registration", "APPROVED", owner, Instant.now().minus(1, ChronoUnit.HOURS));
+			seedRegistration(paidTournament, player2, RegistrationType.SINGLE.getValue(), "Player Two", "0900000002",
+					"Seed approved registration", RegistrationStatus.APPROVED.getValue(), owner, Instant.now().minus(1, ChronoUnit.HOURS));
 		}
 	}
 
@@ -445,7 +450,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"FPT 9-Ball Open 2026",
 						"Giải đấu 9-Ball mở rộng — dành cho mọi cơ thủ. Alternate break, race-to-7.",
-						"9_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 16,
+						"9_BALL", "SINGLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), 16,
 						BigDecimal.valueOf(200000), BigDecimal.valueOf(8000000),
 						"Vô địch 4.000.000đ · Á quân 2.400.000đ · Hạng 3-4 800.000đ",
 						now.plus(10, ChronoUnit.DAYS), now.plus(20, ChronoUnit.DAYS), now.plus(22, ChronoUnit.DAYS),
@@ -453,7 +458,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Giải Loại Kép 8-Ball FPT 2026",
 						"Double Elimination 8-Ball — cơ hội thua 1 lần vẫn tiếp tục.",
-						"8_BALL", "DOUBLE_ELIMINATION", "REGISTRATION_CLOSED", 16,
+						"8_BALL", "DOUBLE_ELIMINATION", TournamentStatus.REGISTRATION_CLOSED.getValue(), 16,
 						BigDecimal.valueOf(150000), BigDecimal.valueOf(6000000),
 						"Vô địch 3.000.000đ · Á quân 1.800.000đ · Hạng 3-4 600.000đ",
 						now.minus(2, ChronoUnit.DAYS), now.plus(5, ChronoUnit.DAYS), now.plus(7, ChronoUnit.DAYS),
@@ -461,7 +466,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Giải 10-Ball Đà Nẵng Open 2026",
 						"Giải đấu 10-Ball đầu tiên tại miền Trung — vòng bảng kết hợp playoff.",
-						"10_BALL", "GROUP_PLAYOFF", "COMPLETED", 16,
+						"10_BALL", "GROUP_PLAYOFF", TournamentStatus.COMPLETED.getValue(), 16,
 						BigDecimal.valueOf(100000), BigDecimal.valueOf(4000000),
 						"Vô địch 2.000.000đ · Á quân 1.200.000đ · Hạng 3-4 400.000đ",
 						now.minus(30, ChronoUnit.DAYS), now.minus(20, ChronoUnit.DAYS), now.minus(18, ChronoUnit.DAYS),
@@ -469,7 +474,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"CLB FPT — Giải Nội Bộ Q3/2026",
 						"Giải đấu nội bộ dành cho thành viên CLB — không tính phí.",
-						"8_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 8,
+						"8_BALL", "SINGLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), 8,
 						BigDecimal.ZERO, BigDecimal.valueOf(1000000),
 						"Vô địch 600.000đ · Á quân 250.000đ · Hạng 3 150.000đ",
 						now.plus(7, ChronoUnit.DAYS), now.plus(14, ChronoUnit.DAYS), now.plus(14, ChronoUnit.DAYS),
@@ -479,7 +484,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Vietnam 9-Ball Masters 2026",
 						"Giải đấu đỉnh cao với 32 cơ thủ hàng đầu. Single elimination race-to-9.",
-						"9_BALL", "SINGLE_ELIMINATION", "IN_PROGRESS", 32,
+						"9_BALL", "SINGLE_ELIMINATION", TournamentStatus.IN_PROGRESS.getValue(), 32,
 						BigDecimal.valueOf(500000), BigDecimal.valueOf(20000000),
 						"Vô địch 10.000.000đ · Á quân 5.000.000đ · Hạng 3-4 2.000.000đ · Hạng 5-8 750.000đ",
 						now.minus(10, ChronoUnit.DAYS), now.minus(3, ChronoUnit.DAYS), now.plus(2, ChronoUnit.DAYS),
@@ -487,7 +492,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Hanoi 8-Ball Grand Prix 2026",
 						"Giải đấu 8-Ball tại Hà Nội — 32 cơ thủ tranh tài. Race-to-7.",
-						"8_BALL", "SINGLE_ELIMINATION", "REGISTRATION_CLOSED", 32,
+						"8_BALL", "SINGLE_ELIMINATION", TournamentStatus.REGISTRATION_CLOSED.getValue(), 32,
 						BigDecimal.valueOf(300000), BigDecimal.valueOf(15000000),
 						"Vô địch 7.500.000đ · Á quân 4.000.000đ · Hạng 3-4 1.750.000đ",
 						now.minus(1, ChronoUnit.DAYS), now.plus(3, ChronoUnit.DAYS), now.plus(5, ChronoUnit.DAYS),
@@ -495,7 +500,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Miền Trung 10-Ball Masters 2026",
 						"Giải đấu 10-Ball tại Đà Nẵng — 32 cơ thủ, vòng bảng + playoff.",
-						"10_BALL", "GROUP_PLAYOFF", "IN_PROGRESS", 32,
+						"10_BALL", "GROUP_PLAYOFF", TournamentStatus.IN_PROGRESS.getValue(), 32,
 						BigDecimal.valueOf(200000), BigDecimal.valueOf(12000000),
 						"Vô địch 6.000.000đ · Á quân 3.000.000đ · Hạng 3-4 1.500.000đ",
 						now.minus(5, ChronoUnit.DAYS), now.minus(2, ChronoUnit.DAYS), now.plus(1, ChronoUnit.DAYS),
@@ -503,7 +508,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Hà Nội 9-Ball Open 2026",
 						"Giải 9-Ball mở rộng tại Hà Nội — 32 cơ thủ, alternate break, race-to-7.",
-						"9_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 32,
+						"9_BALL", "SINGLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), 32,
 						BigDecimal.valueOf(250000), BigDecimal.valueOf(14000000),
 						"Vô địch 7.000.000đ · Á quân 4.000.000đ · Hạng 3-4 1.500.000đ",
 						now.plus(12, ChronoUnit.DAYS), now.plus(20, ChronoUnit.DAYS), now.plus(22, ChronoUnit.DAYS),
@@ -511,7 +516,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"FPT 8-Ball Group Stage 2026",
 						"Giải 8-Ball nội bộ FPT — 32 cơ thủ, vòng bảng round-robin + knockout.",
-						"8_BALL", "GROUP_PLAYOFF", "IN_PROGRESS", 32,
+						"8_BALL", "GROUP_PLAYOFF", TournamentStatus.IN_PROGRESS.getValue(), 32,
 						BigDecimal.valueOf(200000), BigDecimal.valueOf(10000000),
 						"Vô địch 5.000.000đ · Á quân 2.500.000đ · Hạng 3-4 1.250.000đ",
 						now.minus(7, ChronoUnit.DAYS), now.minus(3, ChronoUnit.DAYS), now.plus(1, ChronoUnit.DAYS),
@@ -521,7 +526,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Vietnam Open 9-Ball Championship 2026",
 						"Giải vô địch 9-Ball lớn nhất năm — 64 cơ thủ, single elimination race-to-9.",
-						"9_BALL", "SINGLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 64,
+						"9_BALL", "SINGLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), 64,
 						BigDecimal.valueOf(500000), BigDecimal.valueOf(40000000),
 						"Vô địch 20.000.000đ · Á quân 10.000.000đ · Hạng 3-4 5.000.000đ · Hạng 5-8 1.250.000đ",
 						now.plus(15, ChronoUnit.DAYS), now.plus(25, ChronoUnit.DAYS), now.plus(27, ChronoUnit.DAYS),
@@ -529,7 +534,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"HCMC Double Elimination 9-Ball 2026",
 						"Giải đấu double elimination tại TP.HCM — 64 cơ thủ, 2 nhánh thắng/thua.",
-						"9_BALL", "DOUBLE_ELIMINATION", "REGISTRATION_CLOSED", 64,
+						"9_BALL", "DOUBLE_ELIMINATION", TournamentStatus.REGISTRATION_CLOSED.getValue(), 64,
 						BigDecimal.valueOf(400000), BigDecimal.valueOf(30000000),
 						"Vô địch 15.000.000đ · Á quân 7.500.000đ · Hạng 3-4 3.750.000đ",
 						now.minus(2, ChronoUnit.DAYS), now.plus(4, ChronoUnit.DAYS), now.plus(7, ChronoUnit.DAYS),
@@ -537,7 +542,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"FPT Double Elimination Cup 2026",
 						"FPT Cup — double elimination 8-Ball, 64 cơ thủ tranh tài, race-to-7.",
-						"8_BALL", "DOUBLE_ELIMINATION", "OPEN_FOR_REGISTRATION", 64,
+						"8_BALL", "DOUBLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), 64,
 						BigDecimal.valueOf(350000), BigDecimal.valueOf(25000000),
 						"Vô địch 12.500.000đ · Á quân 6.250.000đ · Hạng 3-4 3.125.000đ",
 						now.plus(8, ChronoUnit.DAYS), now.plus(18, ChronoUnit.DAYS), now.plus(21, ChronoUnit.DAYS),
@@ -545,7 +550,7 @@ public class DataInitializer implements CommandLineRunner {
 				new TData(
 						"Giải Vô Địch 9-Ball Toàn Quốc 2026",
 						"Giải vô địch toàn quốc 9-Ball — 64 cơ thủ tốt nhất cả nước. Đã kết thúc.",
-						"9_BALL", "SINGLE_ELIMINATION", "COMPLETED", 64,
+						"9_BALL", "SINGLE_ELIMINATION", TournamentStatus.COMPLETED.getValue(), 64,
 						BigDecimal.valueOf(500000), BigDecimal.valueOf(50000000),
 						"Vô địch 25.000.000đ · Á quân 12.500.000đ · Hạng 3-4 6.250.000đ · Hạng 5-8 1.562.500đ",
 						now.minus(40, ChronoUnit.DAYS), now.minus(30, ChronoUnit.DAYS), now.minus(27, ChronoUnit.DAYS),
@@ -559,7 +564,7 @@ public class DataInitializer implements CommandLineRunner {
 					.description(d.desc())
 					.gameType(d.gameType())
 					.format(d.format())
-					.participantType("SINGLE")
+					.participantType(ParticipantType.SINGLE.getValue())
 					.status(d.status())
 					.maxParticipants(d.max())
 					.entryFee(d.fee())
@@ -577,7 +582,7 @@ public class DataInitializer implements CommandLineRunner {
 			TournamentConfig cfg = TournamentConfig.builder()
 					.tournament(t)
 					.formatCode(t.getFormat())
-					.seedingMethod("RANDOM")
+					.seedingMethod(SeedingMethod.RANDOM.name())
 					.build();
 			tournamentConfigRepository.save(cfg);
 			count++;
@@ -678,15 +683,15 @@ public class DataInitializer implements CommandLineRunner {
 
 		record RegConfig(String name, int count, String status) {}
 		var configs = java.util.List.of(
-				new RegConfig("Giải Vô Địch 9-Ball Toàn Quốc 2026",       64, "APPROVED"),
-				new RegConfig("HCMC Double Elimination 9-Ball 2026",       64, "APPROVED"),
-				new RegConfig("Vietnam 9-Ball Masters 2026",               32, "APPROVED"),
-				new RegConfig("Hanoi 8-Ball Grand Prix 2026",              32, "APPROVED"),
-				new RegConfig("Miền Trung 10-Ball Masters 2026",           32, "APPROVED"),
-				new RegConfig("FPT 8-Ball Group Stage 2026",               32, "APPROVED"),
-				new RegConfig("Vietnam Open 9-Ball Championship 2026",     45, "APPROVED"),
-				new RegConfig("Hà Nội 9-Ball Open 2026",                   22, "APPROVED"),
-				new RegConfig("FPT Double Elimination Cup 2026",           30, "APPROVED"));
+				new RegConfig("Giải Vô Địch 9-Ball Toàn Quốc 2026",       64, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("HCMC Double Elimination 9-Ball 2026",       64, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("Vietnam 9-Ball Masters 2026",               32, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("Hanoi 8-Ball Grand Prix 2026",              32, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("Miền Trung 10-Ball Masters 2026",           32, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("FPT 8-Ball Group Stage 2026",               32, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("Vietnam Open 9-Ball Championship 2026",     45, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("Hà Nội 9-Ball Open 2026",                   22, RegistrationStatus.APPROVED.getValue()),
+				new RegConfig("FPT Double Elimination Cup 2026",           30, RegistrationStatus.APPROVED.getValue()));
 
 		int totalSeeded = 0;
 		for (var cfg : configs) {
@@ -709,6 +714,6 @@ public class DataInitializer implements CommandLineRunner {
 		UserProfile profile = user.getProfile();
 		String fullName = (profile != null && profile.getFullName() != null) ? profile.getFullName() : user.getEmail();
 		String phone = (user.getPhone() != null) ? user.getPhone() : "0900000000";
-		seedRegistration(tournament, user, "SINGLE", fullName, phone, null, status, approvedBy, approvedAt);
+		seedRegistration(tournament, user, RegistrationType.SINGLE.getValue(), fullName, phone, null, status, approvedBy, approvedAt);
 	}
 }

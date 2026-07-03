@@ -12,6 +12,7 @@ import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
 import com.capstone.su26_sep490_g2_be.service.MatchBroadcastService;
 import com.capstone.su26_sep490_g2_be.service.MatchService;
+import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
 import com.capstone.su26_sep490_g2_be.service.impl.BracketGenerationServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -35,6 +36,7 @@ public class MatchController {
     private final BracketGenerationServiceImpl bracketHelper;
     private final MatchService matchService;
     private final MatchBroadcastService broadcastService;
+    private final TournamentResultService tournamentResultService;
 
     /* ─── Bracket generation ─────────────────────────────────── */
 
@@ -127,12 +129,34 @@ public class MatchController {
         return ResponseEntity.ok(ApiResponse.success("Đã điền bracket loại trực tiếp", buildStageResponse(id)));
     }
 
-    /* ─── GROUP_PLAYOFF: progressive elimination ──────────────── */
+    /* ─── Xếp hạng giải đấu ──────────────────────────────────────── */
 
+    /**
+     * Bảng điểm vòng tròn (GROUP_PLAYOFF) — chỉ tính từ vòng bảng.
+     * Khác với /rankings: standings không gộp placement knockout.
+     */
     @Operation(summary = "Xếp hạng vòng tròn — Public")
     @GetMapping("/tournaments/{id}/standings")
     public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> standingsPublic(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.getLeagueStandings(id)));
+    }
+
+    /**
+     * Bảng xếp hạng tổng hợp theo bracket — dùng cho tab "Xếp hạng" trên FE.
+     * Tự chọn chiến lược: GROUP_PLAYOFF → bảng điểm; còn lại → placement loại trực tiếp.
+     */
+    @Operation(summary = "Xếp hạng giải đấu (theo bracket) — Public")
+    @GetMapping("/tournaments/{id}/rankings")
+    public ResponseEntity<ApiResponse<TournamentRankingResponse>> rankingsPublic(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(tournamentResultService.getRankings(id)));
+    }
+
+    /** Cùng logic rankingsPublic — endpoint cho Owner dashboard. */
+    @Operation(summary = "Xếp hạng giải đấu (theo bracket) — Owner")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/owner/tournaments/{id}/rankings")
+    public ResponseEntity<ApiResponse<TournamentRankingResponse>> rankingsOwner(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(tournamentResultService.getRankings(id)));
     }
 
     @Operation(summary = "Xếp hạng vòng tròn — Owner")

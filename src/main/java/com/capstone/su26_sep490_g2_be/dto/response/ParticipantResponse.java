@@ -16,4 +16,5 @@ public class ParticipantResponse {
     private Integer seedNo;
     private String status;
     private String source;
+    private String avtarUrl;
 }

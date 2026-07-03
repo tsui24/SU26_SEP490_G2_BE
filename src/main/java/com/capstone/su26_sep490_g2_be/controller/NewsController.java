@@ -9,6 +9,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.entity.NewsCategory;
 import com.capstone.su26_sep490_g2_be.entity.NewsPost;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.NewsCategoryStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.service.NewsCategoryService;
 import com.capstone.su26_sep490_g2_be.service.NewsPostService;
@@ -142,7 +143,7 @@ public class NewsController {
         NewsCategory cat = NewsCategory.builder()
                 .name(request.getName())
                 .slug(request.getSlug())
-                .status("ACTIVE")
+                .status(NewsCategoryStatus.ACTIVE.getValue())
                 .build();
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(toCatResponse(categoryService.create(cat))));
@@ -230,7 +231,7 @@ public class NewsController {
     @PostMapping("/manager/news/categories")
     public ResponseEntity<ApiResponse<NewsCategoryResponse>> managerCreateCategory(
             @Valid @RequestBody NewsCategoryRequest req) {
-        NewsCategory cat = NewsCategory.builder().name(req.getName()).slug(req.getSlug()).status("ACTIVE").build();
+        NewsCategory cat = NewsCategory.builder().name(req.getName()).slug(req.getSlug()).status(NewsCategoryStatus.ACTIVE.getValue()).build();
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(toCatResponse(categoryService.create(cat))));
     }
 
