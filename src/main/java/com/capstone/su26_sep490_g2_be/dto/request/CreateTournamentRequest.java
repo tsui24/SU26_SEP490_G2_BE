@@ -21,6 +21,14 @@ public class CreateTournamentRequest {
 	@Schema(description = "Mô tả giải")
 	private String description;
 
+	@Size(max = 1000, message = "URL thumbnail tối đa 1000 ký tự")
+	@Schema(description = "Ảnh đại diện giải")
+	private String thumbnailUrl;
+
+	@Size(max = 1000, message = "URL banner tối đa 1000 ký tự")
+	@Schema(description = "Ảnh banner giải")
+	private String bannerUrl;
+
 	@NotBlank(message = "Mã loại bi không được để trống")
 	@Schema(description = "Mã loại bi", example = "9_BALL")
 	private String gameType;

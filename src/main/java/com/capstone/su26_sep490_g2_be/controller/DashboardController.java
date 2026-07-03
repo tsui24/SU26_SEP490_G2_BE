@@ -3,6 +3,10 @@ package com.capstone.su26_sep490_g2_be.controller;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.DashboardStatsResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
@@ -53,25 +57,30 @@ public class DashboardController {
                 : tournamentRepository.count();
 
         long active = countByStatuses(ownerUserId,
-                List.of("OPEN_FOR_REGISTRATION", "REGISTRATION_CLOSED", "DRAW_DONE", "IN_PROGRESS"));
+                List.of(
+                        TournamentStatus.OPEN_FOR_REGISTRATION.getValue(),
+                        TournamentStatus.REGISTRATION_CLOSED.getValue(),
+                        TournamentStatus.DRAW_DONE.getValue(),
+                        TournamentStatus.IN_PROGRESS.getValue()));
 
-        long openReg = countByStatuses(ownerUserId, List.of("OPEN_FOR_REGISTRATION"));
+        long openReg = countByStatuses(ownerUserId,
+                List.of(TournamentStatus.OPEN_FOR_REGISTRATION.getValue()));
 
         long totalReg = registrationRepository.count();
         long pendingReg = registrationRepository.findAll().stream()
-                .filter(r -> "PENDING_PAYMENT".equals(r.getStatus()))
+                .filter(r -> RegistrationStatus.PENDING_PAYMENT.getValue().equals(r.getStatus()))
                 .count();
 
-        long totalParticipants = participantRepository.countByTournamentIdAndStatus(
-                0L, "ACTIVE"); // fallback approach
+        long         totalParticipants = participantRepository.countByTournamentIdAndStatus(
+                0L, ParticipantStatus.ACTIVE.getValue()); // fallback approach
 
         // Count all active participants
         totalParticipants = participantRepository.findAll().stream()
-                .filter(p -> "ACTIVE".equals(p.getStatus()))
+                .filter(p -> ParticipantStatus.ACTIVE.getValue().equals(p.getStatus()))
                 .count();
 
         BigDecimal revenue = paymentRepository.findAll().stream()
-                .filter(p -> "SUCCESS".equals(p.getStatus()))
+                .filter(p -> PaymentStatus.SUCCESS.getValue().equals(p.getStatus()))
                 .map(p -> p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 

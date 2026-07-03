@@ -7,6 +7,10 @@ import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationResponse;
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
@@ -57,14 +61,14 @@ public class RegistrationServiceImpl implements RegistrationService {
 		}
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-		if (!"OPEN_FOR_REGISTRATION".equals(tournament.getStatus())) {
+		if (!TournamentStatus.OPEN_FOR_REGISTRATION.getValue().equals(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.REGISTRATION_NOT_OPEN);
 		}
 		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		registration.setTournament(tournament);
 		registration.setUser(user);
-		registration.setStatus("PENDING_PAYMENT");
+		registration.setStatus(RegistrationStatus.PENDING_PAYMENT.getValue());
 		return registrationRepository.save(registration);
 	}
 
@@ -80,7 +84,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		if (!Boolean.TRUE.equals(tournament.getIsRegister())) {
 			throw new BusinessException(ErrorCode.INVALID_OPERATION);
 		}
-		if (!"OPEN_FOR_REGISTRATION".equals(tournament.getStatus())) {
+		if (!TournamentStatus.OPEN_FOR_REGISTRATION.getValue().equals(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.REGISTRATION_NOT_OPEN);
 		}
 		if (tournament.getRegistrationFormTemplateId() == null) {
@@ -101,7 +105,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.playerFullName(resolveValue(normalizedValues, FULL_NAME_KEYS, "N/A"))
 				.playerPhone(resolveValue(normalizedValues, PHONE_KEYS, "N/A"))
 				.note(request.getNote())
-				.status("PENDING_PAYMENT")
+				.status(RegistrationStatus.PENDING_PAYMENT.getValue())
 				.build();
 		registration = registrationRepository.save(registration);
 		registrationFormService.saveFieldValues(
@@ -179,7 +183,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		Registration reg = getById(registrationId);
 		User approver = userRepository.findById(approvedByUserId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
-		reg.setStatus("APPROVED");
+		reg.setStatus(RegistrationStatus.APPROVED.getValue());
 		reg.setApprovedBy(approver);
 		reg.setApprovedAt(Instant.now());
 		registrationRepository.save(reg);
@@ -191,7 +195,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 	@Transactional
 	public TournamentRegistrationResponse reject(Long registrationId, RejectRegistrationRequest request) {
 		Registration reg = getById(registrationId);
-		reg.setStatus("REJECTED");
+		reg.setStatus(RegistrationStatus.REJECTED.getValue());
 		reg.setRejectedReason(request.getReason());
 		reg.setRejectedAt(Instant.now());
 		return toResponse(registrationRepository.save(reg));
@@ -204,7 +208,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		if (!reg.getUser().getId().equals(requestingUserId)) {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
-		reg.setStatus("CANCELLED");
+		reg.setStatus(RegistrationStatus.CANCELLED.getValue());
 		registrationRepository.save(reg);
 	}
 
@@ -255,7 +259,8 @@ public class RegistrationServiceImpl implements RegistrationService {
 		if (!reg.getUser().getId().equals(userId)) {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
-		if ("PAID".equals(reg.getStatus()) || "APPROVED".equals(reg.getStatus())) {
+		if (RegistrationStatus.PAID.getValue().equals(reg.getStatus())
+				|| RegistrationStatus.APPROVED.getValue().equals(reg.getStatus())) {
 			throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PAID);
 		}
 		Tournament tournament = reg.getTournament();
@@ -266,7 +271,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
 		// Tìm payment PENDING hiện có (để tái sử dụng checkout URL)
 		Payment existing = paymentRepository.findByRegistrationId(registrationId).stream()
-				.filter(p -> "PENDING".equals(p.getStatus()) && p.getCheckoutUrl() != null)
+				.filter(p -> PaymentStatus.PENDING.getValue().equals(p.getStatus()) && p.getCheckoutUrl() != null)
 				.findFirst()
 				.orElse(null);
 		if (existing != null) {
@@ -287,7 +292,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.registration(reg)
 				.amount(fee)
 				.paymentMethod("PAYOS")
-				.status("PENDING")
+				.status(PaymentStatus.PENDING.getValue())
 				.build();
 		payment = paymentRepository.save(payment);
 
@@ -317,15 +322,15 @@ public class RegistrationServiceImpl implements RegistrationService {
 		// orderCode == payment.id
 		Payment payment = paymentRepository.findById(orderCode).orElse(null);
 		if (payment == null) return;
-		if ("SUCCESS".equals(payment.getStatus())) return; // idempotent
+		if (PaymentStatus.SUCCESS.getValue().equals(payment.getStatus())) return; // idempotent
 
-		payment.setStatus("SUCCESS");
+		payment.setStatus(PaymentStatus.SUCCESS.getValue());
 		payment.setTransactionCode(transactionRef != null ? transactionRef : String.valueOf(orderCode));
 		payment.setPaidAt(Instant.now());
 		paymentRepository.save(payment);
 
 		Registration reg = payment.getRegistration();
-		if (reg == null || !"PENDING_PAYMENT".equals(reg.getStatus())) return;
+		if (reg == null || !RegistrationStatus.PENDING_PAYMENT.getValue().equals(reg.getStatus())) return;
 
 		approveOrRejectBySlot(reg);
 	}
@@ -340,15 +345,15 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.orElse(reg.getTournament());
 
 		long approved = registrationRepository.countByTournamentIdAndStatus(
-				tournament.getId(), "APPROVED");
+				tournament.getId(), RegistrationStatus.APPROVED.getValue());
 
 		if (approved < tournament.getMaxParticipants()) {
-			reg.setStatus("APPROVED");
+			reg.setStatus(RegistrationStatus.APPROVED.getValue());
 			registrationRepository.save(reg);
 			// UC-28: Auto-create Participant từ Registration được duyệt
 			autoCreateParticipant(reg);
 		} else {
-			reg.setStatus("REJECTED");
+			reg.setStatus(RegistrationStatus.REJECTED.getValue());
 			reg.setRejectedReason("Giải đã đủ " + tournament.getMaxParticipants()
 					+ " người tham gia. Liên hệ ban tổ chức để được hoàn tiền (nếu có).");
 			reg.setRejectedAt(Instant.now());
@@ -363,7 +368,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.registration(reg)
 				.participantType(reg.getTournament().getParticipantType())
 				.displayName(reg.getPlayerFullName())
-				.status("ACTIVE")
+				.status(ParticipantStatus.ACTIVE.getValue())
 				.build();
 		participantRepository.save(participant);
 	}

@@ -5,6 +5,8 @@ import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
@@ -63,10 +65,11 @@ public class MatchServiceImpl implements MatchService {
         Match match = getById(matchId);
         // DRAW_DONE = DE/Group matches; FINAL_BRACKET_READY = SE phase matches (CUT_TO_SE)
         String ts = match.getTournament().getStatus();
-        if (!"DRAW_DONE".equals(ts) && !"FINAL_BRACKET_READY".equals(ts)) {
+        if (!TournamentStatus.DRAW_DONE.getValue().equals(ts)
+                && !TournamentStatus.FINAL_BRACKET_READY.getValue().equals(ts)) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
-        if (!"PENDING".equals(match.getStatus())) {
+        if (!MatchStatus.PENDING.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
         if (match.getPlayer1() == null || match.getPlayer2() == null) {
@@ -74,7 +77,7 @@ public class MatchServiceImpl implements MatchService {
         }
         User updatedBy = getUser(updatedByUserId);
 
-        match.setStatus("IN_PROGRESS");
+        match.setStatus(MatchStatus.IN_PROGRESS.getValue());
         scoreEventRepository.save(MatchScoreEvent.builder()
                 .match(match)
                 .player1ScoreAfter(0)
@@ -90,14 +93,16 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match updateScore(Long matchId, Integer player1Score, Integer player2Score, Long updatedByUserId) {
         Match match = getById(matchId);
-        if ("COMPLETED".equals(match.getStatus()) || "BYE".equals(match.getStatus()) || "WALKOVER".equals(match.getStatus())) {
+        if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())
+                || MatchStatus.BYE.getValue().equals(match.getStatus())
+                || MatchStatus.WALKOVER.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
         User updatedBy = getUser(updatedByUserId);
 
         match.setPlayer1Score(player1Score);
         match.setPlayer2Score(player2Score);
-        match.setStatus("IN_PROGRESS");
+        match.setStatus(MatchStatus.IN_PROGRESS.getValue());
 
         scoreEventRepository.save(MatchScoreEvent.builder()
                 .match(match)
@@ -114,7 +119,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match completeMatch(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
         Match match = getById(matchId);
-        if ("COMPLETED".equals(match.getStatus())) {
+        if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
         Participant winner = getParticipant(winnerParticipantId);
@@ -123,7 +128,7 @@ public class MatchServiceImpl implements MatchService {
 
         match.setWinner(winner);
         match.setLoser(loser);
-        match.setStatus("COMPLETED");
+        match.setStatus(MatchStatus.COMPLETED.getValue());
 
         scoreEventRepository.save(MatchScoreEvent.builder()
                 .match(match)
@@ -151,13 +156,13 @@ public class MatchServiceImpl implements MatchService {
 
         match.setWinner(winner);
         match.setLoser(loser);
-        match.setStatus("WALKOVER");
+        match.setStatus(MatchStatus.WALKOVER.getValue());
 
         scoreEventRepository.save(MatchScoreEvent.builder()
                 .match(match)
                 .player1ScoreAfter(0)
                 .player2ScoreAfter(0)
-                .eventType("WALKOVER")
+                .eventType(MatchStatus.WALKOVER.getValue())
                 .createdBy(updatedBy)
                 .build());
 

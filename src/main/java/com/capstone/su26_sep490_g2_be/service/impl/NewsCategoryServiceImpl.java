@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.entity.NewsCategory;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.NewsCategoryStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.NewsCategoryRepository;
 import com.capstone.su26_sep490_g2_be.service.NewsCategoryService;
@@ -24,7 +25,7 @@ public class NewsCategoryServiceImpl implements NewsCategoryService {
 
 	@Override
 	public List<NewsCategory> getActive() {
-		return categoryRepository.findByStatus("ACTIVE");
+		return categoryRepository.findByStatus(NewsCategoryStatus.ACTIVE.getValue());
 	}
 
 	@Override

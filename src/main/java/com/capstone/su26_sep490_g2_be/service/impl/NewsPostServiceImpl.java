@@ -5,6 +5,7 @@ import com.capstone.su26_sep490_g2_be.entity.NewsPost;
 import com.capstone.su26_sep490_g2_be.entity.NewsTag;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.NewsPostStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.NewsCategoryRepository;
 import com.capstone.su26_sep490_g2_be.repository.NewsPostRepository;
@@ -44,7 +45,7 @@ public class NewsPostServiceImpl implements NewsPostService {
 		post.setCreatedBy(author);
 		post.setCategory(category);
 		post.setTags(resolveTags(tagIds));
-		post.setStatus("DRAFT");
+		post.setStatus(NewsPostStatus.DRAFT.getValue());
 		return postRepository.save(post);
 	}
 
@@ -62,12 +63,12 @@ public class NewsPostServiceImpl implements NewsPostService {
 
 	@Override
 	public Page<NewsPost> getPublished(Pageable pageable) {
-		return postRepository.findByStatus("PUBLISHED", pageable);
+		return postRepository.findByStatus(NewsPostStatus.PUBLISHED.getValue(), pageable);
 	}
 
 	@Override
 	public Page<NewsPost> getPublishedByCategory(Long categoryId, Pageable pageable) {
-		return postRepository.findByCategoryIdAndStatus(categoryId, "PUBLISHED", pageable);
+		return postRepository.findByCategoryIdAndStatus(categoryId, NewsPostStatus.PUBLISHED.getValue(), pageable);
 	}
 
 	@Override
@@ -98,7 +99,7 @@ public class NewsPostServiceImpl implements NewsPostService {
 	@Transactional
 	public void publish(Long id) {
 		NewsPost post = getById(id);
-		post.setStatus("PUBLISHED");
+		post.setStatus(NewsPostStatus.PUBLISHED.getValue());
 		post.setPublishedAt(Instant.now());
 		postRepository.save(post);
 	}
@@ -107,7 +108,7 @@ public class NewsPostServiceImpl implements NewsPostService {
 	@Transactional
 	public void hide(Long id) {
 		NewsPost post = getById(id);
-		post.setStatus("HIDDEN");
+		post.setStatus(NewsPostStatus.HIDDEN.getValue());
 		postRepository.save(post);
 	}
 

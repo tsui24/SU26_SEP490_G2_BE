@@ -5,15 +5,20 @@ import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.FieldSource;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.exception.ConfigValidationException;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.AdminRegistrationFormService;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -34,14 +39,20 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
-	private static final List<String> SEEDING_OPTIONS = List.of("RANDOM", "MANUAL", "ELO");
+	private static final List<String> SEEDING_OPTIONS = List.of(
+			SeedingMethod.RANDOM.name(), SeedingMethod.MANUAL.name(), SeedingMethod.ELO.name());
 
 	private static final Map<String, Set<String>> STATUS_TRANSITIONS = Map.of(
-			"DRAFT", Set.of("OPEN_FOR_REGISTRATION", "CANCELLED"),
-			"OPEN_FOR_REGISTRATION", Set.of("REGISTRATION_CLOSED", "CANCELLED"),
-			"REGISTRATION_CLOSED", Set.of("DRAW_DONE", "CANCELLED"),
-			"DRAW_DONE", Set.of("IN_PROGRESS", "CANCELLED"),
-			"IN_PROGRESS", Set.of("COMPLETED", "CANCELLED"));
+			TournamentStatus.DRAFT.getValue(), Set.of(
+					TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), TournamentStatus.CANCELLED.getValue()),
+			TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), Set.of(
+					TournamentStatus.REGISTRATION_CLOSED.getValue(), TournamentStatus.CANCELLED.getValue()),
+			TournamentStatus.REGISTRATION_CLOSED.getValue(), Set.of(
+					TournamentStatus.DRAW_DONE.getValue(), TournamentStatus.CANCELLED.getValue()),
+			TournamentStatus.DRAW_DONE.getValue(), Set.of(
+					TournamentStatus.IN_PROGRESS.getValue(), TournamentStatus.CANCELLED.getValue()),
+			TournamentStatus.IN_PROGRESS.getValue(), Set.of(
+					TournamentStatus.COMPLETED.getValue(), TournamentStatus.CANCELLED.getValue()));
 
 	private final TournamentRepository tournamentRepository;
 	private final TournamentConfigRepository tournamentConfigRepository;
@@ -57,6 +68,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final RegistrationFormService registrationFormService;
 	private final RegistrationFormTemplateRepository registrationFormTemplateRepository;
 	private final RegistrationRepository registrationRepository;
+	private final MinioStorageService minioStorageService;
+	private final MinioProperties minioProperties;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -137,10 +150,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Tournament tournament = Tournament.builder()
 				.name(request.getName())
 				.description(request.getDescription())
+				.thumbnailUrl(normalizeImageForStorage(request.getThumbnailUrl()))
+				.bannerUrl(normalizeImageForStorage(request.getBannerUrl()))
 				.gameType(request.getGameType())
 				.format(request.getFormat())
 				.participantType(request.getParticipantType())
-				.status("DRAFT")
+				.status(TournamentStatus.DRAFT.getValue())
 				.maxParticipants(request.getMaxParticipants())
 				.entryFee(request.getEntryFee() != null ? request.getEntryFee() : BigDecimal.ZERO)
 				.prizePool(request.getPrizePool())
@@ -157,7 +172,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		TournamentConfig config = TournamentConfig.builder()
 				.tournament(tournament)
 				.formatCode(request.getFormat())
-				.seedingMethod("RANDOM")
+				.seedingMethod(SeedingMethod.RANDOM.name())
 				.build();
 		tournamentConfigRepository.save(config);
 
@@ -199,6 +214,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 		if (request.getDescription() != null) {
 			tournament.setDescription(request.getDescription());
+		}
+		if (request.getThumbnailUrl() != null) {
+			tournament.setThumbnailUrl(normalizeImageForStorage(request.getThumbnailUrl()));
+		}
+		if (request.getBannerUrl() != null) {
+			tournament.setBannerUrl(normalizeImageForStorage(request.getBannerUrl()));
 		}
 		if (request.getMaxParticipants() != null) {
 			tournament.setMaxParticipants(request.getMaxParticipants());
@@ -259,7 +280,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
 				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
 				: null;
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, "APPROVED");
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, RegistrationStatus.APPROVED.getValue());
 		int remaining = Math.max(0, tournament.getMaxParticipants() - (int) approved);
 
 		return TournamentDetailResponse.builder()
@@ -285,6 +306,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
 				.registrationFormTemplateCode(registrationTemplate != null ? registrationTemplate.getCode() : null)
 				.registrationFormTemplateName(registrationTemplate != null ? registrationTemplate.getName() : null)
+				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
+				.bannerUrl(resolveImageForResponse(tournament.getBannerUrl()))
 				.configSummary(buildConfigSummary(tournamentId, tournament.getFormat(), config))
 				.build();
 	}
@@ -310,7 +333,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 		Specification<Tournament> spec = buildSpec(null, statusParam, searchParam,
-				List.of("DRAFT", "CANCELLED"));
+				List.of(TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue()));
 		Page<Tournament> result = tournamentRepository.findAll(spec, pageable);
 		return PageResponse.of(result, this::toPublicListItem);
 	}
@@ -320,7 +343,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	public TournamentDetailResponse getPlayerTournamentDetail(Long tournamentId) {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-		if ("DRAFT".equals(tournament.getStatus()) || "CANCELLED".equals(tournament.getStatus())) {
+		if (TournamentStatus.DRAFT.getValue().equals(tournament.getStatus())
+				|| TournamentStatus.CANCELLED.getValue().equals(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
 		}
 		TournamentFormatDefinition format = formatRepository.findById(tournament.getFormat()).orElse(null);
@@ -328,7 +352,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
 				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
 				: null;
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, "APPROVED");
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, RegistrationStatus.APPROVED.getValue());
 		int remaining = Math.max(0, tournament.getMaxParticipants() - (int) approved);
 
 		return TournamentDetailResponse.builder()
@@ -352,6 +376,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.remainingSlots(remaining)
 				.registrationFormTemplateCode(registrationTemplate != null ? registrationTemplate.getCode() : null)
 				.registrationFormTemplateName(registrationTemplate != null ? registrationTemplate.getName() : null)
+				.bannerUrl(resolveImageForResponse(tournament.getBannerUrl()))
+				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
 				.configSummary(buildConfigSummary(tournamentId, tournament.getFormat(), config))
 				.build();
 	}
@@ -576,7 +602,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION);
 		}
 
-		if ("OPEN_FOR_REGISTRATION".equals(newStatus)) {
+		if (TournamentStatus.OPEN_FOR_REGISTRATION.getValue().equals(newStatus)) {
 			List<ConfigValidationDetailResponse> errors = collectConfigErrors(tournamentId, tournament.getFormat());
 			if (!errors.isEmpty()) {
 				throw new ConfigValidationException(ErrorCode.CONFIG_INCOMPLETE, errors);
@@ -601,11 +627,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String formatName = formatRepository.findById(tournament.getFormat())
 				.map(TournamentFormatDefinition::getName)
 				.orElse(null);
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), "APPROVED");
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), RegistrationStatus.APPROVED.getValue());
 
 		return TournamentListItemResponse.builder()
 				.id(tournament.getId())
 				.name(tournament.getName())
+				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
 				.gameType(tournament.getGameType())
 				.format(tournament.getFormat())
 				.formatName(formatName)
@@ -627,11 +654,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String formatName = formatRepository.findById(tournament.getFormat())
 				.map(TournamentFormatDefinition::getName)
 				.orElse(null);
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), "APPROVED");
+		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), RegistrationStatus.APPROVED.getValue());
 
 		return TournamentListItemResponse.builder()
 				.id(tournament.getId())
 				.name(tournament.getName())
+				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
 				.gameType(tournament.getGameType())
 				.format(tournament.getFormat())
 				.formatName(formatName)
@@ -704,7 +732,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	private void assertEditableStatus(Tournament tournament) {
-		if (!"DRAFT".equals(tournament.getStatus())) {
+		if (!TournamentStatus.DRAFT.getValue().equals(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.INVALID_OPERATION);
 		}
 	}
@@ -986,5 +1014,24 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.breakRule(breakRule)
 				.finalRaceTo(finalRaceTo)
 				.build();
+	}
+
+	/**
+	 * Chuẩn hóa input ảnh từ FE để lưu DB: lưu MinIO object key (không lưu presigned URL có thời hạn).
+	 * Chuỗi rỗng => null (xóa ảnh).
+	 */
+	private String normalizeImageForStorage(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		return AvatarUrlResolver.normalizeForStorage(value, minioProperties.getBucket());
+	}
+
+	/**
+	 * Từ object key đã lưu, tạo presigned URL mới cho client hiển thị ảnh.
+	 */
+	private String resolveImageForResponse(String storedValue) {
+		return AvatarUrlResolver.resolveForResponse(
+				storedValue, minioStorageService, minioProperties.getBucket());
 	}
 }

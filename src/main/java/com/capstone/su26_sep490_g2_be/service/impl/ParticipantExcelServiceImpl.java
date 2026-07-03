@@ -5,6 +5,9 @@ import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
@@ -189,10 +192,10 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 			Registration registration = registrationRepository.save(Registration.builder()
 					.tournament(tournament)
 					.user(null)
-					.registrationType("MANUAL")
+					.registrationType(RegistrationType.MANUAL.getValue())
 					.playerFullName(displayName)
 					.playerPhone(phone)
-					.status("APPROVED")
+					.status(RegistrationStatus.APPROVED.getValue())
 					.build());
 
 			participantRepository.save(Participant.builder()
@@ -201,7 +204,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 					.participantType(tournament.getParticipantType())
 					.displayName(displayName)
 					.seedNo(seedNo)
-					.status("ACTIVE")
+					.status(ParticipantStatus.ACTIVE.getValue())
 					.build());
 			imported++;
 		}
