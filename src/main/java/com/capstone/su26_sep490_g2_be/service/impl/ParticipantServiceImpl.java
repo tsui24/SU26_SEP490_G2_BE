@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.service.ParticipantService;
@@ -36,7 +37,7 @@ public class ParticipantServiceImpl implements ParticipantService {
 
 	@Override
 	public List<Participant> getActiveByTournament(Long tournamentId) {
-		return participantRepository.findByTournamentIdAndStatus(tournamentId, "ACTIVE");
+		return participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
 	}
 
 	@Override
@@ -50,7 +51,7 @@ public class ParticipantServiceImpl implements ParticipantService {
 	@Override
 	@Transactional
 	public void assignSeedNumbers(Long tournamentId) {
-		List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, "ACTIVE");
+		List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
 		for (int i = 0; i < participants.size(); i++) {
 			participants.get(i).setSeedNo(i + 1);
 		}

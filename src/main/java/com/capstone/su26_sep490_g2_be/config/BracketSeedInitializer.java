@@ -1,6 +1,10 @@
 package com.capstone.su26_sep490_g2_be.config;
 
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
+import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -102,7 +106,7 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 "Vô địch 2.000.000đ · Á quân 1.200.000đ · Hạng 3 800.000đ",
                 owner);
 
-        createConfig(t, "RANDOM");
+        createConfig(t, SeedingMethod.RANDOM.name());
 
         // Race-to rules — khớp với key code sinh ra trong generateDoubleElimination
         // Winners Bracket (3 vòng)
@@ -154,7 +158,7 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 "Vô địch 3.000.000đ · Á quân 1.800.000đ · Hạng 3-4 600.000đ",
                 owner);
 
-        createConfig(t, "RANDOM");
+        createConfig(t, SeedingMethod.RANDOM.name());
 
         // Winners Bracket (4 vòng: bracketSize=16 → log2(16)=4)
         addRaceToRule(t, "winners_r1", "WINNERS", 5);  // W Vòng 1 (6 BYE + 2 thật)
@@ -213,7 +217,7 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 "Vô địch 1.500.000đ · Á quân 900.000đ · Hạng 3-4 300.000đ",
                 owner);
 
-        createConfig(t, "RANDOM");
+        createConfig(t, SeedingMethod.RANDOM.name());
 
         // Group Stage — tất cả trận đều dùng key "group_stage"
         addRaceToRule(t, "group_stage", "GROUP", 5);
@@ -263,7 +267,7 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 "Vô địch 2.500.000đ · Á quân 1.500.000đ · Hạng 3-4 500.000đ",
                 owner);
 
-        createConfig(t, "RANDOM");
+        createConfig(t, SeedingMethod.RANDOM.name());
 
         addRaceToRule(t, "group_stage", "GROUP",   5);
         addRaceToRule(t, "semi_final",  "PLAYOFF",  7);
@@ -303,8 +307,8 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 .description(description)
                 .gameType(gameType)
                 .format(format)
-                .participantType("SINGLE")
-                .status("REGISTRATION_CLOSED")  // sẵn sàng để generate bracket
+                .participantType(ParticipantType.SINGLE.getValue())
+                .status(TournamentStatus.REGISTRATION_CLOSED.getValue())  // sẵn sàng để generate bracket
                 .maxParticipants(maxParticipants)
                 .entryFee(entryFee)
                 .prizePool(prizePool)
@@ -338,15 +342,15 @@ public class BracketSeedInitializer implements CommandLineRunner {
     }
 
     private void createParticipants(Tournament t, List<String> displayNames) {
-        long existing = participantRepository.countByTournamentIdAndStatus(t.getId(), "ACTIVE");
+        long existing = participantRepository.countByTournamentIdAndStatus(t.getId(), ParticipantStatus.ACTIVE.getValue());
         if (existing >= displayNames.size()) return;
         for (String name : displayNames) {
             participantRepository.save(Participant.builder()
                     .tournament(t)
                     .registration(null)   // standalone participant (không qua đăng ký online)
-                    .participantType("SINGLE")
+                    .participantType(ParticipantType.SINGLE.getValue())
                     .displayName(name)
-                    .status("ACTIVE")
+                    .status(ParticipantStatus.ACTIVE.getValue())
                     .build());
         }
     }
@@ -387,7 +391,7 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 "Vô địch 3.000.000đ · Á quân 1.800.000đ · Hạng 3-4 600.000đ",
                 owner);
 
-        createConfig(t, "RANDOM");
+        createConfig(t, SeedingMethod.RANDOM.name());
 
         // DE phase — W bracket (3 vòng, cutoffRound=3)
         addRaceToRule(t, "de_winners_r1", "WINNERS", 5);
@@ -440,7 +444,7 @@ public class BracketSeedInitializer implements CommandLineRunner {
                 "Vô địch 5.000.000đ · Á quân 3.000.000đ · Hạng 3-4 1.000.000đ",
                 owner);
 
-        createConfig(t, "RANDOM");
+        createConfig(t, SeedingMethod.RANDOM.name());
 
         // DE W bracket (3 vòng)
         addRaceToRule(t, "de_winners_r1", "WINNERS", 5);

@@ -9,6 +9,9 @@ import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
+import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
@@ -148,7 +151,7 @@ public class ParticipantController {
 
     private void syncApprovedRegistrationsToParticipants(Tournament tournament) {
         List<Registration> approvedRegs = registrationRepository
-                .findByTournamentIdAndStatus(tournament.getId(), "APPROVED",
+                .findByTournamentIdAndStatus(tournament.getId(), RegistrationStatus.APPROVED.getValue(),
                         org.springframework.data.domain.Pageable.unpaged())
                 .getContent();
 
@@ -159,7 +162,7 @@ public class ParticipantController {
                         .registration(reg)
                         .participantType(tournament.getParticipantType())
                         .displayName(reg.getPlayerFullName())
-                        .status("ACTIVE")
+                        .status(ParticipantStatus.ACTIVE.getValue())
                         .build();
                 participantRepository.save(participant);
                 log.info("Auto-synced participant from registration #{}", reg.getId());
@@ -206,11 +209,11 @@ public class ParticipantController {
         Registration registration = Registration.builder()
                 .tournament(tournament)
                 .user(null)
-                .registrationType("MANUAL")
+                .registrationType(RegistrationType.MANUAL.getValue())
                 .playerFullName(request.getDisplayName().trim())
                 .playerPhone(phone)
                 .note(request.getNote())
-                .status("APPROVED")
+                .status(RegistrationStatus.APPROVED.getValue())
                 .approvedBy(approver)
                 .approvedAt(java.time.Instant.now())
                 .build();
@@ -222,7 +225,7 @@ public class ParticipantController {
                 .participantType(tournament.getParticipantType())
                 .displayName(request.getDisplayName().trim())
                 .seedNo(request.getSeedNo())
-                .status("ACTIVE")
+                .status(ParticipantStatus.ACTIVE.getValue())
                 .build();
         participant = participantRepository.save(participant);
         return toResponse(findParticipantWithDetails(participant.getId()));
@@ -231,7 +234,7 @@ public class ParticipantController {
 
     private ParticipantResponse withdraw(Long participantId) {
         Participant participant = findParticipantWithDetails(participantId);
-        participant.setStatus("WITHDRAWN");
+        participant.setStatus(ParticipantStatus.WITHDRAWN.getValue());
         participantRepository.save(participant);
         return toResponse(participant);
     }
@@ -243,9 +246,9 @@ public class ParticipantController {
 
     private ParticipantResponse toResponse(Participant p) {
         Registration reg = p.getRegistration();
-        String source = (reg != null && "MANUAL".equals(reg.getRegistrationType()))
-                ? "MANUAL"
-                : (reg != null ? "ONLINE_REGISTRATION" : "MANUAL");
+        String source = (reg != null && RegistrationType.MANUAL.getValue().equals(reg.getRegistrationType()))
+                ? RegistrationType.MANUAL.getValue()
+                : (reg != null ? RegistrationType.ONLINE_REGISTRATION.getValue() : RegistrationType.MANUAL.getValue());
         return ParticipantResponse.builder()
                 .id(p.getId())
                 .tournamentId(p.getTournament().getId())
@@ -257,6 +260,7 @@ public class ParticipantController {
                 .seedNo(p.getSeedNo())
                 .status(p.getStatus())
                 .source(source)
+                .avtarUrl(p.getAvtarUrl())
                 .build();
     }
 }

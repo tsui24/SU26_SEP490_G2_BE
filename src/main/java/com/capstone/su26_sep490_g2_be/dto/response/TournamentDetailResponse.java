@@ -35,7 +35,8 @@ public class TournamentDetailResponse {
 	private String registrationFormTemplateCode;
 	private String registrationFormTemplateName;
 	private ConfigSummary configSummary;
-
+	private String thumbnailUrl;
+	private String bannerUrl;
 	@Getter
 	@Builder
 	public static class ConfigSummary {

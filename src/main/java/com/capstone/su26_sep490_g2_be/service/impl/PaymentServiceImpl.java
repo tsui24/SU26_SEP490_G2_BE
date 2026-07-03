@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.entity.Payment;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
 import com.capstone.su26_sep490_g2_be.service.PaymentService;
@@ -50,7 +51,7 @@ public class PaymentServiceImpl implements PaymentService {
 		if (transactionCode != null) {
 			payment.setTransactionCode(transactionCode);
 		}
-		if ("SUCCESS".equals(status)) {
+		if (PaymentStatus.SUCCESS.getValue().equals(status)) {
 			payment.setPaidAt(Instant.now());
 		}
 		return paymentRepository.save(payment);
