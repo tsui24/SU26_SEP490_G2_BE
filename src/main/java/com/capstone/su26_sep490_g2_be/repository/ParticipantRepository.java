@@ -44,6 +44,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 
     boolean existsByRegistrationId(Long registrationId);
 
+    List<Participant> findByTournamentIdIn(List<Long> tournamentIds);
+
     @Query("""
         SELECT p FROM Participant p
         LEFT JOIN FETCH p.tournament

@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,4 +24,8 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long>,
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM Tournament t WHERE t.id = :id")
     Optional<Tournament> findByIdWithLock(@Param("id") Long id);
+
+    List<Tournament> findByStatusAndRegistrationDeadlineBefore(String status, Instant deadline);
+
+    List<Tournament> findByStatusInAndStartAtBefore(List<String> statuses, Instant startAt);
 }

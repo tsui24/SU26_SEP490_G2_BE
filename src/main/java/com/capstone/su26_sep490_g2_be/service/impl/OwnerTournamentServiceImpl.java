@@ -16,6 +16,7 @@ import com.capstone.su26_sep490_g2_be.service.AdminRegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
+import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
@@ -70,6 +71,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final RegistrationRepository registrationRepository;
 	private final MinioStorageService minioStorageService;
 	private final MinioProperties minioProperties;
+	private final TournamentAuditService tournamentAuditService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -615,12 +617,23 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		tournament.setStatus(newStatus);
 		tournamentRepository.save(tournament);
+		tournamentAuditService.recordChange(tournament, previousStatus, newStatus, userId,
+				"Cập nhật trạng thái thủ công");
 
 		return PatchTournamentStatusResponse.builder()
 				.id(tournamentId)
 				.status(newStatus)
 				.previousStatus(previousStatus)
 				.build();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<TournamentStatusHistoryResponse> getStatusHistory(Long tournamentId) {
+		if (!tournamentRepository.existsById(tournamentId)) {
+			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+		}
+		return tournamentAuditService.getHistory(tournamentId);
 	}
 
 	private TournamentListItemResponse toListItem(Tournament tournament) {
