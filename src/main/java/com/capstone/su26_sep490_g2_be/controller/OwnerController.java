@@ -2,10 +2,12 @@ package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.CreateManagerAccountRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.CreateStaffAccountRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.UpdateEmployeeAccountRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.EmployeeAccountResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
+import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -15,6 +17,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Owner", description = "Owner management APIs — requires OWNER role")
@@ -27,7 +30,7 @@ public class OwnerController {
 	private final AccountService accountService;
 
 	@Operation(summary = "Create Manager account",
-			description = "Tạo Manager kèm profile cơ bản (avatar, gender, ...). Không có billiard ranking.")
+			description = "Tạo Manager kèm profile cơ bản (avatar, gender, ...) và phân quyền chi nhánh (toàn chuỗi hoặc theo chi nhánh).")
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Tạo Manager thành công"),
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
@@ -35,10 +38,29 @@ public class OwnerController {
 	})
 	@PostMapping("/accounts/manager")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> createManager(
+			Authentication authentication,
 			@Valid @RequestBody CreateManagerAccountRequest request) {
-		EmployeeAccountResponse response = accountService.createManagerAccount(request);
+		EmployeeAccountResponse response = accountService.createManagerAccount(
+				request, SecurityUtil.extractUserId(authentication));
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success("Đã tạo tài khoản Manager", response));
+	}
+
+	@Operation(summary = "Cập nhật thông tin Manager/Staff",
+			description = "Sửa hồ sơ (họ tên, avatar, ...) — với Manager có thể đổi luôn phạm vi quản lý chi nhánh.")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Cập nhật thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy nhân viên")
+	})
+	@PutMapping("/employees/{id}")
+	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> updateEmployee(
+			Authentication authentication,
+			@PathVariable Long id,
+			@Valid @RequestBody UpdateEmployeeAccountRequest request) {
+		EmployeeAccountResponse response = accountService.updateEmployee(
+				SecurityUtil.extractUserId(authentication), id, request);
+		return ResponseEntity.ok(ApiResponse.success("Đã cập nhật thông tin nhân viên", response));
 	}
 
 	@Operation(summary = "Create Staff account",
@@ -50,8 +72,10 @@ public class OwnerController {
 	})
 	@PostMapping("/accounts/staff")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> createStaff(
+			Authentication authentication,
 			@Valid @RequestBody CreateStaffAccountRequest request) {
-		EmployeeAccountResponse response = accountService.createStaffAccount(request);
+		EmployeeAccountResponse response = accountService.createStaffAccount(
+				request, SecurityUtil.extractUserId(authentication));
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success("Đã tạo tài khoản Staff", response));
 	}
@@ -64,13 +88,15 @@ public class OwnerController {
 	})
 	@GetMapping("/employees")
 	public ResponseEntity<ApiResponse<PageResponse<EmployeeAccountResponse>>> getEmployees(
+			Authentication authentication,
 			@Parameter(description = "Mã vai trò cần lọc (STAFF hoặc MANAGER)")
 			@RequestParam(required = false) String role,
 			@Parameter(description = "Từ khóa tìm kiếm theo tên (fullName hoặc displayName)")
 			@RequestParam(required = false) String search,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
-		PageResponse<EmployeeAccountResponse> response = accountService.getEmployees(role, search, page, size);
+		PageResponse<EmployeeAccountResponse> response = accountService.getEmployees(
+				SecurityUtil.extractUserId(authentication), role, search, page, size);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
@@ -83,8 +109,10 @@ public class OwnerController {
 	})
 	@GetMapping("/employees/{id}")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> getEmployeeDetail(
+			Authentication authentication,
 			@PathVariable Long id) {
-		EmployeeAccountResponse response = accountService.getEmployeeDetail(id);
+		EmployeeAccountResponse response = accountService.getEmployeeDetail(
+				SecurityUtil.extractUserId(authentication), id);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
@@ -97,8 +125,10 @@ public class OwnerController {
 	})
 	@PutMapping("/employees/{id}/deactivate")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateEmployee(
+			Authentication authentication,
 			@PathVariable Long id) {
-		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
+		EmployeeAccountResponse response = accountService.deactivateEmployee(
+				SecurityUtil.extractUserId(authentication), id);
 		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa nhân viên", response));
 	}
 }

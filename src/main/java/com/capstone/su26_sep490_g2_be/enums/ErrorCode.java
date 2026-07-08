@@ -83,7 +83,13 @@ public enum ErrorCode {
 	STORAGE_UPLOAD_FAILED("STORAGE_001", "Tải file lên thất bại", HttpStatus.INTERNAL_SERVER_ERROR),
 	STORAGE_DOWNLOAD_FAILED("STORAGE_002", "Tải file xuống thất bại", HttpStatus.INTERNAL_SERVER_ERROR),
 	STORAGE_OBJECT_NOT_FOUND("STORAGE_003", "Không tìm thấy file trong kho lưu trữ", HttpStatus.NOT_FOUND),
-	STORAGE_INVALID_FILE("STORAGE_004", "Loại file hoặc kích thước không hợp lệ", HttpStatus.BAD_REQUEST);
+	STORAGE_INVALID_FILE("STORAGE_004", "Loại file hoặc kích thước không hợp lệ", HttpStatus.BAD_REQUEST),
+
+	// Branch
+	BRANCH_NOT_FOUND("BRANCH_001", "Không tìm thấy chi nhánh", HttpStatus.NOT_FOUND),
+	BRANCH_ACCESS_DENIED("BRANCH_002", "Bạn không có quyền truy cập chi nhánh này", HttpStatus.FORBIDDEN),
+	BRANCH_INACTIVE("BRANCH_003", "Chi nhánh đang ngừng hoạt động", HttpStatus.UNPROCESSABLE_ENTITY),
+	BRANCH_REQUIRED("BRANCH_005", "Vui lòng chọn chi nhánh tổ chức", HttpStatus.BAD_REQUEST);
 
 	private final String code;
 	private final String message;

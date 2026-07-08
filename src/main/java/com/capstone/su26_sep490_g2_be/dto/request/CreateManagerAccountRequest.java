@@ -3,6 +3,7 @@ package com.capstone.su26_sep490_g2_be.dto.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,6 +38,7 @@ public class CreateManagerAccountRequest {
 	@Schema(example = "https://example.com/avatar.jpg")
 	private String avatarUrl;
 
+	@PastOrPresent(message = "Ngày sinh không được là ngày trong tương lai")
 	@Schema(example = "1990-03-20")
 	private LocalDate dateOfBirth;
 
@@ -45,4 +47,10 @@ public class CreateManagerAccountRequest {
 
 	@Schema(example = "Club manager")
 	private String bio;
+
+	@Schema(description = "true = quản lý toàn chuỗi, false = quản lý theo chi nhánh cụ thể", example = "false")
+	private Boolean manageAllBranches;
+
+	@Schema(description = "Danh sách branchId — bắt buộc khi manageAllBranches=false")
+	private java.util.List<Long> branchIds;
 }

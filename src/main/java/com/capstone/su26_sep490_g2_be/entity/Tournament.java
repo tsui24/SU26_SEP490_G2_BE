@@ -96,4 +96,14 @@ public class Tournament extends BaseEntity {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "registration_form_template_id", insertable = false, updatable = false)
 	private RegistrationFormTemplate registrationFormTemplate;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "branch_id")
+	private Branch branch;
+
+	@Column(name = "venue_name")
+	private String venueName;
+
+	@Column(name = "venue_address", length = 500)
+	private String venueAddress;
 }
