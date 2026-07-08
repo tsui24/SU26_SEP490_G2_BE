@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface MatchRepository extends JpaRepository<Match, Long> {
@@ -74,4 +75,18 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		WHERE m.id = :id
 		""")
 	java.util.Optional<Match> findByIdWithDetails(@Param("id") Long id);
+
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.player1 p1
+		LEFT JOIN FETCH p1.registration r1
+		LEFT JOIN FETCH r1.user
+		LEFT JOIN FETCH m.player2 p2
+		LEFT JOIN FETCH p2.registration r2
+		LEFT JOIN FETCH r2.user
+		WHERE m.status = :status AND m.scheduledAt BETWEEN :from AND :to
+		""")
+	List<Match> findByStatusAndScheduledAtBetween(
+			@Param("status") String status, @Param("from") Instant from, @Param("to") Instant to);
 }

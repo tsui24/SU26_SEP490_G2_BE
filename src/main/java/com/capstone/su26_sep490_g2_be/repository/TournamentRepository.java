@@ -28,4 +28,6 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long>,
     List<Tournament> findByStatusAndRegistrationDeadlineBefore(String status, Instant deadline);
 
     List<Tournament> findByStatusInAndStartAtBefore(List<String> statuses, Instant startAt);
+
+    List<Tournament> findByStatusAndRegistrationDeadlineBetween(String status, Instant from, Instant to);
 }
