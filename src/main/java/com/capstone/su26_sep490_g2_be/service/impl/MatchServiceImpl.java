@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
@@ -72,6 +73,52 @@ public class MatchServiceImpl implements MatchService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Match> getMatchesForReferee(Long refereeUserId, Long tournamentId, String status,
+                                            String tournamentName) {
+        getUser(refereeUserId);
+        String statusParam = (status == null || status.isBlank()) ? null : status.trim();
+        String nameParam = (tournamentName == null || tournamentName.isBlank()) ? null : tournamentName.trim();
+        return matchRepository.findByAssignedStaffId(refereeUserId, tournamentId, statusParam, nameParam);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void assertStaffAssigned(Long matchId, Long staffUserId) {
+        assertStaffAssignedOnMatch(getById(matchId), staffUserId);
+    }
+
+    private void assertStaffAssignedOnMatch(Match match, Long staffUserId) {
+        if (match.getAssignedStaff() == null
+                || !match.getAssignedStaff().getId().equals(staffUserId)) {
+            throw new BusinessException(ErrorCode.MATCH_NOT_ASSIGNED);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId) {
+        Match match = getById(matchId);
+        getUser(updatedByUserId);
+
+        if (Boolean.TRUE.equals(request.getClearAssignedStaff())) {
+            match.setAssignedStaff(null);
+        } else if (request.getAssignedStaffId() != null) {
+            User staff = getUser(request.getAssignedStaffId());
+            if (!"STAFF".equals(staff.getRole().getCode())) {
+                throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
+            }
+            match.setAssignedStaff(staff);
+        }
+
+        if (request.getTableNo() != null) {
+            match.setTableNo(request.getTableNo());
+        }
+
+        return matchRepository.save(match);
+    }
+
+    @Override
     @Transactional
     public Match startMatch(Long matchId, Long updatedByUserId) {
         Match match = getById(matchId);
@@ -125,6 +172,55 @@ public class MatchServiceImpl implements MatchService {
 
     @Override
     @Transactional
+    public Match incrementScore(Long matchId, int playerSlot, int delta, Long updatedByUserId) {
+        Match match = getByIdForUpdate(matchId);
+        assertStaffAssignedOnMatch(match, updatedByUserId);
+        assertMatchPlayable(match);
+        assertMatchInProgress(match);
+        if (playerSlot != 1 && playerSlot != 2) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+        if (delta != 1 && delta != -1) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+
+        User updatedBy = getUser(updatedByUserId);
+        int raceTo = match.getRaceTo() != null ? match.getRaceTo() : Integer.MAX_VALUE;
+
+        int p1 = match.getPlayer1Score() != null ? match.getPlayer1Score() : 0;
+        int p2 = match.getPlayer2Score() != null ? match.getPlayer2Score() : 0;
+
+        // Khóa cộng điểm khi đã có người đạt raceTo — vẫn cho trừ (hoàn tác)
+        if (delta > 0 && (p1 >= raceTo || p2 >= raceTo)) {
+            throw new BusinessException(ErrorCode.MATCH_SCORE_LOCKED);
+        }
+
+        if (playerSlot == 1) {
+            p1 += delta;
+        } else {
+            p2 += delta;
+        }
+
+        if (p1 < 0 || p2 < 0 || p1 > raceTo || p2 > raceTo) {
+            throw new BusinessException(ErrorCode.MATCH_SCORE_OUT_OF_RANGE);
+        }
+
+        match.setPlayer1Score(p1);
+        match.setPlayer2Score(p2);
+
+        scoreEventRepository.save(MatchScoreEvent.builder()
+                .match(match)
+                .player1ScoreAfter(p1)
+                .player2ScoreAfter(p2)
+                .eventType("SCORE_UPDATE")
+                .createdBy(updatedBy)
+                .build());
+
+        return matchRepository.save(match);
+    }
+
+    @Override
+    @Transactional
     public Match completeMatch(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
         Match match = getById(matchId);
         assertMatchPlayable(match);
@@ -132,6 +228,8 @@ public class MatchServiceImpl implements MatchService {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
         Participant winner = getParticipant(winnerParticipantId);
+        assertWinnerBelongsToMatch(match, winner);
+        assertWinnerWhenRaceReached(match, winner);
         Participant loser = determineLoser(match, winner);
         User updatedBy = getUser(updatedByUserId);
 
@@ -244,6 +342,46 @@ public class MatchServiceImpl implements MatchService {
                 : match.getPlayer1();
     }
 
+    private void assertWinnerBelongsToMatch(Match match, Participant winner) {
+        Long p1 = match.getPlayer1() != null ? match.getPlayer1().getId() : null;
+        Long p2 = match.getPlayer2() != null ? match.getPlayer2().getId() : null;
+        if (winner == null
+                || (!winner.getId().equals(p1) && !winner.getId().equals(p2))) {
+            throw new BusinessException(ErrorCode.MATCH_WINNER_NOT_IN_MATCH);
+        }
+    }
+
+    /**
+     * Khi đã có người đạt raceTo, chỉ cho chốt thắng đúng người đó
+     * (nếu cả hai đạt thì cho người điểm cao hơn; hòa bỏ qua check này).
+     */
+    private void assertWinnerWhenRaceReached(Match match, Participant winner) {
+        Integer raceTo = match.getRaceTo();
+        if (raceTo == null) return;
+        int p1 = match.getPlayer1Score() != null ? match.getPlayer1Score() : 0;
+        int p2 = match.getPlayer2Score() != null ? match.getPlayer2Score() : 0;
+        boolean p1Reached = p1 >= raceTo;
+        boolean p2Reached = p2 >= raceTo;
+        if (!p1Reached && !p2Reached) return;
+
+        Long requiredId;
+        if (p1Reached && !p2Reached) {
+            requiredId = match.getPlayer1().getId();
+        } else if (p2Reached && !p1Reached) {
+            requiredId = match.getPlayer2().getId();
+        } else if (p1 > p2) {
+            requiredId = match.getPlayer1().getId();
+        } else if (p2 > p1) {
+            requiredId = match.getPlayer2().getId();
+        } else {
+            return; // cả hai đạt & điểm bằng nhau — trọng tài chọn
+        }
+
+        if (!winner.getId().equals(requiredId)) {
+            throw new BusinessException(ErrorCode.MATCH_WINNER_MUST_BE_RACE_LEADER);
+        }
+    }
+
     private Participant getParticipant(Long id) {
         return participantRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
@@ -252,6 +390,17 @@ public class MatchServiceImpl implements MatchService {
     private User getUser(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+    }
+
+    private Match getByIdForUpdate(Long id) {
+        return matchRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private void assertMatchInProgress(Match match) {
+        if (!MatchStatus.IN_PROGRESS.getValue().equals(match.getStatus())) {
+            throw new BusinessException(ErrorCode.MATCH_NOT_IN_PROGRESS);
+        }
     }
 
     /**
