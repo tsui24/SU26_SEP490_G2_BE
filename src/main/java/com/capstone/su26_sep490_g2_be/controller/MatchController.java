@@ -1,6 +1,7 @@
 package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.CompleteMatchRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.EliminateBottomRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.SwapPlayersRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.UpdateScoreRequest;
@@ -240,7 +241,29 @@ public class MatchController {
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<ApiResponse<MatchResponse>> startStaff(
             Authentication auth, @PathVariable Long matchId) {
-        matchService.startMatch(matchId, extractUserId(auth));
+        Long staffId = extractUserId(auth);
+        matchService.assertStaffAssigned(matchId, staffId);
+        matchService.startMatch(matchId, staffId);
+        return ResponseEntity.ok(ApiResponse.success(fetchAndBroadcast(matchId)));
+    }
+
+    @Operation(summary = "Gán trọng tài và/hoặc số bàn (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/owner/matches/{matchId}/assignment")
+    public ResponseEntity<ApiResponse<MatchResponse>> assignOwner(
+            Authentication auth, @PathVariable Long matchId,
+            @Valid @RequestBody AssignMatchRequest req) {
+        matchService.assignMatch(matchId, req, extractUserId(auth));
+        return ResponseEntity.ok(ApiResponse.success(fetchAndBroadcast(matchId)));
+    }
+
+    @Operation(summary = "Gán trọng tài và/hoặc số bàn (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/manager/matches/{matchId}/assignment")
+    public ResponseEntity<ApiResponse<MatchResponse>> assignManager(
+            Authentication auth, @PathVariable Long matchId,
+            @Valid @RequestBody AssignMatchRequest req) {
+        matchService.assignMatch(matchId, req, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(fetchAndBroadcast(matchId)));
     }
 
@@ -268,7 +291,9 @@ public class MatchController {
     public ResponseEntity<ApiResponse<MatchResponse>> scoreStaff(
             Authentication auth, @PathVariable Long matchId,
             @Valid @RequestBody UpdateScoreRequest req) {
-        matchService.updateScore(matchId, req.getPlayer1Score(), req.getPlayer2Score(), extractUserId(auth));
+        Long staffId = extractUserId(auth);
+        matchService.assertStaffAssigned(matchId, staffId);
+        matchService.updateScore(matchId, req.getPlayer1Score(), req.getPlayer2Score(), staffId);
         return ResponseEntity.ok(ApiResponse.success(fetchAndBroadcast(matchId)));
     }
 
@@ -296,7 +321,9 @@ public class MatchController {
     public ResponseEntity<ApiResponse<MatchResponse>> completeStaff(
             Authentication auth, @PathVariable Long matchId,
             @Valid @RequestBody CompleteMatchRequest req) {
-        matchService.completeMatch(matchId, req.getWinnerParticipantId(), extractUserId(auth));
+        Long staffId = extractUserId(auth);
+        matchService.assertStaffAssigned(matchId, staffId);
+        matchService.completeMatch(matchId, req.getWinnerParticipantId(), staffId);
         return ResponseEntity.ok(ApiResponse.success(fetchBroadcastAndSyncBracket(matchId)));
     }
 
@@ -324,7 +351,9 @@ public class MatchController {
     public ResponseEntity<ApiResponse<MatchResponse>> walkoverStaff(
             Authentication auth, @PathVariable Long matchId,
             @Valid @RequestBody CompleteMatchRequest req) {
-        matchService.walkover(matchId, req.getWinnerParticipantId(), extractUserId(auth));
+        Long staffId = extractUserId(auth);
+        matchService.assertStaffAssigned(matchId, staffId);
+        matchService.walkover(matchId, req.getWinnerParticipantId(), staffId);
         return ResponseEntity.ok(ApiResponse.success(fetchBroadcastAndSyncBracket(matchId)));
     }
 
@@ -370,12 +399,10 @@ public class MatchController {
         return bracketHelper.getMatchesForTournament(tournamentId);
     }
 
-    /** Fetch + broadcast — dùng sau mỗi mutation (score / start) */
+    /** Fetch + broadcast match update — dùng sau start / ghi điểm (không sync cả bracket). */
     private MatchResponse fetchAndBroadcast(Long matchId) {
         MatchResponse resp = bracketHelper.getMatchResponseById(matchId);
         broadcastService.broadcastMatchUpdate(resp);
-        broadcastService.broadcastBracketSync(resp.getTournamentId(),
-                bracketHelper.getMatchesForTournament(resp.getTournamentId()));
         return resp;
     }
 
