@@ -7,9 +7,9 @@ import java.util.List;
 
 public interface BracketGenerationService {
 
-    DrawResultResponse generate(Long tournamentId);
+    DrawResultResponse generate(Long tournamentId, Long actorUserId);
 
-    void confirmDraw(Long tournamentId);
+    void confirmDraw(Long tournamentId, Long actorUserId);
 
     void swapPlayers(Long tournamentId, Long matchId1, String slot1, Long matchId2, String slot2);
 
@@ -24,7 +24,7 @@ public interface BracketGenerationService {
      * điền seSize/2 W survivors + seSize/2 L survivors vào SE bracket.
      * Tournament status → FINAL_BRACKET_READY.
      */
-    void populateFinalBracket(Long tournamentId);
+    void populateFinalBracket(Long tournamentId, Long actorUserId);
 
     /**
      * GROUP_PLAYOFF progressive elimination: giữ keepCount người top standings,

@@ -92,7 +92,7 @@ public class NationalChampionshipMatchSeedInitializer implements CommandLineRunn
 		}
 
 		prepareBracket(tournament);
-		bracketGenerationService.confirmDraw(tournament.getId());
+		bracketGenerationService.confirmDraw(tournament.getId(), null);
 
 		tournament.setStatus(TournamentStatus.IN_PROGRESS.getValue());
 		tournamentRepository.save(tournament);
@@ -132,7 +132,7 @@ public class NationalChampionshipMatchSeedInitializer implements CommandLineRunn
 			tournament.setStatus(TournamentStatus.REGISTRATION_CLOSED.getValue());
 			tournamentRepository.save(tournament);
 		}
-		bracketGenerationService.generate(tournament.getId());
+		bracketGenerationService.generate(tournament.getId(), null);
 	}
 
 	private int simulateAllMatches(Tournament tournament, User owner) {

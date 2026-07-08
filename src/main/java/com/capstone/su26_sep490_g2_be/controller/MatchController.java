@@ -43,32 +43,32 @@ public class MatchController {
     @Operation(summary = "Bốc thăm — sinh bracket từ danh sách người tham gia (Owner)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/owner/tournaments/{id}/draw")
-    public ResponseEntity<ApiResponse<DrawResultResponse>> drawOwner(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<DrawResultResponse>> drawOwner(Authentication auth, @PathVariable Long id) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Bốc thăm thành công", bracketGenerationService.generate(id)));
+                .body(ApiResponse.success("Bốc thăm thành công", bracketGenerationService.generate(id, extractUserId(auth))));
     }
 
     @Operation(summary = "Bốc thăm — sinh bracket từ danh sách người tham gia (Manager)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/tournaments/{id}/draw")
-    public ResponseEntity<ApiResponse<DrawResultResponse>> drawManager(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<DrawResultResponse>> drawManager(Authentication auth, @PathVariable Long id) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Bốc thăm thành công", bracketGenerationService.generate(id)));
+                .body(ApiResponse.success("Bốc thăm thành công", bracketGenerationService.generate(id, extractUserId(auth))));
     }
 
     @Operation(summary = "Xác nhận bracket — DRAW_PREVIEW → DRAW_DONE (Owner)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/owner/tournaments/{id}/draw/confirm")
-    public ResponseEntity<ApiResponse<Void>> confirmDrawOwner(@PathVariable Long id) {
-        bracketGenerationService.confirmDraw(id);
+    public ResponseEntity<ApiResponse<Void>> confirmDrawOwner(Authentication auth, @PathVariable Long id) {
+        bracketGenerationService.confirmDraw(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success("Đã xác nhận bracket", null));
     }
 
     @Operation(summary = "Xác nhận bracket — DRAW_PREVIEW → DRAW_DONE (Manager)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/tournaments/{id}/draw/confirm")
-    public ResponseEntity<ApiResponse<Void>> confirmDrawManager(@PathVariable Long id) {
-        bracketGenerationService.confirmDraw(id);
+    public ResponseEntity<ApiResponse<Void>> confirmDrawManager(Authentication auth, @PathVariable Long id) {
+        bracketGenerationService.confirmDraw(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success("Đã xác nhận bracket", null));
     }
 
@@ -117,15 +117,15 @@ public class MatchController {
     @Operation(summary = "[CUT_TO_SE] Điền SE bracket từ W+L survivors (Owner)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/owner/tournaments/{id}/populate-final-bracket")
-    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> populateFinalOwner(@PathVariable Long id) {
-        bracketGenerationService.populateFinalBracket(id);
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> populateFinalOwner(Authentication auth, @PathVariable Long id) {
+        bracketGenerationService.populateFinalBracket(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success("Đã điền bracket loại trực tiếp", buildStageResponse(id)));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/tournaments/{id}/populate-final-bracket")
-    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> populateFinalManager(@PathVariable Long id) {
-        bracketGenerationService.populateFinalBracket(id);
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> populateFinalManager(Authentication auth, @PathVariable Long id) {
+        bracketGenerationService.populateFinalBracket(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success("Đã điền bracket loại trực tiếp", buildStageResponse(id)));
     }
 
