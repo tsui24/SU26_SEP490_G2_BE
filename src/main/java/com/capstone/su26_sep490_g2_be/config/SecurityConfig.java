@@ -34,6 +34,8 @@ public class SecurityConfig {
 			"/api/v1/health",
 			"/api/v1/tournaments",
 			"/api/v1/tournaments/**",
+			"/api/v1/branches",
+			"/api/v1/branches/**",
 			"/api/v1/news",
 			"/api/v1/news/**",
 			"/api/v1/matches/**",

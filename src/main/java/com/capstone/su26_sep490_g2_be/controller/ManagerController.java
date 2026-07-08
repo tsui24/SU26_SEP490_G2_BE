@@ -4,7 +4,9 @@ import com.capstone.su26_sep490_g2_be.dto.request.CreateStaffAccountRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.EmployeeAccountResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
+import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
+import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -14,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Manager", description = "Manager APIs — requires MANAGER role")
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class ManagerController {
 
 	private final AccountService accountService;
+	private final SecurityUtil securityUtil;
 
 	@Operation(summary = "Get all, search and filter staff accounts",
 			description = "Lấy danh sách các tài khoản có role là STAFF. Hỗ trợ tìm kiếm lọc theo tên, số điện thoại hoặc email.")
@@ -33,11 +37,14 @@ public class ManagerController {
 	})
 	@GetMapping("/accounts/staffs")
 	public ResponseEntity<ApiResponse<PageResponse<EmployeeAccountResponse>>> getStaffs(
+			Authentication authentication,
 			@Parameter(description = "Từ khóa tìm kiếm lọc theo tên (fullName hoặc displayName), số điện thoại hoặc email")
 			@RequestParam(required = false) String search,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
-		PageResponse<EmployeeAccountResponse> response = accountService.getStaffsByManager(search, page, size);
+		User manager = securityUtil.resolveCurrentUser(authentication);
+		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
+		PageResponse<EmployeeAccountResponse> response = accountService.getStaffsByManager(ownerId, search, page, size);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
@@ -50,8 +57,11 @@ public class ManagerController {
 	})
 	@PostMapping("/accounts/staff")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> createStaff(
+			Authentication authentication,
 			@Valid @RequestBody CreateStaffAccountRequest request) {
-		EmployeeAccountResponse response = accountService.createStaffAccount(request);
+		User manager = securityUtil.resolveCurrentUser(authentication);
+		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
+		EmployeeAccountResponse response = accountService.createStaffAccount(request, ownerId);
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success("Đã tạo tài khoản Staff", response));
 	}
@@ -64,8 +74,11 @@ public class ManagerController {
 	})
 	@GetMapping("/employees/{id}")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> getEmployeeDetail(
+			Authentication authentication,
 			@PathVariable Long id) {
-		EmployeeAccountResponse response = accountService.getEmployeeDetail(id);
+		User manager = securityUtil.resolveCurrentUser(authentication);
+		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
+		EmployeeAccountResponse response = accountService.getEmployeeDetail(ownerId, id);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
@@ -79,8 +92,11 @@ public class ManagerController {
 	})
 	@PutMapping("/accounts/staffs/{id}/deactivate")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateEmployee(
+			Authentication authentication,
 			@PathVariable Long id) {
-		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
+		User manager = securityUtil.resolveCurrentUser(authentication);
+		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
+		EmployeeAccountResponse response = accountService.deactivateEmployee(ownerId, id);
 		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa tài khoản Staff", response));
 	}
 }

@@ -53,4 +53,7 @@ public class UpdateTournamentRequest {
 
 	@Schema(description = "Template form đăng ký — bắt buộc khi isRegister=true")
 	private Long registrationFormTemplateId;
+
+	@Schema(description = "Đổi chi nhánh tổ chức — chỉ khi status=DRAFT")
+	private Long branchId;
 }
