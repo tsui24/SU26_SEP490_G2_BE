@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PastOrPresent;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -22,6 +23,7 @@ public class CreatePlayerProfileRequest {
 	@Schema(description = "MinIO object key (data.objectKey từ POST /storage/images)", example = "avatars/a1b2c3d4-e5f6.jpg")
 	private String avatarUrl;
 
+	@PastOrPresent(message = "Ngày sinh không được là ngày trong tương lai")
 	@Schema(example = "1998-05-15")
 	private LocalDate dateOfBirth;
 

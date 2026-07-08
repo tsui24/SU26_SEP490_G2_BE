@@ -29,4 +29,7 @@ public class TournamentListItemResponse {
 	private Instant startAt;
 	private Instant endAt;
 	private Instant createdAt;
+	private Long branchId;
+	private String venueName;
+	private String venueAddress;
 }

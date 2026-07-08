@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
@@ -25,4 +26,16 @@ public class EmployeeAccountResponse {
 	private LocalDate dateOfBirth;
 	private String gender;
 	private String bio;
+
+	@Schema(description = "Chỉ áp dụng cho role MANAGER — true = quản lý toàn chuỗi")
+	private Boolean manageAllBranches;
+
+	@Schema(description = "Chỉ áp dụng cho role MANAGER khi manageAllBranches=false")
+	private List<Long> branchIds;
+
+	@Schema(description = "Chỉ áp dụng cho role STAFF — chi nhánh làm việc")
+	private Long branchId;
+
+	@Schema(description = "Chỉ áp dụng cho role STAFF")
+	private String branchName;
 }

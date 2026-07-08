@@ -36,4 +36,17 @@ public class User extends BaseEntity {
 
 	@OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
 	private UserProfile profile;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "owner_id")
+	private User owner;
+
+	@Column(name = "manage_all_branches")
+	@Builder.Default
+	private Boolean manageAllBranches = false;
+
+	/** Chỉ dùng cho STAFF — 1 staff làm việc tại đúng 1 chi nhánh. Manager dùng branch_managers thay vì cột này. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "branch_id")
+	private Branch branch;
 }

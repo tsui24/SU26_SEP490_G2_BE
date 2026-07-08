@@ -37,6 +37,7 @@ public class TournamentDetailResponse {
 	private ConfigSummary configSummary;
 	private String thumbnailUrl;
 	private String bannerUrl;
+	private BranchVenueResponse venue;
 	@Getter
 	@Builder
 	public static class ConfigSummary {

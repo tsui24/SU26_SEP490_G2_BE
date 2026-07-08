@@ -81,7 +81,7 @@ public class AdminController {
 	@PutMapping("/accounts/{id}/deactivate")
 	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> deactivateUser(
 			@PathVariable Long id) {
-		EmployeeAccountResponse response = accountService.deactivateEmployee(id);
+		EmployeeAccountResponse response = accountService.deactivateEmployee(null, id);
 		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa tài khoản", response));
 	}
 }

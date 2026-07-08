@@ -71,4 +71,8 @@ public class CreateTournamentRequest {
 
 	@Schema(description = "Template form đăng ký — bắt buộc khi isRegister=true")
 	private Long registrationFormTemplateId;
+
+	@NotNull(message = "Vui lòng chọn chi nhánh tổ chức")
+	@Schema(description = "Chi nhánh tổ chức giải", example = "1")
+	private Long branchId;
 }

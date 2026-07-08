@@ -22,10 +22,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
 			"WHERE r.code IN ('STAFF', 'MANAGER') " +
 			"AND u.status = 'ACTIVE' " +
+			"AND u.owner.id = :ownerId " +
 			"AND (:roleCode IS NULL OR r.code = :roleCode) " +
 			"AND (:search IS NULL OR LOWER(p.fullName) LIKE LOWER(CONCAT('%', :search, '%')) " +
 			"     OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
-	Page<User> searchEmployees(@Param("roleCode") String roleCode,
+	Page<User> searchEmployees(@Param("ownerId") Long ownerId,
+	                           @Param("roleCode") String roleCode,
 	                           @Param("search") String search,
 	                           Pageable pageable);
 
@@ -44,9 +46,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
 			"WHERE r.code = 'STAFF' " +
 			"AND u.status = 'ACTIVE' " +
+			"AND u.owner.id = :ownerId " +
 			"AND (:search IS NULL OR " +
 			"     LOWER(p.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
 			"     LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
-	Page<User> searchStaffsByManager(@Param("search") String search,
+	Page<User> searchStaffsByManager(@Param("ownerId") Long ownerId,
+	                                 @Param("search") String search,
 	                                 Pageable pageable);
 }

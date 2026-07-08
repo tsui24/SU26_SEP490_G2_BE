@@ -3,6 +3,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 import com.capstone.su26_sep490_g2_be.dto.request.*;
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.BranchStatus;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.FieldSource;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
@@ -13,6 +14,7 @@ import com.capstone.su26_sep490_g2_be.exception.ConfigValidationException;
 import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.AdminRegistrationFormService;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
@@ -42,6 +44,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private static final List<String> SEEDING_OPTIONS = List.of(
 			SeedingMethod.RANDOM.name(), SeedingMethod.MANUAL.name(), SeedingMethod.ELO.name());
 
+	/** Đồng bộ maxParticipants <-> bracket_size chỉ áp dụng cho thể thức Loại trực tiếp (1 lần thua). */
+	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
+
 	private static final Map<String, Set<String>> STATUS_TRANSITIONS = Map.of(
 			TournamentStatus.DRAFT.getValue(), Set.of(
 					TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), TournamentStatus.CANCELLED.getValue()),
@@ -70,6 +75,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final RegistrationRepository registrationRepository;
 	private final MinioStorageService minioStorageService;
 	private final MinioProperties minioProperties;
+	private final BranchRepository branchRepository;
+	private final BranchAccessService branchAccessService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -167,6 +174,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.registrationFormTemplateId(isRegister ? request.getRegistrationFormTemplateId() : null)
 				.createdBy(creator)
 				.build();
+		validateAndSnapshotBranch(creator, tournament, request.getBranchId());
 		tournament = tournamentRepository.save(tournament);
 
 		TournamentConfig config = TournamentConfig.builder()
@@ -175,6 +183,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.seedingMethod(SeedingMethod.RANDOM.name())
 				.build();
 		tournamentConfigRepository.save(config);
+
+		syncBracketSizeFromMaxParticipants(tournament, request.getFormat(), request.getMaxParticipants());
 
 		return CreateTournamentResponse.builder()
 				.id(tournament.getId())
@@ -198,7 +208,15 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		assertEditableStatus(tournament);
 
-		if (request.getFormat() != null && !request.getFormat().equals(tournament.getFormat())) {
+		if (request.getBranchId() != null
+				&& (tournament.getBranch() == null || !request.getBranchId().equals(tournament.getBranch().getId()))) {
+			User currentUser = userRepository.findById(userId)
+					.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+			validateAndSnapshotBranch(currentUser, tournament, request.getBranchId());
+		}
+
+		boolean formatChanged = request.getFormat() != null && !request.getFormat().equals(tournament.getFormat());
+		if (formatChanged) {
 			validateFormatReady(request.getFormat());
 			tournament.setFormat(request.getFormat());
 			configValueService.deleteByTournament(tournamentId);
@@ -260,6 +278,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				tournament.getEndAt());
 
 		tournamentRepository.save(tournament);
+		if (formatChanged || request.getMaxParticipants() != null) {
+			syncBracketSizeFromMaxParticipants(tournament, tournament.getFormat(), tournament.getMaxParticipants());
+		}
 		boolean configComplete = isConfigComplete(tournamentId, tournament.getFormat());
 
 		return UpdateTournamentResponse.builder()
@@ -309,6 +330,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
 				.bannerUrl(resolveImageForResponse(tournament.getBannerUrl()))
 				.configSummary(buildConfigSummary(tournamentId, tournament.getFormat(), config))
+				.venue(buildVenue(tournament))
 				.build();
 	}
 
@@ -379,6 +401,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.bannerUrl(resolveImageForResponse(tournament.getBannerUrl()))
 				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
 				.configSummary(buildConfigSummary(tournamentId, tournament.getFormat(), config))
+				.venue(buildVenue(tournament))
 				.build();
 	}
 
@@ -487,6 +510,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 
 		configValueService.saveAll(tournamentId, valuesToSave);
+		syncMaxParticipantsFromBracketSize(tournament, valuesToSave.get("bracket_size"));
 
 		if (request.getRaceToOverrides() != null) {
 			for (SaveTournamentConfigRequest.RaceToOverrideItem override : request.getRaceToOverrides()) {
@@ -647,6 +671,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.createdAt(tournament.getCreatedAt())
+				.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
+				.venueName(tournament.getVenueName())
+				.venueAddress(tournament.getVenueAddress())
 				.build();
 	}
 
@@ -673,6 +700,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.createdAt(tournament.getCreatedAt())
+				.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
+				.venueName(tournament.getVenueName())
+				.venueAddress(tournament.getVenueAddress())
 				.build();
 	}
 
@@ -735,6 +765,54 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (!TournamentStatus.DRAFT.getValue().equals(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.INVALID_OPERATION);
 		}
+	}
+
+	/**
+	 * Kiểm tra quyền của người tạo/sửa đối với chi nhánh, rồi chụp snapshot tên/địa chỉ
+	 * vào tournament (branch có thể đổi thông tin sau này mà không ảnh hưởng giải đã tạo).
+	 */
+	private void validateAndSnapshotBranch(User currentUser, Tournament tournament, Long branchId) {
+		Branch branch = branchRepository.findById(branchId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.BRANCH_NOT_FOUND));
+		String roleCode = currentUser.getRole().getCode();
+		if ("OWNER".equals(roleCode)) {
+			if (branch.getOwner() == null || !branch.getOwner().getId().equals(currentUser.getId())) {
+				throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+			}
+			if (branch.getStatus() != BranchStatus.ACTIVE) {
+				throw new BusinessException(ErrorCode.BRANCH_INACTIVE);
+			}
+		} else if ("MANAGER".equals(roleCode)) {
+			if (!branchAccessService.canManagerCreateTournamentAt(currentUser, branchId)) {
+				throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+			}
+		} else {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		tournament.setBranch(branch);
+		tournament.setVenueName(branch.getName());
+		tournament.setVenueAddress(branch.getAddress());
+	}
+
+	private BranchVenueResponse buildVenue(Tournament tournament) {
+		if (tournament.getBranch() == null) {
+			return null;
+		}
+		Branch branch = tournament.getBranch();
+		List<String> imageKeys = JsonParseUtil.parseStringList(branch.getImageKeys());
+		List<BranchImageResponse> images = imageKeys == null ? List.of() : imageKeys.stream()
+				.map(key -> BranchImageResponse.builder()
+						.key(key)
+						.url(AvatarUrlResolver.resolveForResponse(key, minioStorageService, minioProperties.getBucket()))
+						.build())
+				.toList();
+		return BranchVenueResponse.builder()
+				.branchId(branch.getId())
+				.name(tournament.getVenueName())
+				.address(tournament.getVenueAddress())
+				.phone(branch.getPhone())
+				.images(images)
+				.build();
 	}
 
 	private boolean isConfigComplete(Long tournamentId, String formatCode) {
@@ -875,6 +953,47 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			}
 		}
 		return errors;
+	}
+
+	/**
+	 * bracket_size chỉ được đồng bộ với maxParticipants cho thể thức Loại trực tiếp
+	 * (SINGLE_ELIMINATION) — DOUBLE_ELIMINATION và các format khác không áp dụng.
+	 * Đồng bộ ngay lúc tạo giải để 2 giá trị không lệch nhau ngay từ đầu — clamp theo
+	 * min/max của field để không vi phạm validate khi owner mở lại màn config.
+	 */
+	private void syncBracketSizeFromMaxParticipants(Tournament tournament, String formatCode, Integer maxParticipants) {
+		if (maxParticipants == null || !SINGLE_ELIMINATION_FORMAT_CODE.equals(formatCode)) return;
+		formatConfigFieldRepository.findByFormatCodeAndFieldKey(formatCode, "bracket_size")
+				.ifPresent(field -> {
+					int clamped = clampToFieldRange(field, maxParticipants);
+					configValueService.saveAll(tournament.getId(), Map.of("bracket_size", String.valueOf(clamped)));
+				});
+	}
+
+	/** Chiều ngược lại: khi owner sửa bracket_size ở màn config (chỉ SINGLE_ELIMINATION), đồng bộ lại maxParticipants. */
+	private void syncMaxParticipantsFromBracketSize(Tournament tournament, String bracketSizeValue) {
+		if (bracketSizeValue == null || !SINGLE_ELIMINATION_FORMAT_CODE.equals(tournament.getFormat())) return;
+		try {
+			int bracketSize = Integer.parseInt(bracketSizeValue);
+			if (!Objects.equals(tournament.getMaxParticipants(), bracketSize)) {
+				tournament.setMaxParticipants(bracketSize);
+				tournamentRepository.save(tournament);
+			}
+		} catch (NumberFormatException ignored) {
+			// bracket_size đã được validateFieldValue kiểm tra là INT hợp lệ trước đó
+		}
+	}
+
+	private int clampToFieldRange(FormatConfigField formatField, int value) {
+		ConfigFieldDefinition def = formatField.getFieldDefinition();
+		if (def == null) {
+			def = configFieldRepository.findById(formatField.getFieldKey()).orElse(null);
+		}
+		if (def == null) return value;
+		int result = value;
+		if (def.getMinValue() != null && result < def.getMinValue()) result = def.getMinValue();
+		if (def.getMaxValue() != null && result > def.getMaxValue()) result = def.getMaxValue();
+		return result;
 	}
 
 	/**
