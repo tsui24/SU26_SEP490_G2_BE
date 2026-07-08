@@ -18,4 +18,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 	Page<Payment> findByUserId(Long userId, Pageable pageable);
 
 	Optional<Payment> findByTransactionCode(String transactionCode);
+
+	List<Payment> findByRegistration_Tournament_IdIn(List<Long> tournamentIds);
 }

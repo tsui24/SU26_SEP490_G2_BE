@@ -11,6 +11,7 @@ import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
+import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private final MatchRepository matchRepository;
     private final MatchScoreEventRepository scoreEventRepository;
     private final TournamentRaceToRuleService raceToRuleService;
+    private final TournamentAuditService tournamentAuditService;
 
     /* ═══════════════════════════════════════════════════════════
      *  ENTRY POINT
@@ -41,7 +43,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
     @Override
     @Transactional
-    public DrawResultResponse generate(Long tournamentId) {
+    public DrawResultResponse generate(Long tournamentId, Long actorUserId) {
         Tournament tournament = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
@@ -80,6 +82,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         tournament.setStatus(TournamentStatus.DRAW_PREVIEW.getValue());
         tournamentRepository.save(tournament);
+        tournamentAuditService.recordChange(tournament, currentStatus, TournamentStatus.DRAW_PREVIEW.getValue(),
+                actorUserId, "Bốc thăm — sinh bracket");
 
         List<StageWithMatchesResponse> stageResponses = result.stages().stream()
                 .map(s -> StageWithMatchesResponse.builder()
@@ -619,12 +623,15 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
     @Override
     @Transactional
-    public void confirmDraw(Long tournamentId) {
+    public void confirmDraw(Long tournamentId, Long actorUserId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!TournamentStatus.DRAW_PREVIEW.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        String previousStatus = t.getStatus();
         t.setStatus(TournamentStatus.DRAW_DONE.getValue());
         tournamentRepository.save(t);
+        tournamentAuditService.recordChange(t, previousStatus, TournamentStatus.DRAW_DONE.getValue(),
+                actorUserId, "Xác nhận bracket");
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1022,7 +1029,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
     @Override
     @Transactional
-    public void populateFinalBracket(Long tournamentId) {
+    public void populateFinalBracket(Long tournamentId, Long actorUserId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!TournamentStatus.DRAW_DONE.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
@@ -1090,8 +1097,11 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         wStage.setStatus(TournamentStageStatus.COMPLETED.getValue()); stageRepository.save(wStage);
         if (lStage != null) { lStage.setStatus(TournamentStageStatus.COMPLETED.getValue()); stageRepository.save(lStage); }
 
+        String previousStatus = t.getStatus();
         t.setStatus(TournamentStatus.FINAL_BRACKET_READY.getValue());
         tournamentRepository.save(t);
+        tournamentAuditService.recordChange(t, previousStatus, TournamentStatus.FINAL_BRACKET_READY.getValue(),
+                actorUserId, "Điền bracket loại trực tiếp (CUT_TO_SE)");
     }
 
     /* ═══════════════════════════════════════════════════════════

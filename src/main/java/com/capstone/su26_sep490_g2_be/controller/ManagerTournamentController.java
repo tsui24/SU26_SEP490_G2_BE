@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Tag(name = "Manager — Tournaments", description = "Manager tạo và cấu hình giải đấu — requires MANAGER role")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
@@ -121,6 +123,12 @@ public class ManagerTournamentController {
 			@Valid @RequestBody PatchTournamentStatusRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
 				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, false)));
+	}
+
+	@Operation(summary = "Lịch sử đổi trạng thái giải", description = "Audit trail — cả thao tác thủ công và tự động")
+	@GetMapping("/tournaments/{id}/audit-logs")
+	public ResponseEntity<ApiResponse<List<TournamentStatusHistoryResponse>>> getAuditLogs(@PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(ownerTournamentService.getStatusHistory(id)));
 	}
 
 	private Long extractUserId(Authentication authentication) {

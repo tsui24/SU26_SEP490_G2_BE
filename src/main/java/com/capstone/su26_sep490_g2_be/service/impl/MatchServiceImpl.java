@@ -3,9 +3,11 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
+import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
+import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
@@ -63,12 +65,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match startMatch(Long matchId, Long updatedByUserId) {
         Match match = getById(matchId);
-        String ts = match.getTournament().getStatus();
-        if (!TournamentStatus.DRAW_DONE.getValue().equals(ts)
-                && !TournamentStatus.FINAL_BRACKET_READY.getValue().equals(ts)
-                && !TournamentStatus.IN_PROGRESS.getValue().equals(ts)) {
-            throw new BusinessException(ErrorCode.INVALID_OPERATION);
-        }
+        assertMatchPlayable(match);
         if (!MatchStatus.PENDING.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
@@ -93,6 +90,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match updateScore(Long matchId, Integer player1Score, Integer player2Score, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertMatchPlayable(match);
         if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())
                 || MatchStatus.BYE.getValue().equals(match.getStatus())
                 || MatchStatus.WALKOVER.getValue().equals(match.getStatus())) {
@@ -119,6 +117,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match completeMatch(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertMatchPlayable(match);
         if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
@@ -150,6 +149,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match walkover(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertMatchPlayable(match);
         Participant winner = getParticipant(winnerParticipantId);
         Participant loser = determineLoser(match, winner);
         User updatedBy = getUser(updatedByUserId);
@@ -218,5 +218,26 @@ public class MatchServiceImpl implements MatchService {
     private User getUser(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+    }
+
+    /**
+     * Trận đấu chỉ được thao tác (start/update/complete/walkover) khi giải đã thực sự bắt đầu.
+     * Loại kép (DOUBLE_ELIMINATION) là ngoại lệ: các trận vòng DE thi đấu ngay khi bracket ở
+     * DRAW_DONE (chưa có nút "Bắt đầu giải đấu" riêng cho pha này) và tiếp tục ở FINAL_BRACKET_READY
+     * sau khi điền bracket loại trực tiếp (CUT_TO_SE). Các thể thức còn lại (SINGLE_ELIMINATION,
+     * GROUP_PLAYOFF) bắt buộc phải chuyển sang IN_PROGRESS trước.
+     */
+    private void assertMatchPlayable(Match match) {
+        Tournament tournament = match.getTournament();
+        String status = tournament.getStatus();
+
+        boolean allowed = TournamentStatus.IN_PROGRESS.getValue().equals(status)
+                || TournamentStatus.FINAL_BRACKET_READY.getValue().equals(status)
+                || (TournamentFormat.DOUBLE_ELIMINATION.getValue().equals(tournament.getFormat())
+                        && TournamentStatus.DRAW_DONE.getValue().equals(status));
+
+        if (!allowed) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
     }
 }
