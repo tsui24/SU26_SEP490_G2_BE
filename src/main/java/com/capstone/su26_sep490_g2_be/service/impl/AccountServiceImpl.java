@@ -11,6 +11,7 @@ import com.capstone.su26_sep490_g2_be.entity.BranchManager;
 import com.capstone.su26_sep490_g2_be.entity.Role;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.entity.UserProfile;
+import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
@@ -22,9 +23,12 @@ import com.capstone.su26_sep490_g2_be.repository.BranchRepository;
 import com.capstone.su26_sep490_g2_be.repository.RoleRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
+import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
+import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +38,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +52,8 @@ public class AccountServiceImpl implements AccountService {
 	private final MinioProperties minioProperties;
 	private final BranchRepository branchRepository;
 	private final BranchManagerRepository branchManagerRepository;
+	private final ApplicationEventPublisher eventPublisher;
+	private final MailContextBuilder mailContextBuilder;
 
 	@Override
 	@Transactional
@@ -144,7 +151,23 @@ public class AccountServiceImpl implements AccountService {
 				.build();
 
 		user.setProfile(profile);
-		return userRepository.save(user);
+		user = userRepository.save(user);
+		publishAccountCreatedEvent(targetRole, user);
+		return user;
+	}
+
+	private void publishAccountCreatedEvent(RoleCode targetRole, User user) {
+		EmailEventType eventType = targetRole == RoleCode.MANAGER
+				? EmailEventType.MANAGER_ACCOUNT_CREATED
+				: EmailEventType.STAFF_ACCOUNT_CREATED;
+		Map<String, Object> variables = new java.util.HashMap<>(mailContextBuilder.systemContext());
+		mailContextBuilder.putUser(variables, user);
+		eventPublisher.publishEvent(MailDomainEvent.builder()
+				.eventType(eventType)
+				.variables(variables)
+				.explicitRecipients(List.of(new MailRecipient(user.getId(), user.getEmail())))
+				.entityKey("USER-" + user.getId())
+				.build());
 	}
 
 	private void assignBranches(User owner, User manager, List<Long> branchIds) {

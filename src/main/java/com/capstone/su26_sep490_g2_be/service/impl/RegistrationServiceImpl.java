@@ -6,6 +6,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.CheckoutResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationResponse;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
@@ -19,11 +20,14 @@ import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldValueRepositor
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
+import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.PayOSService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationService;
 import com.capstone.su26_sep490_g2_be.util.PageableUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -31,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -52,6 +57,8 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private final PaymentRepository paymentRepository;
 	private final PayOSService payOSService;
 	private final ParticipantRepository participantRepository;
+	private final ApplicationEventPublisher eventPublisher;
+	private final MailContextBuilder mailContextBuilder;
 
 	@Override
 	@Transactional
@@ -188,6 +195,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		reg.setApprovedAt(Instant.now());
 		registrationRepository.save(reg);
 		autoCreateParticipant(reg);
+		publishRegistrationEvent(EmailEventType.REGISTRATION_APPROVED, reg);
 		return toResponse(reg);
 	}
 
@@ -198,7 +206,9 @@ public class RegistrationServiceImpl implements RegistrationService {
 		reg.setStatus(RegistrationStatus.REJECTED.getValue());
 		reg.setRejectedReason(request.getReason());
 		reg.setRejectedAt(Instant.now());
-		return toResponse(registrationRepository.save(reg));
+		registrationRepository.save(reg);
+		publishRegistrationEvent(EmailEventType.REGISTRATION_REJECTED, reg);
+		return toResponse(reg);
 	}
 
 	@Override
@@ -210,6 +220,23 @@ public class RegistrationServiceImpl implements RegistrationService {
 		}
 		reg.setStatus(RegistrationStatus.CANCELLED.getValue());
 		registrationRepository.save(reg);
+		publishRegistrationEvent(EmailEventType.REGISTRATION_CANCELLED, reg);
+	}
+
+	/** Publish sự kiện mail cho các thay đổi trạng thái đăng ký — bỏ qua nếu không có email nhận. */
+	private void publishRegistrationEvent(EmailEventType eventType, Registration reg) {
+		if (reg.getUser() == null || reg.getUser().getEmail() == null) {
+			return;
+		}
+		Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+		mailContextBuilder.putRegistration(variables, reg);
+		eventPublisher.publishEvent(MailDomainEvent.builder()
+				.eventType(eventType)
+				.tournamentId(reg.getTournament().getId())
+				.variables(variables)
+				.explicitRecipients(List.of(new MailRecipient(reg.getUser().getId(), reg.getUser().getEmail())))
+				.entityKey("REGISTRATION-" + reg.getId())
+				.build());
 	}
 
 	private TournamentRegistrationResponse toResponse(Registration registration) {
@@ -330,9 +357,27 @@ public class RegistrationServiceImpl implements RegistrationService {
 		paymentRepository.save(payment);
 
 		Registration reg = payment.getRegistration();
-		if (reg == null || !RegistrationStatus.PENDING_PAYMENT.getValue().equals(reg.getStatus())) return;
+		if (reg == null) return;
+		publishPaymentSuccessEvent(payment, reg);
+		if (!RegistrationStatus.PENDING_PAYMENT.getValue().equals(reg.getStatus())) return;
 
 		approveOrRejectBySlot(reg);
+	}
+
+	private void publishPaymentSuccessEvent(Payment payment, Registration reg) {
+		if (reg.getUser() == null || reg.getUser().getEmail() == null) {
+			return;
+		}
+		Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+		mailContextBuilder.putRegistration(variables, reg);
+		mailContextBuilder.putPayment(variables, payment);
+		eventPublisher.publishEvent(MailDomainEvent.builder()
+				.eventType(EmailEventType.PAYMENT_SUCCESS)
+				.tournamentId(reg.getTournament().getId())
+				.variables(variables)
+				.explicitRecipients(List.of(new MailRecipient(reg.getUser().getId(), reg.getUser().getEmail())))
+				.entityKey("PAYMENT-" + payment.getId())
+				.build());
 	}
 
 	/**
@@ -352,12 +397,14 @@ public class RegistrationServiceImpl implements RegistrationService {
 			registrationRepository.save(reg);
 			// UC-28: Auto-create Participant từ Registration được duyệt
 			autoCreateParticipant(reg);
+			publishRegistrationEvent(EmailEventType.REGISTRATION_APPROVED, reg);
 		} else {
 			reg.setStatus(RegistrationStatus.REJECTED.getValue());
 			reg.setRejectedReason("Giải đã đủ " + tournament.getMaxParticipants()
 					+ " người tham gia. Liên hệ ban tổ chức để được hoàn tiền (nếu có).");
 			reg.setRejectedAt(Instant.now());
 			registrationRepository.save(reg);
+			publishRegistrationEvent(EmailEventType.REGISTRATION_REJECTED, reg);
 		}
 	}
 

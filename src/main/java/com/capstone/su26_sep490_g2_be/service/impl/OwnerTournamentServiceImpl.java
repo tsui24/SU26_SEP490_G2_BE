@@ -4,6 +4,7 @@ import com.capstone.su26_sep490_g2_be.dto.request.*;
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.BranchStatus;
+import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.FieldSource;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
@@ -15,6 +16,7 @@ import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.AdminRegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
+import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
@@ -25,6 +27,7 @@ import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -79,6 +82,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final BranchRepository branchRepository;
 	private final BranchAccessService branchAccessService;
 	private final TournamentAuditService tournamentAuditService;
+	private final ApplicationEventPublisher eventPublisher;
+	private final MailContextBuilder mailContextBuilder;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -643,6 +648,15 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		tournamentRepository.save(tournament);
 		tournamentAuditService.recordChange(tournament, previousStatus, newStatus, userId,
 				"Cập nhật trạng thái thủ công");
+
+		Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+		mailContextBuilder.putTournament(variables, tournament);
+		eventPublisher.publishEvent(MailDomainEvent.builder()
+				.eventType(EmailEventType.TOURNAMENT_STATUS_CHANGED)
+				.tournamentId(tournament.getId())
+				.variables(variables)
+				.entityKey("TOURNAMENT-STATUS-" + tournament.getId() + "-" + newStatus)
+				.build());
 
 		return PatchTournamentStatusResponse.builder()
 				.id(tournamentId)
