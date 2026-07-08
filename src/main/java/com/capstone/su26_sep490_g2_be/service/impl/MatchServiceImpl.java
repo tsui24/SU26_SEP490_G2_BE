@@ -5,6 +5,7 @@ import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
+import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
@@ -14,13 +15,20 @@ import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
+import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.MatchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -31,6 +39,8 @@ public class MatchServiceImpl implements MatchService {
     private final MatchScoreEventRepository scoreEventRepository;
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MailContextBuilder mailContextBuilder;
 
     @Override
     public Match getById(Long id) {
@@ -141,8 +151,32 @@ public class MatchServiceImpl implements MatchService {
 
         // Auto-advance winner and loser
         advanceParticipants(match, winner, loser);
+        publishMatchCompletedEvent(match);
 
         return match;
+    }
+
+    private void publishMatchCompletedEvent(Match match) {
+        List<MailRecipient> recipients = Stream.of(match.getPlayer1(), match.getPlayer2())
+                .filter(Objects::nonNull)
+                .map(p -> p.getRegistration() != null ? p.getRegistration().getUser() : null)
+                .filter(Objects::nonNull)
+                .filter(u -> u.getEmail() != null)
+                .distinct()
+                .map(u -> new MailRecipient(u.getId(), u.getEmail()))
+                .toList();
+        if (recipients.isEmpty()) {
+            return;
+        }
+        Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+        mailContextBuilder.putMatch(variables, match);
+        eventPublisher.publishEvent(MailDomainEvent.builder()
+                .eventType(EmailEventType.MATCH_COMPLETED)
+                .tournamentId(match.getTournament().getId())
+                .variables(variables)
+                .explicitRecipients(recipients)
+                .entityKey("MATCH-" + match.getId())
+                .build());
     }
 
     @Override

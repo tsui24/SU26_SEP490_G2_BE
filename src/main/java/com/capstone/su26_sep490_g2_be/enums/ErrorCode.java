@@ -89,7 +89,19 @@ public enum ErrorCode {
 	BRANCH_NOT_FOUND("BRANCH_001", "Không tìm thấy chi nhánh", HttpStatus.NOT_FOUND),
 	BRANCH_ACCESS_DENIED("BRANCH_002", "Bạn không có quyền truy cập chi nhánh này", HttpStatus.FORBIDDEN),
 	BRANCH_INACTIVE("BRANCH_003", "Chi nhánh đang ngừng hoạt động", HttpStatus.UNPROCESSABLE_ENTITY),
-	BRANCH_REQUIRED("BRANCH_005", "Vui lòng chọn chi nhánh tổ chức", HttpStatus.BAD_REQUEST);
+	BRANCH_REQUIRED("BRANCH_005", "Vui lòng chọn chi nhánh tổ chức", HttpStatus.BAD_REQUEST),
+
+	// Email notification
+	EMAIL_TEMPLATE_NOT_FOUND("EMAIL_001", "Không tìm thấy mẫu email", HttpStatus.NOT_FOUND),
+	EMAIL_TEMPLATE_CODE_EXISTS("EMAIL_002", "Mã mẫu email đã tồn tại", HttpStatus.CONFLICT),
+	EMAIL_TEMPLATE_INACTIVE("EMAIL_003", "Mẫu email đang bị vô hiệu hoá", HttpStatus.UNPROCESSABLE_ENTITY),
+	EMAIL_RULE_NOT_FOUND("EMAIL_004", "Không tìm thấy quy tắc tự động", HttpStatus.NOT_FOUND),
+	EMAIL_RULE_CODE_EXISTS("EMAIL_005", "Mã quy tắc tự động đã tồn tại", HttpStatus.CONFLICT),
+	EMAIL_RENDER_FAILED("EMAIL_006", "Không thể render nội dung email", HttpStatus.UNPROCESSABLE_ENTITY),
+	EMAIL_SEND_FAILED("EMAIL_007", "Gửi email thất bại", HttpStatus.INTERNAL_SERVER_ERROR),
+	EMAIL_RECIPIENT_EMPTY("EMAIL_008", "Danh sách người nhận trống", HttpStatus.BAD_REQUEST),
+	EMAIL_AUTOMATION_DISABLED("EMAIL_009", "Quy tắc tự động đang tắt", HttpStatus.UNPROCESSABLE_ENTITY),
+	EMAIL_LOG_NOT_FOUND("EMAIL_010", "Không tìm thấy nhật ký gửi email", HttpStatus.NOT_FOUND);
 
 	private final String code;
 	private final String message;
