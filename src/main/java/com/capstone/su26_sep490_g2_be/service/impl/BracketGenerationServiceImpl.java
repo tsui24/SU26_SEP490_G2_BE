@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
@@ -11,10 +12,12 @@ import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
+import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +39,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private final MatchScoreEventRepository scoreEventRepository;
     private final TournamentRaceToRuleService raceToRuleService;
     private final TournamentAuditService tournamentAuditService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MailContextBuilder mailContextBuilder;
 
     /* ═══════════════════════════════════════════════════════════
      *  ENTRY POINT
@@ -632,6 +637,15 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         tournamentRepository.save(t);
         tournamentAuditService.recordChange(t, previousStatus, TournamentStatus.DRAW_DONE.getValue(),
                 actorUserId, "Xác nhận bracket");
+
+        Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+        mailContextBuilder.putTournament(variables, t);
+        eventPublisher.publishEvent(MailDomainEvent.builder()
+                .eventType(EmailEventType.TOURNAMENT_DRAW_COMPLETED)
+                .tournamentId(t.getId())
+                .variables(variables)
+                .entityKey("TOURNAMENT-DRAW-" + t.getId())
+                .build());
     }
 
     /* ═══════════════════════════════════════════════════════════

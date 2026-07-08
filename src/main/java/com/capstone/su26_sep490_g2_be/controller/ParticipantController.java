@@ -8,6 +8,7 @@ import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
+import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
@@ -16,8 +17,11 @@ import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.service.impl.MailContextBuilder;
 import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
 import org.springframework.security.core.Authentication;
+import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
+import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.ParticipantExcelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -25,6 +29,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,6 +52,8 @@ public class ParticipantController {
     private final RegistrationRepository registrationRepository;
     private final ParticipantExcelService participantExcelService;
     private final SecurityUtil securityUtil;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MailContextBuilder mailContextBuilder;
 
     /* ── Shared: list participants ── */
     @Operation(summary = "Danh sách người tham gia (Owner)")
@@ -236,7 +243,26 @@ public class ParticipantController {
         Participant participant = findParticipantWithDetails(participantId);
         participant.setStatus(ParticipantStatus.WITHDRAWN.getValue());
         participantRepository.save(participant);
+        publishParticipantWithdrawnEvent(participant);
         return toResponse(participant);
+    }
+
+    private void publishParticipantWithdrawnEvent(Participant participant) {
+        Registration registration = participant.getRegistration();
+        User user = registration != null ? registration.getUser() : null;
+        if (user == null || user.getEmail() == null) {
+            return;
+        }
+        java.util.Map<String, Object> variables = new java.util.HashMap<>(mailContextBuilder.systemContext());
+        mailContextBuilder.putUser(variables, user);
+        mailContextBuilder.putTournament(variables, participant.getTournament());
+        eventPublisher.publishEvent(MailDomainEvent.builder()
+                .eventType(EmailEventType.PARTICIPANT_WITHDRAWN)
+                .tournamentId(participant.getTournament().getId())
+                .variables(variables)
+                .explicitRecipients(List.of(new MailRecipient(user.getId(), user.getEmail())))
+                .entityKey("PARTICIPANT-WITHDRAWN-" + participant.getId())
+                .build());
     }
 
     private Participant findParticipantWithDetails(Long participantId) {
