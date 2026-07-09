@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.service;
 
+import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 
@@ -17,9 +18,17 @@ public interface MatchService {
 
     List<Match> getByParticipant(Long participantId);
 
+    List<Match> getMatchesForReferee(Long refereeUserId, Long tournamentId, String status, String tournamentName);
+
+    void assertStaffAssigned(Long matchId, Long staffUserId);
+
+    Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId);
+
     Match startMatch(Long matchId, Long updatedByUserId);
 
     Match updateScore(Long matchId, Integer player1Score, Integer player2Score, Long updatedByUserId);
+
+    Match incrementScore(Long matchId, int playerSlot, int delta, Long updatedByUserId);
 
     Match completeMatch(Long matchId, Long winnerParticipantId, Long updatedByUserId);
 

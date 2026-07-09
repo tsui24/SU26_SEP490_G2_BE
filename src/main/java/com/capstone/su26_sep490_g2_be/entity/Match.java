@@ -89,4 +89,11 @@ public class Match extends BaseEntity {
 	@Column(name = "is_bye", nullable = false)
 	@Builder.Default
 	private Boolean isBye = false;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "assigned_staff_id")
+	private User assignedStaff;
+
+	@Column(name = "table_no")
+	private Integer tableNo;
 }

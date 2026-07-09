@@ -1,7 +1,9 @@
 package com.capstone.su26_sep490_g2_be.repository;
 
 import com.capstone.su26_sep490_g2_be.entity.Match;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +22,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		LEFT JOIN FETCH m.loser
 		LEFT JOIN FETCH m.nextMatchWin
 		LEFT JOIN FETCH m.nextMatchLose
+		LEFT JOIN FETCH m.assignedStaff staff
+		LEFT JOIN FETCH staff.profile
 		WHERE m.stage.id = :stageId
 		ORDER BY m.roundNo ASC, m.positionNo ASC
 		""")
@@ -35,6 +39,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		LEFT JOIN FETCH m.loser
 		LEFT JOIN FETCH m.nextMatchWin
 		LEFT JOIN FETCH m.nextMatchLose
+		LEFT JOIN FETCH m.assignedStaff staff
+		LEFT JOIN FETCH staff.profile
 		WHERE m.tournament.id = :tournamentId
 		ORDER BY m.roundNo ASC, m.positionNo ASC
 		""")
@@ -72,6 +78,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		LEFT JOIN FETCH m.loser
 		LEFT JOIN FETCH m.nextMatchWin
 		LEFT JOIN FETCH m.nextMatchLose
+		LEFT JOIN FETCH m.assignedStaff staff
+		LEFT JOIN FETCH staff.profile
 		WHERE m.id = :id
 		""")
 	java.util.Optional<Match> findByIdWithDetails(@Param("id") Long id);
@@ -89,4 +97,37 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		""")
 	List<Match> findByStatusAndScheduledAtBetween(
 			@Param("status") String status, @Param("from") Instant from, @Param("to") Instant to);
+
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.stage
+		LEFT JOIN FETCH m.player1
+		LEFT JOIN FETCH m.player2
+		LEFT JOIN FETCH m.winner
+		LEFT JOIN FETCH m.loser
+		LEFT JOIN FETCH m.nextMatchWin
+		LEFT JOIN FETCH m.nextMatchLose
+		LEFT JOIN FETCH m.assignedStaff staff
+		LEFT JOIN FETCH staff.profile
+		WHERE m.assignedStaff.id = :staffId
+		AND (:tournamentId IS NULL OR m.tournament.id = :tournamentId)
+		AND (:status IS NULL OR m.status = :status)
+		AND (:tournamentName IS NULL OR LOWER(m.tournament.name) LIKE LOWER(CONCAT('%', :tournamentName, '%')))
+		ORDER BY m.tableNo ASC, m.roundNo ASC, m.positionNo ASC
+		""")
+	List<Match> findByAssignedStaffId(
+			@Param("staffId") Long staffId,
+			@Param("tournamentId") Long tournamentId,
+			@Param("status") String status,
+			@Param("tournamentName") String tournamentName);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		LEFT JOIN FETCH m.assignedStaff
+		WHERE m.id = :id
+		""")
+	java.util.Optional<Match> findByIdForUpdate(@Param("id") Long id);
 }

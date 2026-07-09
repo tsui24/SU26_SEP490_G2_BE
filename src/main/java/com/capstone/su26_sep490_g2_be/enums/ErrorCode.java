@@ -67,6 +67,15 @@ public enum ErrorCode {
 	REGISTRATION_NOT_OPEN("REG_FORM_010", "Tournament is not open for registration", HttpStatus.UNPROCESSABLE_ENTITY),
 	REGISTRATION_ALREADY_EXISTS("REG_FORM_011", "You have already registered for this tournament", HttpStatus.CONFLICT),
 
+	// Match operations
+	MATCH_NOT_ASSIGNED("MATCH_001", "Bạn không được phân công làm trọng tài trận này", HttpStatus.FORBIDDEN),
+	INVALID_SCORE("MATCH_002", "Điểm số không hợp lệ", HttpStatus.BAD_REQUEST),
+	MATCH_NOT_IN_PROGRESS("MATCH_003", "Trận không ở trạng thái đang đấu", HttpStatus.CONFLICT),
+	MATCH_SCORE_LOCKED("MATCH_004", "Đã có người đủ điểm, không thể cộng thêm", HttpStatus.CONFLICT),
+	MATCH_SCORE_OUT_OF_RANGE("MATCH_005", "Điểm phải nằm trong khoảng 0 đến race-to", HttpStatus.BAD_REQUEST),
+	MATCH_WINNER_MUST_BE_RACE_LEADER("MATCH_006", "Người thắng phải là cơ thủ đã đạt điểm thắng", HttpStatus.BAD_REQUEST),
+	MATCH_WINNER_NOT_IN_MATCH("MATCH_007", "Người thắng phải thuộc trận này", HttpStatus.BAD_REQUEST),
+
 	// Tournament participation
 	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),
 	PARTICIPANT_INVALID_EXCEL("TOURNAMENT_002", "File không hợp lệ. Vui lòng tải mẫu từ nút \"Tải template\" hoặc upload file .xlsx / .csv", HttpStatus.BAD_REQUEST),
