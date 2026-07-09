@@ -730,9 +730,13 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         Long stageId = null; String stageName = null; String stageType = null;
         try { stageId = m.getStage().getId(); stageName = m.getStage().getName(); stageType = m.getStage().getStageType(); }
         catch (Exception ignored) {}
+        String tournamentName = null;
+        try { tournamentName = m.getTournament().getName(); }
+        catch (Exception ignored) {}
         return MatchResponse.builder()
                 .id(m.getId()).matchCode(m.getMatchCode())
                 .tournamentId(m.getTournament().getId())
+                .tournamentName(tournamentName)
                 .stageId(stageId).stageName(stageName).stageType(stageType)
                 .bracketType(m.getBracketType())
                 .roundNo(m.getRoundNo()).positionNo(m.getPositionNo())
@@ -744,7 +748,21 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                 .nextMatchWinId(m.getNextMatchWin()  != null ? m.getNextMatchWin().getId()  : null)
                 .nextMatchLoseId(m.getNextMatchLose() != null ? m.getNextMatchLose().getId() : null)
                 .winSlot(m.getWinSlot()).loseSlot(m.getLoseSlot())
+                .tableNo(m.getTableNo())
+                .assignedStaff(staffBrief(m.getAssignedStaff()))
                 .build();
+    }
+
+    private StaffBriefResponse staffBrief(User u) {
+        if (u == null) return null;
+        String name = null;
+        try {
+            if (u.getProfile() != null && u.getProfile().getDisplayName() != null) {
+                name = u.getProfile().getDisplayName();
+            }
+        } catch (Exception ignored) {}
+        if (name == null) name = u.getEmail();
+        return StaffBriefResponse.builder().id(u.getId()).displayName(name).build();
     }
 
     private ParticipantBriefResponse brief(Participant p) {

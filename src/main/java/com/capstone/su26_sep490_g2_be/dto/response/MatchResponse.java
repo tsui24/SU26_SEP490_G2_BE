@@ -11,6 +11,7 @@ public class MatchResponse {
     private Long id;
     private String matchCode;
     private Long tournamentId;
+    private String tournamentName;
     private Long stageId;
     private String stageName;
     private String stageType;
@@ -33,4 +34,7 @@ public class MatchResponse {
     private Long nextMatchLoseId;
     private String winSlot;
     private String loseSlot;
+
+    private Integer tableNo;
+    private StaffBriefResponse assignedStaff;
 }
