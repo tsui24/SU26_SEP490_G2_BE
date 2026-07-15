@@ -14,6 +14,7 @@ public class SaveTournamentConfigResponse {
 	private Long tournamentId;
 	private String formatCode;
 	private String seedingMethod;
+	private Integer seedCount;
 	private Boolean isConfigComplete;
 	private List<ConfigValidationDetailResponse> validationErrors;
 }

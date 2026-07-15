@@ -188,6 +188,16 @@ public class RegistrationServiceImpl implements RegistrationService {
 	@Transactional
 	public TournamentRegistrationResponse approve(Long registrationId, Long approvedByUserId) {
 		Registration reg = getById(registrationId);
+		Tournament tournament = tournamentRepository.findByIdWithLock(reg.getTournament().getId())
+				.orElse(reg.getTournament());
+		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+		}
+		long approvedCount = registrationRepository.countByTournamentIdAndStatus(
+				tournament.getId(), RegistrationStatus.APPROVED.getValue());
+		if (tournament.getMaxParticipants() != null && approvedCount >= tournament.getMaxParticipants()) {
+			throw new BusinessException(ErrorCode.TOURNAMENT_FULL);
+		}
 		User approver = userRepository.findById(approvedByUserId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		reg.setStatus(RegistrationStatus.APPROVED.getValue());
@@ -388,6 +398,17 @@ public class RegistrationServiceImpl implements RegistrationService {
 		Tournament tournament = tournamentRepository
 				.findByIdWithLock(reg.getTournament().getId())
 				.orElse(reg.getTournament());
+
+		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+			// Thanh toán xác nhận trễ, sau khi giải đã đóng đăng ký/lên bracket — không thể tạo
+			// participant vào bracket đã khóa, tự động từ chối và ghi rõ lý do.
+			reg.setStatus(RegistrationStatus.REJECTED.getValue());
+			reg.setRejectedReason("Giải đã đóng đăng ký trước khi xác nhận thanh toán. Liên hệ ban tổ chức để được hoàn tiền.");
+			reg.setRejectedAt(Instant.now());
+			registrationRepository.save(reg);
+			publishRegistrationEvent(EmailEventType.REGISTRATION_REJECTED, reg);
+			return;
+		}
 
 		long approved = registrationRepository.countByTournamentIdAndStatus(
 				tournament.getId(), RegistrationStatus.APPROVED.getValue());

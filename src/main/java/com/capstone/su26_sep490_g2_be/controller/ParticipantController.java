@@ -13,6 +13,7 @@ import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
@@ -34,6 +35,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -78,6 +80,7 @@ public class ParticipantController {
     /* ── Manual add ── */
     @Operation(summary = "Thêm người tham gia thủ công (Owner)")
     @PostMapping("/api/v1/owner/tournaments/{id}/participants/manual")
+    @Transactional
     public ResponseEntity<ApiResponse<ParticipantResponse>> addManualOwner(
             @PathVariable Long id,
             @Valid @RequestBody ManualAddParticipantRequest request,
@@ -88,6 +91,7 @@ public class ParticipantController {
 
     @Operation(summary = "Thêm người tham gia thủ công (Manager)")
     @PostMapping("/api/v1/manager/tournaments/{id}/participants/manual")
+    @Transactional
     public ResponseEntity<ApiResponse<ParticipantResponse>> addManualManager(
             @PathVariable Long id,
             @Valid @RequestBody ManualAddParticipantRequest request,
@@ -205,8 +209,25 @@ public class ParticipantController {
 
     private ParticipantResponse addManual(Long tournamentId, ManualAddParticipantRequest request,
                                           Authentication authentication) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
+        Tournament tournament = tournamentRepository.findByIdWithLock(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+            throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+        }
+
+        if (tournament.getMaxParticipants() != null) {
+            long activeCount = participantRepository.countByTournamentIdAndStatus(
+                    tournamentId, ParticipantStatus.ACTIVE.getValue());
+            if (activeCount >= tournament.getMaxParticipants()) {
+                throw new BusinessException(ErrorCode.TOURNAMENT_FULL);
+            }
+        }
+
+        if (request.getSeedNo() != null && participantRepository.existsByTournamentIdAndStatusAndSeedNo(
+                tournamentId, ParticipantStatus.ACTIVE.getValue(), request.getSeedNo())) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
+        }
 
         User approver = securityUtil.resolveCurrentUser(authentication);
 
