@@ -42,6 +42,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 
     long countByTournamentIdAndStatus(Long tournamentId, String status);
 
+    boolean existsByTournamentIdAndStatusAndSeedNo(Long tournamentId, String status, Integer seedNo);
+
     boolean existsByRegistrationId(Long registrationId);
 
     List<Participant> findByTournamentIdIn(List<Long> tournamentIds);

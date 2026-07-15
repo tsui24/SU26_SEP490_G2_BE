@@ -7,6 +7,8 @@ import com.capstone.su26_sep490_g2_be.enums.BranchStatus;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.FieldSource;
+import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
@@ -51,17 +53,27 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	/** Đồng bộ maxParticipants <-> bracket_size chỉ áp dụng cho thể thức Loại trực tiếp (1 lần thua). */
 	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
 
+	/**
+	 * DRAW_DONE chỉ được vào qua bracketGenerationService.confirmDraw() (không phải patchStatus trực
+	 * tiếp) nên REGISTRATION_CLOSED không có đường đi thẳng tới DRAW_DONE ở đây — tránh bỏ qua bước
+	 * sinh bracket. Tương tự DRAW_PREVIEW/FINAL_BRACKET_READY chỉ vào qua generate()/populateFinalBracket().
+	 */
 	private static final Map<String, Set<String>> STATUS_TRANSITIONS = Map.of(
 			TournamentStatus.DRAFT.getValue(), Set.of(
 					TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), TournamentStatus.CANCELLED.getValue()),
 			TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), Set.of(
 					TournamentStatus.REGISTRATION_CLOSED.getValue(), TournamentStatus.CANCELLED.getValue()),
 			TournamentStatus.REGISTRATION_CLOSED.getValue(), Set.of(
-					TournamentStatus.DRAW_DONE.getValue(), TournamentStatus.CANCELLED.getValue()),
+					TournamentStatus.CANCELLED.getValue()),
 			TournamentStatus.DRAW_DONE.getValue(), Set.of(
 					TournamentStatus.IN_PROGRESS.getValue(), TournamentStatus.CANCELLED.getValue()),
+			TournamentStatus.FINAL_BRACKET_READY.getValue(), Set.of(
+					TournamentStatus.COMPLETED.getValue(), TournamentStatus.CANCELLED.getValue()),
 			TournamentStatus.IN_PROGRESS.getValue(), Set.of(
 					TournamentStatus.COMPLETED.getValue(), TournamentStatus.CANCELLED.getValue()));
+
+	private static final List<String> FINISHED_MATCH_STATUSES = List.of(
+			MatchStatus.COMPLETED.getValue(), MatchStatus.WALKOVER.getValue(), MatchStatus.BYE.getValue());
 
 	private final TournamentRepository tournamentRepository;
 	private final TournamentConfigRepository tournamentConfigRepository;
@@ -77,6 +89,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final RegistrationFormService registrationFormService;
 	private final RegistrationFormTemplateRepository registrationFormTemplateRepository;
 	private final RegistrationRepository registrationRepository;
+	private final ParticipantRepository participantRepository;
+	private final MatchRepository matchRepository;
 	private final MinioStorageService minioStorageService;
 	private final MinioProperties minioProperties;
 	private final BranchRepository branchRepository;
@@ -143,6 +157,11 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	public OwnerRegistrationFormTemplateListResponse listRegistrationFormTemplates() {
 		return adminRegistrationFormService.listActiveTemplatesForOwner();
+	}
+
+	@Override
+	public RegistrationFormPreviewResponse previewRegistrationFormTemplate(Long templateId) {
+		return adminRegistrationFormService.getActiveTemplatePreview(templateId);
 	}
 
 	@Override
@@ -308,7 +327,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
 				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
 				: null;
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, RegistrationStatus.APPROVED.getValue());
+		long approved = participantRepository.countByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
 		int remaining = Math.max(0, tournament.getMaxParticipants() - (int) approved);
 
 		return TournamentDetailResponse.builder()
@@ -381,7 +400,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		RegistrationFormTemplate registrationTemplate = tournament.getRegistrationFormTemplateId() != null
 				? registrationFormTemplateRepository.findById(tournament.getRegistrationFormTemplateId()).orElse(null)
 				: null;
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournamentId, RegistrationStatus.APPROVED.getValue());
+		long approved = participantRepository.countByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
 		int remaining = Math.max(0, tournament.getMaxParticipants() - (int) approved);
 
 		return TournamentDetailResponse.builder()
@@ -439,6 +458,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.formatDescription(format.getDescription())
 				.gameType(tournament.getGameType())
 				.seedingMethod(config.getSeedingMethod())
+				.seedCount(config.getSeedCount())
 				.isConfigComplete(isConfigComplete(tournamentId, tournament.getFormat()))
 				.fields(fields)
 				.raceToRules(raceToRules)
@@ -459,6 +479,23 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 					ConfigValidationDetailResponse.builder()
 							.fieldKey("seedingMethod")
 							.message("Phương thức xếp hạt giống không hợp lệ")
+							.build()));
+		}
+
+		boolean usesSeeding = !SeedingMethod.RANDOM.name().equals(request.getSeedingMethod());
+		if (usesSeeding && (request.getSeedCount() == null || request.getSeedCount() < 1)) {
+			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, List.of(
+					ConfigValidationDetailResponse.builder()
+							.fieldKey("seedCount")
+							.message("Cần nhập số lượng hạt giống (từ 1 trở lên) khi chọn xếp hạt giống")
+							.build()));
+		}
+		if (usesSeeding && tournament.getMaxParticipants() != null
+				&& request.getSeedCount() > tournament.getMaxParticipants()) {
+			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, List.of(
+					ConfigValidationDetailResponse.builder()
+							.fieldKey("seedCount")
+							.message("Số lượng hạt giống không được vượt quá số người tối đa của giải")
 							.build()));
 		}
 
@@ -541,6 +578,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		TournamentConfig config = getConfig(tournamentId);
 		config.setSeedingMethod(request.getSeedingMethod());
+		config.setSeedCount(usesSeeding ? request.getSeedCount() : null);
 		boolean complete = isConfigComplete(tournamentId, tournament.getFormat());
 		if (complete) {
 			config.setConfigSnapshotJson(buildConfigSnapshot(tournamentId, tournament.getFormat()));
@@ -551,6 +589,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.tournamentId(tournamentId)
 				.formatCode(tournament.getFormat())
 				.seedingMethod(config.getSeedingMethod())
+				.seedCount(config.getSeedCount())
 				.isConfigComplete(complete)
 				.validationErrors(List.of())
 				.build();
@@ -586,6 +625,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.formatName(format.getName())
 				.gameType(tournament.getGameType())
 				.seedingMethod(config.getSeedingMethod())
+				.seedCount(config.getSeedCount())
 				.isConfigComplete(isConfigComplete(tournamentId, tournament.getFormat()))
 				.fields(fields)
 				.raceToRules(raceToMap)
@@ -644,6 +684,14 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			}
 		}
 
+		if (TournamentStatus.COMPLETED.getValue().equals(newStatus)) {
+			boolean hasUnfinishedMatch = matchRepository.existsByTournamentIdAndStatusNotIn(
+					tournamentId, FINISHED_MATCH_STATUSES);
+			if (hasUnfinishedMatch) {
+				throw new BusinessException(ErrorCode.TOURNAMENT_MATCHES_NOT_FINISHED);
+			}
+		}
+
 		tournament.setStatus(newStatus);
 		tournamentRepository.save(tournament);
 		tournamentAuditService.recordChange(tournament, previousStatus, newStatus, userId,
@@ -678,7 +726,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String formatName = formatRepository.findById(tournament.getFormat())
 				.map(TournamentFormatDefinition::getName)
 				.orElse(null);
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), RegistrationStatus.APPROVED.getValue());
+		long approved = participantRepository.countByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
 
 		return TournamentListItemResponse.builder()
 				.id(tournament.getId())
@@ -708,7 +756,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String formatName = formatRepository.findById(tournament.getFormat())
 				.map(TournamentFormatDefinition::getName)
 				.orElse(null);
-		long approved = registrationRepository.countByTournamentIdAndStatus(tournament.getId(), RegistrationStatus.APPROVED.getValue());
+		long approved = participantRepository.countByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
 
 		return TournamentListItemResponse.builder()
 				.id(tournament.getId())

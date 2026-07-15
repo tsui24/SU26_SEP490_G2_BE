@@ -282,6 +282,11 @@ public class MatchServiceImpl implements MatchService {
     public Match walkover(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
         Match match = getById(matchId);
         assertMatchPlayable(match);
+        if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())
+                || MatchStatus.WALKOVER.getValue().equals(match.getStatus())
+                || MatchStatus.BYE.getValue().equals(match.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
         Participant winner = getParticipant(winnerParticipantId);
         Participant loser = determineLoser(match, winner);
         User updatedBy = getUser(updatedByUserId);

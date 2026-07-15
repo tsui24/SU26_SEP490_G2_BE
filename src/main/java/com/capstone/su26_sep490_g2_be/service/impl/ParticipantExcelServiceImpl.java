@@ -8,6 +8,7 @@ import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
@@ -29,7 +30,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -110,6 +113,10 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
+		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+		}
+
 		validateUploadFile(file);
 
 		byte[] content;
@@ -141,6 +148,10 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		int imported = 0;
 		int skipped = 0;
 		int totalRows = 0;
+
+		Set<Integer> usedSeeds = new HashSet<>();
+		participantRepository.findByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue())
+				.forEach(p -> { if (p.getSeedNo() != null) usedSeeds.add(p.getSeedNo()); });
 
 		for (int i = 0; i < rows.size(); i++) {
 			String[] cols = rows.get(i);
@@ -187,6 +198,12 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 					skipped++;
 					continue;
 				}
+				if (usedSeeds.contains(seedNo)) {
+					errors.add("Hàng " + rowNo + ": Hạt giống " + seedNo + " đã được dùng cho người khác");
+					skipped++;
+					continue;
+				}
+				usedSeeds.add(seedNo);
 			}
 
 			Registration registration = registrationRepository.save(Registration.builder()

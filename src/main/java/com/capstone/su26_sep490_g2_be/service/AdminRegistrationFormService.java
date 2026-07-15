@@ -36,4 +36,6 @@ public interface AdminRegistrationFormService {
 	RegistrationFormPreviewResponse getTemplatePreview(Long id);
 
 	OwnerRegistrationFormTemplateListResponse listActiveTemplatesForOwner();
+
+	RegistrationFormPreviewResponse getActiveTemplatePreview(Long id);
 }
