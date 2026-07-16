@@ -3,6 +3,8 @@ package com.capstone.su26_sep490_g2_be.dto.response;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @Builder
 public class ParticipantResponse {
@@ -17,4 +19,14 @@ public class ParticipantResponse {
     private String status;
     private String source;
     private String avtarUrl;
+    /** Chỉ có giá trị cho participant đôi/đội — danh sách thành viên trong participant. */
+    private List<MemberItem> members;
+
+    @Getter
+    @Builder
+    public static class MemberItem {
+        private String fullName;
+        private String phone;
+        private String role;
+    }
 }

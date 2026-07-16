@@ -7,9 +7,9 @@ import java.io.IOException;
 
 public interface ParticipantExcelService {
 
-	byte[] buildImportTemplate() throws IOException;
+	byte[] buildImportTemplate(Long tournamentId) throws IOException;
 
-	byte[] buildImportTemplateCsv();
+	byte[] buildImportTemplateCsv(Long tournamentId);
 
 	String getTemplateFilename();
 

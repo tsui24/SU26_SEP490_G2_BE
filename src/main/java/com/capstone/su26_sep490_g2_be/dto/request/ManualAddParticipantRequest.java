@@ -17,6 +17,12 @@ public class ManualAddParticipantRequest {
     @Size(max = 20)
     private String phone;
 
+    @Size(max = 255)
+    private String partnerFullName;
+
+    @Size(max = 20)
+    private String partnerPhone;
+
     @Min(value = 1, message = "Hạt giống phải từ 1 trở lên")
     private Integer seedNo;
 

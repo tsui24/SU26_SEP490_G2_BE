@@ -6,14 +6,17 @@ import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.ParticipantMemberRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.ParticipantExcelService;
+import com.capstone.su26_sep490_g2_be.util.ParticipantMemberFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.openxml4j.exceptions.NotOfficeXmlFileException;
@@ -48,45 +51,79 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	private final TournamentRepository tournamentRepository;
 	private final RegistrationRepository registrationRepository;
 	private final ParticipantRepository participantRepository;
+	private final ParticipantMemberRepository participantMemberRepository;
+
+	private boolean isDouble(Long tournamentId) {
+		return tournamentRepository.findById(tournamentId)
+				.map(t -> ParticipantType.DOUBLE.name().equals(t.getParticipantType()))
+				.orElse(false);
+	}
 
 	@Override
-	public byte[] buildImportTemplate() throws IOException {
+	public byte[] buildImportTemplate(Long tournamentId) throws IOException {
+		boolean isDouble = isDouble(tournamentId);
 		try (XSSFWorkbook workbook = new XSSFWorkbook();
 			 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 			Sheet sheet = workbook.createSheet(SHEET_NAME);
 
 			CellStyle textStyle = workbook.createCellStyle();
 			textStyle.setDataFormat(workbook.createDataFormat().getFormat("@"));
-			// Áp dụng format Text cho cột SĐT để Excel giữ số 0 đầu
+			// Áp dụng format Text cho các cột SĐT để Excel giữ số 0 đầu
 			sheet.setDefaultColumnStyle(1, textStyle);
+			if (isDouble) {
+				sheet.setDefaultColumnStyle(3, textStyle);
+			}
 
 			Row header = sheet.createRow(0);
-			header.createCell(0).setCellValue("Tên hiển thị");
-			Cell headerPhone = header.createCell(1);
-			headerPhone.setCellStyle(textStyle);
-			headerPhone.setCellValue("Số điện thoại");
-			header.createCell(2).setCellValue("Hạt giống");
-
 			Row sample = sheet.createRow(1);
-			sample.createCell(0).setCellValue("Nguyễn Văn A");
-			Cell phoneCell = sample.createCell(1);
-			phoneCell.setCellStyle(textStyle);
-			phoneCell.setCellValue("0901234567");
-			sample.createCell(2).setCellValue(1);
+			if (isDouble) {
+				header.createCell(0).setCellValue("Tên VĐV 1");
+				setPhoneCell(header.createCell(1), textStyle, "SĐT VĐV 1");
+				header.createCell(2).setCellValue("Tên VĐV 2");
+				setPhoneCell(header.createCell(3), textStyle, "SĐT VĐV 2");
+				header.createCell(4).setCellValue("Hạt giống");
 
-			sheet.setColumnWidth(0, 20 * 256);
-			sheet.setColumnWidth(1, 18 * 256);
-			sheet.setColumnWidth(2, 12 * 256);
+				sample.createCell(0).setCellValue("Nguyễn Văn A");
+				setPhoneCell(sample.createCell(1), textStyle, "0901234567");
+				sample.createCell(2).setCellValue("Trần Văn B");
+				setPhoneCell(sample.createCell(3), textStyle, "0907654321");
+				sample.createCell(4).setCellValue(1);
+
+				sheet.setColumnWidth(0, 20 * 256);
+				sheet.setColumnWidth(1, 18 * 256);
+				sheet.setColumnWidth(2, 20 * 256);
+				sheet.setColumnWidth(3, 18 * 256);
+				sheet.setColumnWidth(4, 12 * 256);
+			} else {
+				header.createCell(0).setCellValue("Tên hiển thị");
+				setPhoneCell(header.createCell(1), textStyle, "Số điện thoại");
+				header.createCell(2).setCellValue("Hạt giống");
+
+				sample.createCell(0).setCellValue("Nguyễn Văn A");
+				setPhoneCell(sample.createCell(1), textStyle, "0901234567");
+				sample.createCell(2).setCellValue(1);
+
+				sheet.setColumnWidth(0, 20 * 256);
+				sheet.setColumnWidth(1, 18 * 256);
+				sheet.setColumnWidth(2, 12 * 256);
+			}
 
 			workbook.write(out);
 			return out.toByteArray();
 		}
 	}
 
+	private void setPhoneCell(Cell cell, CellStyle textStyle, String value) {
+		cell.setCellStyle(textStyle);
+		cell.setCellValue(value);
+	}
+
 	@Override
-	public byte[] buildImportTemplateCsv() {
+	public byte[] buildImportTemplateCsv(Long tournamentId) {
 		// Công thức Excel ="..." để khi mở CSV, cột SĐT vẫn là text và giữ số 0 đầu
-		String csv = "Tên hiển thị,Số điện thoại,Hạt giống\nNguyễn Văn A,=\"0901234567\",1\n";
+		String csv = isDouble(tournamentId)
+				? "Tên VĐV 1,SĐT VĐV 1,Tên VĐV 2,SĐT VĐV 2,Hạt giống\nNguyễn Văn A,=\"0901234567\",Trần Văn B,=\"0907654321\",1\n"
+				: "Tên hiển thị,Số điện thoại,Hạt giống\nNguyễn Văn A,=\"0901234567\",1\n";
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		try {
 			out.write(UTF8_BOM);
@@ -149,40 +186,65 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		int skipped = 0;
 		int totalRows = 0;
 
+		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
+		int seedCol = isDouble ? 4 : 2;
+
 		Set<Integer> usedSeeds = new HashSet<>();
 		participantRepository.findByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue())
 				.forEach(p -> { if (p.getSeedNo() != null) usedSeeds.add(p.getSeedNo()); });
 
 		for (int i = 0; i < rows.size(); i++) {
 			String[] cols = rows.get(i);
-			if (isDataRowEmpty(cols)) {
+			if (isDataRowEmpty(cols, seedCol)) {
 				continue;
 			}
 
 			totalRows++;
 			int rowNo = i + 2;
 
-			String displayName = normalizeCell(cols, 0);
-			if (displayName == null || displayName.isBlank()) {
-				errors.add("Hàng " + rowNo + ": Tên hiển thị không được để trống");
+			String name1 = normalizeCell(cols, 0);
+			if (name1 == null || name1.isBlank()) {
+				errors.add("Hàng " + rowNo + ": Tên VĐV 1 không được để trống");
 				skipped++;
 				continue;
 			}
-			if (displayName.length() > 255) {
+			if (name1.length() > 255) {
 				errors.add("Hàng " + rowNo + ": Tên quá dài");
 				skipped++;
 				continue;
 			}
 
-			String phone = normalizePhone(normalizeCell(cols, 1));
-			if (phone != null && !phone.isBlank() && !isValidPhone(phone)) {
-				errors.add("Hàng " + rowNo + ": Số điện thoại không hợp lệ");
+			String phone1 = normalizePhone(normalizeCell(cols, 1));
+			if (phone1 != null && !phone1.isBlank() && !isValidPhone(phone1)) {
+				errors.add("Hàng " + rowNo + ": Số điện thoại VĐV 1 không hợp lệ");
 				skipped++;
 				continue;
 			}
 
+			String name2 = null;
+			String phone2 = null;
+			if (isDouble) {
+				name2 = normalizeCell(cols, 2);
+				if (name2 == null || name2.isBlank()) {
+					errors.add("Hàng " + rowNo + ": Tên VĐV 2 không được để trống (giải đôi)");
+					skipped++;
+					continue;
+				}
+				if (name2.length() > 255) {
+					errors.add("Hàng " + rowNo + ": Tên VĐV 2 quá dài");
+					skipped++;
+					continue;
+				}
+				phone2 = normalizePhone(normalizeCell(cols, 3));
+				if (phone2 != null && !phone2.isBlank() && !isValidPhone(phone2)) {
+					errors.add("Hàng " + rowNo + ": Số điện thoại VĐV 2 không hợp lệ");
+					skipped++;
+					continue;
+				}
+			}
+
 			Integer seedNo = null;
-			String seedRaw = normalizeCell(cols, 2);
+			String seedRaw = normalizeCell(cols, seedCol);
 			if (seedRaw != null && !seedRaw.isBlank()) {
 				try {
 					int parsed = Integer.parseInt(seedRaw.trim());
@@ -206,16 +268,20 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				usedSeeds.add(seedNo);
 			}
 
+			String displayName = isDouble
+					? ParticipantMemberFactory.composeDoubleDisplayName(name1, name2)
+					: name1;
+
 			Registration registration = registrationRepository.save(Registration.builder()
 					.tournament(tournament)
 					.user(null)
 					.registrationType(RegistrationType.MANUAL.getValue())
 					.playerFullName(displayName)
-					.playerPhone(phone)
+					.playerPhone(phone1)
 					.status(RegistrationStatus.APPROVED.getValue())
 					.build());
 
-			participantRepository.save(Participant.builder()
+			Participant participant = participantRepository.save(Participant.builder()
 					.tournament(tournament)
 					.registration(registration)
 					.participantType(tournament.getParticipantType())
@@ -223,6 +289,11 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 					.seedNo(seedNo)
 					.status(ParticipantStatus.ACTIVE.getValue())
 					.build());
+
+			if (isDouble) {
+				participantMemberRepository.saveAll(ParticipantMemberFactory.buildDoubleMembers(
+						participant, name1, phone1, null, name2, phone2));
+			}
 			imported++;
 		}
 
@@ -248,7 +319,9 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				rows.add(new String[] {
 						getCellString(row, 0),
 						getCellString(row, 1),
-						getCellString(row, 2)
+						getCellString(row, 2),
+						getCellString(row, 3),
+						getCellString(row, 4)
 				});
 			}
 		}
@@ -328,11 +401,11 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		return filename != null && filename.toLowerCase().endsWith(".csv");
 	}
 
-	private boolean isDataRowEmpty(String[] cols) {
+	private boolean isDataRowEmpty(String[] cols, int seedCol) {
 		if (cols == null || cols.length == 0) {
 			return true;
 		}
-		for (int i = 0; i <= 2; i++) {
+		for (int i = 0; i <= seedCol; i++) {
 			if (i < cols.length) {
 				String value = normalizeCell(cols, i);
 				if (value != null && !value.isBlank()) {
