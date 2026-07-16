@@ -54,6 +54,13 @@ app:
     connect-timeout-ms: ${MINIO_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${MINIO_READ_TIMEOUT_MS:5000}
     write-timeout-ms: ${MINIO_WRITE_TIMEOUT_MS:5000}
+  facebook:
+    page-id: ${FB_PAGE_ID:}
+    page-access-token: ${FB_PAGE_ACCESS_TOKEN:}
+    app-id: ${FB_APP_ID:}
+    app-secret: ${FB_APP_SECRET:}
+    use-system-user: ${FB_USE_SYSTEM_USER:false}
+    api-version: ${FB_API_VERSION:v21.0}
   payos:
     client-id: ${PAYOS_CLIENT_ID:}
     api-key: ${PAYOS_API_KEY:}

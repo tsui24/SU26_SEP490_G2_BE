@@ -275,11 +275,13 @@ public class ParticipantController {
         String source = (reg != null && RegistrationType.MANUAL.getValue().equals(reg.getRegistrationType()))
                 ? RegistrationType.MANUAL.getValue()
                 : (reg != null ? RegistrationType.ONLINE_REGISTRATION.getValue() : RegistrationType.MANUAL.getValue());
+        Long userId = (reg != null && reg.getUser() != null) ? reg.getUser().getId() : null;
         return ParticipantResponse.builder()
                 .id(p.getId())
                 .tournamentId(p.getTournament().getId())
                 .tournamentName(p.getTournament().getName())
                 .registrationId(reg != null ? reg.getId() : null)
+                .userId(userId)
                 .participantType(p.getParticipantType())
                 .displayName(p.getDisplayName())
                 .phone(reg != null ? reg.getPlayerPhone() : null)

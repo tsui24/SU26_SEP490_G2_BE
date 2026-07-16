@@ -320,11 +320,11 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 		Participant participant = participantRepository.findByIdWithDetails(participantId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-		// Lấy avatar từ participant, fallback sang UserProfile nếu có
 		String avatarUrl = participant.getAvtarUrl();
 		String billiardRank = null;
 		String bio = null;
 		Long userId = null;
+		String accountName = null;
 
 		if (participant.getRegistration() != null && participant.getRegistration().getUser() != null) {
 			userId = participant.getRegistration().getUser().getId();
@@ -335,10 +335,10 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 				}
 				billiardRank = profile.getBilliardRank();
 				bio = profile.getBio();
+				accountName = profile.getFullName();
 			}
 		}
 
-		// Lấy toàn bộ kết quả chính thức — nếu có userId thì lấy tất cả giải đã thi, ngược lại chỉ lấy giải này
 		List<TournamentResult> results;
 		if (userId != null) {
 			results = resultRepository.findByParticipantRegistrationUserId(userId);
@@ -349,7 +349,68 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 					.ifPresent(results::add);
 		}
 
-		List<PlayerPublicProfileResponse.TournamentAchievementEntry> achievements = results.stream()
+		List<PlayerPublicProfileResponse.TournamentAchievementEntry> achievements = buildAchievements(results);
+
+		return PlayerPublicProfileResponse.builder()
+				.participantId(participantId)
+				.userId(userId)
+				.displayName(participant.getDisplayName())
+				.accountName(accountName)
+				.avatarUrl(avatarUrl)
+				.seedNo(participant.getSeedNo())
+				.billiardRank(billiardRank)
+				.bio(bio)
+				.achievements(achievements)
+				.build();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public PlayerPublicProfileResponse getPlayerProfileByUserId(Long userId) {
+		UserProfile profile = userProfileRepository.findById(userId).orElse(null);
+
+		String accountName = null;
+		String avatarUrl = null;
+		String billiardRank = null;
+		String bio = null;
+
+		if (profile != null) {
+			accountName = profile.getFullName();
+			avatarUrl = profile.getAvatarUrl();
+			billiardRank = profile.getBilliardRank();
+			bio = profile.getBio();
+		}
+
+		List<TournamentResult> results = resultRepository.findByParticipantRegistrationUserId(userId);
+		List<PlayerPublicProfileResponse.TournamentAchievementEntry> achievements = buildAchievements(results);
+
+		// Lấy displayName từ participant gần nhất
+		List<Participant> participants = participantRepository.findByRegistrationUserId(userId);
+		String displayName = accountName;
+		Long latestParticipantId = null;
+		if (!participants.isEmpty()) {
+			Participant latest = participants.get(participants.size() - 1);
+			latestParticipantId = latest.getId();
+			if (displayName == null || displayName.isBlank()) {
+				displayName = latest.getDisplayName();
+			}
+		}
+
+		return PlayerPublicProfileResponse.builder()
+				.participantId(latestParticipantId)
+				.userId(userId)
+				.displayName(displayName)
+				.accountName(accountName)
+				.avatarUrl(avatarUrl)
+				.billiardRank(billiardRank)
+				.bio(bio)
+				.achievements(achievements)
+				.build();
+	}
+
+	private List<PlayerPublicProfileResponse.TournamentAchievementEntry> buildAchievements(
+			List<TournamentResult> results) {
+		return results.stream()
 				.map(tr -> PlayerPublicProfileResponse.TournamentAchievementEntry.builder()
 						.tournamentId(tr.getTournament().getId())
 						.tournamentName(tr.getTournament().getName())
@@ -361,16 +422,6 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 						.isOfficial(TournamentStatus.COMPLETED.getValue().equals(tr.getTournament().getStatus()))
 						.build())
 				.toList();
-
-		return PlayerPublicProfileResponse.builder()
-				.participantId(participantId)
-				.displayName(participant.getDisplayName())
-				.avatarUrl(avatarUrl)
-				.seedNo(participant.getSeedNo())
-				.billiardRank(billiardRank)
-				.bio(bio)
-				.achievements(achievements)
-				.build();
 	}
 
 	/**

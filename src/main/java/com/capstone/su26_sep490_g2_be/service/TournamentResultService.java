@@ -17,4 +17,6 @@ public interface TournamentResultService {
 	TournamentRankingResponse getRankings(Long tournamentId);
 
 	PlayerPublicProfileResponse getParticipantProfile(Long participantId);
+
+	PlayerPublicProfileResponse getPlayerProfileByUserId(Long userId);
 }
