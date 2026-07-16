@@ -19,6 +19,9 @@ public class SaveTournamentConfigRequest {
 	@Schema(description = "Phương thức xếp hạt giống", example = "ELO")
 	private String seedingMethod;
 
+	@Schema(description = "Số người dự kiến được gán hạt giống — bắt buộc khi seedingMethod khác RANDOM", example = "16")
+	private Integer seedCount;
+
 	@NotEmpty(message = "Danh sách field cấu hình không được để trống")
 	@Valid
 	private List<ConfigFieldValueItem> fields;

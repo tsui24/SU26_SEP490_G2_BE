@@ -35,6 +35,13 @@ public class ManagerRegistrationController {
 		return ResponseEntity.ok(ApiResponse.success(ownerTournamentService.listRegistrationFormTemplates()));
 	}
 
+	@Operation(summary = "Preview template form đăng ký")
+	@GetMapping("/registration-form-templates/{id}/preview")
+	public ResponseEntity<ApiResponse<RegistrationFormPreviewResponse>> previewRegistrationFormTemplate(
+			@PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(ownerTournamentService.previewRegistrationFormTemplate(id)));
+	}
+
 	@Operation(summary = "Preview form đăng ký của giải")
 	@GetMapping("/tournaments/{id}/registration-form")
 	public ResponseEntity<ApiResponse<RegistrationFormPreviewResponse>> getTournamentRegistrationForm(

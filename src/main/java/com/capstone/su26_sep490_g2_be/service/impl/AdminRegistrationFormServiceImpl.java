@@ -271,6 +271,16 @@ public class AdminRegistrationFormServiceImpl implements AdminRegistrationFormSe
 
 	@Override
 	@Transactional(readOnly = true)
+	public RegistrationFormPreviewResponse getActiveTemplatePreview(Long id) {
+		RegistrationFormTemplate template = getTemplateEntity(id);
+		if (!Boolean.TRUE.equals(template.getIsActive())) {
+			throw new BusinessException(ErrorCode.REG_TEMPLATE_NOT_FOUND);
+		}
+		return registrationFormService.resolveTemplatePreview(template);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
 	public OwnerRegistrationFormTemplateListResponse listActiveTemplatesForOwner() {
 		List<OwnerRegistrationFormTemplateListResponse.OwnerRegistrationFormTemplateItemResponse> items =
 				templateRepository.findByIsActiveTrueOrderBySortOrderAscCreatedAtAsc().stream()

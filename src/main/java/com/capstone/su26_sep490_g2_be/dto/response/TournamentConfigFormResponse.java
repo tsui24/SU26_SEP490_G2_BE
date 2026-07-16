@@ -19,6 +19,7 @@ public class TournamentConfigFormResponse {
 	private String formatDescription;
 	private String gameType;
 	private String seedingMethod;
+	private Integer seedCount;
 	private Boolean isConfigComplete;
 	private List<ConfigFieldItem> fields;
 	private List<RaceToRuleItem> raceToRules;

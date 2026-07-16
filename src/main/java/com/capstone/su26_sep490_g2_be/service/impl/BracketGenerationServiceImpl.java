@@ -72,11 +72,14 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         TournamentConfig config = tournamentConfigRepository.findById(tournamentId).orElse(null);
         String seedingMethod = config != null ? config.getSeedingMethod() : SeedingMethod.RANDOM.name();
 
-        if (SeedingMethod.RANDOM.name().equals(seedingMethod)) {
-            Collections.shuffle(participants);
-        } else {
-            participants.sort(Comparator.comparingInt(p -> p.getSeedNo() != null ? p.getSeedNo() : Integer.MAX_VALUE));
+        if (!SeedingMethod.RANDOM.name().equals(seedingMethod) && config != null && config.getSeedCount() != null) {
+            long seededCount = participants.stream().filter(p -> p.getSeedNo() != null).count();
+            if (seededCount < config.getSeedCount()) {
+                throw new BusinessException(ErrorCode.TOURNAMENT_SEED_COUNT_INSUFFICIENT);
+            }
         }
+
+        participants = resolveSeedRankOrder(seedingMethod, participants);
 
         String format = tournament.getFormat();
         BracketResult result = switch (format) {
@@ -110,10 +113,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     /* ═══════════════════════════════════════════════════════════
      *  SINGLE ELIMINATION
      *
-     *  BYE distribution (n=10, bracketSize=16):
-     *    numByes = 6  → positions 1-6 are BYE slots (auto-advance)
-     *    positions 7-8 are real matches (4 players)
-     *    R2 (Tứ kết): 8 slots fully populated ✓
+     *  Vòng 1 được xếp qua assignSeededRound1() theo standardSeedOrder() — bracketSize - n slot
+     *  "ảo" (rank > n) tự động thành BYE, và luôn rơi vào seed cao nhất trước (VD n=10,
+     *  bracketSize=16 → seed 1-6 nhận BYE, seed 7-10 thi đấu thật ở R1) thay vì cố định theo vị trí.
      * ═══════════════════════════════════════════════════════════ */
 
     private BracketResult generateSingleElimination(Tournament t, List<Participant> participants) {
@@ -154,22 +156,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             }
         }
 
-        // BYE distribution: first numByes positions auto-advance, rest are real matches
-        int numByes = bracketSize - n;
-        for (int i = 0; i < numByes; i++) {
-            Match m = grid[1][i + 1];
-            m.setPlayer1(participants.get(i));
-            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
-            matchRepository.save(m);
-            placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
-        }
-        int realIdx = numByes;
-        for (int pos = numByes + 1; pos <= bracketSize / 2; pos++) {
-            Match m = grid[1][pos];
-            if (realIdx < n) m.setPlayer1(participants.get(realIdx++));
-            if (realIdx < n) m.setPlayer2(participants.get(realIdx++));
-            matchRepository.save(m);
-        }
+        // Xếp vòng 1 theo thuật toán seeding chuẩn (seed cao được ưu tiên BYE, seed 1&2 tách 2 nửa...)
+        assignSeededRound1(grid[1], participants, bracketSize);
 
         // Optional third-place match
         if (resolveThirdPlaceEnabled(t.getId(), t.getFormat()) && totalRounds >= 2) {
@@ -317,25 +305,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         lGrid[lTotalRounds][1].setWinSlot("player2");
         matchRepository.save(lGrid[lTotalRounds][1]);
 
-        // ── Assign participants to W-R1 ───────────────────────
-        int numByes = bracketSize - n;
-
-        // BYE slots (top positions)
-        for (int i = 0; i < numByes; i++) {
-            Match m = wGrid[1][i + 1];
-            m.setPlayer1(participants.get(i));
-            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
-            matchRepository.save(m);
-            placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
-        }
-        // Real match slots
-        int realIdx = numByes;
-        for (int pos = numByes + 1; pos <= bracketSize / 2; pos++) {
-            Match m = wGrid[1][pos];
-            if (realIdx < n) m.setPlayer1(participants.get(realIdx++));
-            if (realIdx < n) m.setPlayer2(participants.get(realIdx++));
-            matchRepository.save(m);
-        }
+        // ── Assign participants to W-R1 (seeding chuẩn — xem assignSeededRound1) ──
+        assignSeededRound1(wGrid[1], participants, bracketSize);
 
         // ── Wire Winners → Losers drops ───────────────────────
 
@@ -568,6 +539,10 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public void populateLeaguePlayoff(Long tournamentId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!TournamentStatus.IN_PROGRESS.getValue().equals(t.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
 
         List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);
         TournamentStage groupStage = stages.stream()
@@ -817,6 +792,79 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         matchRepository.save(r);
     }
 
+    /**
+     * Sắp participants theo "seed rank" (index 0 = hạng 1 — mạnh nhất, được ưu tiên BYE khi có).
+     * - RANDOM: bỏ qua seedNo, xáo toàn bộ ngẫu nhiên (bốc thăm hoàn toàn).
+     * - Còn lại (MANUAL/ELO): người có seedNo được xếp trước theo seedNo tăng dần; người KHÔNG có
+     *   seedNo được xáo ngẫu nhiên và xếp sau — cho phép seed một phần (VD chỉ 16/64 người có hạt
+     *   giống), phần còn lại vẫn bốc thăm công bằng thay vì giữ nguyên thứ tự đăng ký/tạo participant.
+     */
+    private List<Participant> resolveSeedRankOrder(String seedingMethod, List<Participant> participants) {
+        if (SeedingMethod.RANDOM.name().equals(seedingMethod)) {
+            List<Participant> shuffled = new ArrayList<>(participants);
+            Collections.shuffle(shuffled);
+            return shuffled;
+        }
+        List<Participant> seeded = participants.stream()
+                .filter(p -> p.getSeedNo() != null)
+                .sorted(Comparator.comparingInt(Participant::getSeedNo))
+                .collect(Collectors.toCollection(ArrayList::new));
+        List<Participant> unseeded = participants.stream()
+                .filter(p -> p.getSeedNo() == null)
+                .collect(Collectors.toCollection(ArrayList::new));
+        Collections.shuffle(unseeded);
+        seeded.addAll(unseeded);
+        return seeded;
+    }
+
+    /**
+     * Thứ tự seeding chuẩn cho 1 nhánh {@code size} slot (lũy thừa 2) — thuật toán đệ quy dùng ở
+     * mọi giải đấu có hạt giống thật (tennis, NCAA...): đảm bảo seed 1 & 2 luôn ở 2 nửa nhánh khác
+     * nhau, seed 1-4 ở 4 phần tư khác nhau, v.v. Trả về danh sách 1..size theo đúng thứ tự slot
+     * (2 phần tử liên tiếp = 1 cặp đấu vòng 1).
+     */
+    private static List<Integer> standardSeedOrder(int size) {
+        if (size == 1) return new ArrayList<>(List.of(1));
+        List<Integer> prev = standardSeedOrder(size / 2);
+        List<Integer> result = new ArrayList<>(size);
+        for (int s : prev) {
+            result.add(s);
+            result.add(size + 1 - s);
+        }
+        return result;
+    }
+
+    /**
+     * Xếp {@code participants} (đã ở seed rank order — xem {@link #resolveSeedRankOrder}) vào vòng 1
+     * theo {@link #standardSeedOrder}. Rank > số người thực (do bracketSize > n) là slot "ảo" → BYE
+     * cho đối thủ còn lại, và BYE luôn rơi vào seed cao nhất trước — đúng quy ước giải đấu thật.
+     */
+    private void assignSeededRound1(Match[] r1Grid, List<Participant> participants, int bracketSize) {
+        int n = participants.size();
+        List<Integer> order = standardSeedOrder(bracketSize);
+        for (int slot = 0; slot < bracketSize; slot += 2) {
+            int pos = (slot / 2) + 1;
+            int rankP1 = order.get(slot);
+            int rankP2 = order.get(slot + 1);
+            Participant p1 = rankP1 <= n ? participants.get(rankP1 - 1) : null;
+            Participant p2 = rankP2 <= n ? participants.get(rankP2 - 1) : null;
+
+            Match m = r1Grid[pos];
+            m.setPlayer1(p1);
+            m.setPlayer2(p2);
+            Participant byeWinner = (p1 != null && p2 == null) ? p1 : (p2 != null && p1 == null) ? p2 : null;
+            if (byeWinner != null) {
+                m.setIsBye(true);
+                m.setStatus(MatchStatus.BYE.getValue());
+                m.setWinner(byeWinner);
+            }
+            matchRepository.save(m);
+            if (byeWinner != null) {
+                placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), byeWinner);
+            }
+        }
+    }
+
     private Participant getSlot(Match m, String slot) { return "player1".equals(slot) ? m.getPlayer1() : m.getPlayer2(); }
     private void setSlot(Match m, String slot, Participant p) { if ("player1".equals(slot)) m.setPlayer1(p); else m.setPlayer2(p); }
 
@@ -1007,22 +1055,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
             }
         }
 
-        // ── Assign participants to W-R1 ──────────────────────────────
-        int numByes = bracketSize - n;
-        for (int i = 0; i < numByes; i++) {
-            Match m = wGrid[1][i + 1];
-            m.setPlayer1(participants.get(i));
-            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
-            matchRepository.save(m);
-            placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), m.getPlayer1());
-        }
-        int realIdx = numByes;
-        for (int pos = numByes + 1; pos <= bracketSize / 2; pos++) {
-            Match m = wGrid[1][pos];
-            if (realIdx < n) m.setPlayer1(participants.get(realIdx++));
-            if (realIdx < n) m.setPlayer2(participants.get(realIdx++));
-            matchRepository.save(m);
-        }
+        // ── Assign participants to W-R1 (seeding chuẩn — xem assignSeededRound1) ──
+        assignSeededRound1(wGrid[1], participants, bracketSize);
 
         // ── W → L drops (after participant assignment, skip BYEs) ────
         // W-R1 (bracketSize/2 matches) → L-R1 (bracketSize/4 matches)
@@ -1147,6 +1181,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     @Override
     @Transactional
     public void eliminateBottomParticipants(Long tournamentId, int keepCount) {
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!TournamentStatus.IN_PROGRESS.getValue().equals(tournament.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
+
         List<StandingsEntryResponse> standings = getLeagueStandings(tournamentId);
         if (keepCount >= standings.size()) return;
 
