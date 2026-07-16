@@ -13,6 +13,9 @@ public interface RegistrationService {
 
 	Registration register(Long tournamentId, Long userId, Registration registration);
 
+	/** Tạo Participant (+ ParticipantMember nếu giải đôi) từ 1 Registration đã duyệt — idempotent. */
+	void autoCreateParticipant(Registration reg);
+
 	TournamentRegistrationResponse submitRegistration(
 			Long tournamentId, Long userId, SubmitTournamentRegistrationRequest request);
 

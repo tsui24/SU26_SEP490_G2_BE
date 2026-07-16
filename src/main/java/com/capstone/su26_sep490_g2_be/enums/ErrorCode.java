@@ -84,6 +84,7 @@ public enum ErrorCode {
 	TOURNAMENT_MATCHES_NOT_FINISHED("TOURNAMENT_005", "Vẫn còn trận đấu chưa kết thúc — hãy hoàn thành tất cả trận trước khi kết thúc giải", HttpStatus.CONFLICT),
 	PARTICIPANT_SEED_DUPLICATE("TOURNAMENT_006", "Số hạt giống này đã được gán cho người tham gia khác", HttpStatus.CONFLICT),
 	TOURNAMENT_SEED_COUNT_INSUFFICIENT("TOURNAMENT_007", "Số người đã được gán hạt giống chưa đủ theo cấu hình — hãy gán thêm hạt giống hoặc giảm số lượng cấu hình trước khi bốc thăm", HttpStatus.CONFLICT),
+	PARTICIPANT_PARTNER_REQUIRED("TOURNAMENT_008", "Giải đôi yêu cầu nhập đủ thông tin cả 2 thành viên", HttpStatus.BAD_REQUEST),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),

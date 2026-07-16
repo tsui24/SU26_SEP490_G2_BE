@@ -9,10 +9,12 @@ import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
 import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.ParticipantMemberRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldDefinitionRepository;
@@ -26,6 +28,7 @@ import com.capstone.su26_sep490_g2_be.service.PayOSService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationService;
 import com.capstone.su26_sep490_g2_be.util.PageableUtil;
+import com.capstone.su26_sep490_g2_be.util.ParticipantMemberFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -47,6 +50,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 			"player_full_name", "player1_full_name", "full_name");
 	private static final List<String> PHONE_KEYS = List.of(
 			"player_phone", "player1_phone", "phone");
+	private static final List<String> PARTNER_FULL_NAME_KEYS = List.of(
+			"player2_full_name", "partner_full_name");
+	private static final List<String> PARTNER_PHONE_KEYS = List.of(
+			"player2_phone", "partner_phone");
 
 	private final RegistrationRepository registrationRepository;
 	private final TournamentRepository tournamentRepository;
@@ -57,6 +64,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private final PaymentRepository paymentRepository;
 	private final PayOSService payOSService;
 	private final ParticipantRepository participantRepository;
+	private final ParticipantMemberRepository participantMemberRepository;
 	private final ApplicationEventPublisher eventPublisher;
 	private final MailContextBuilder mailContextBuilder;
 
@@ -101,6 +109,11 @@ public class RegistrationServiceImpl implements RegistrationService {
 		registrationFormService.loadActiveTemplate(tournament.getRegistrationFormTemplateId());
 		Map<String, String> normalizedValues = registrationFormService.validateAndNormalizeFieldValues(
 				tournament.getRegistrationFormTemplateId(), request.getFieldValues());
+
+		if (ParticipantType.DOUBLE.name().equals(tournament.getParticipantType())
+				&& resolveValue(normalizedValues, PARTNER_FULL_NAME_KEYS, null) == null) {
+			throw new BusinessException(ErrorCode.PARTICIPANT_PARTNER_REQUIRED);
+		}
 
 		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
@@ -312,15 +325,29 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.findFirst()
 				.orElse(null);
 		if (existing != null) {
-			return CheckoutResponse.builder()
-					.paymentId(existing.getId())
-					.registrationId(registrationId)
-					.orderCode(Long.parseLong(existing.getTransactionCode() != null
-							? existing.getTransactionCode().split(":")[0] : String.valueOf(existing.getId())))
-					.amount(fee)
-					.checkoutUrl(existing.getCheckoutUrl())
-					.description(tournament.getName())
-					.build();
+			// Đơn cũ có thể đã bị hủy/hết hạn bên PayOS (user bấm "Hủy" trên trang PayOS) —
+			// phải hỏi lại PayOS trước khi tái dùng link, nếu không link cũ sẽ chết
+			// ("Đơn hàng không tồn tại hoặc đã được xử lý") dù DB vẫn ghi PENDING.
+			String remoteStatus = payOSService.getOrderStatus(existing.getId());
+			if ("PAID".equalsIgnoreCase(remoteStatus)) {
+				markAsPaid(existing.getId(), null);
+				throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PAID);
+			}
+			boolean deadOrder = "CANCELLED".equalsIgnoreCase(remoteStatus) || "EXPIRED".equalsIgnoreCase(remoteStatus);
+			if (!deadOrder) {
+				return CheckoutResponse.builder()
+						.paymentId(existing.getId())
+						.registrationId(registrationId)
+						.orderCode(Long.parseLong(existing.getTransactionCode() != null
+								? existing.getTransactionCode().split(":")[0] : String.valueOf(existing.getId())))
+						.amount(fee)
+						.checkoutUrl(existing.getCheckoutUrl())
+						.description(tournament.getName())
+						.build();
+			}
+			existing.setStatus(PaymentStatus.CANCELLED.getValue());
+			paymentRepository.save(existing);
+			// fall through: tạo payment + link PayOS mới bên dưới
 		}
 
 		// Tạo payment record trước để lấy ID dùng làm orderCode
@@ -429,16 +456,47 @@ public class RegistrationServiceImpl implements RegistrationService {
 		}
 	}
 
-	private void autoCreateParticipant(Registration reg) {
+	@Override
+	@Transactional
+	public void autoCreateParticipant(Registration reg) {
 		if (participantRepository.existsByRegistrationId(reg.getId())) return;
+		Tournament tournament = reg.getTournament();
+		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
+
+		String partnerFullName = null;
+		String partnerPhone = null;
+		if (isDouble) {
+			Map<String, String> fieldValues = loadFieldValues(reg.getId());
+			partnerFullName = resolveValue(fieldValues, PARTNER_FULL_NAME_KEYS, null);
+			partnerPhone = resolveValue(fieldValues, PARTNER_PHONE_KEYS, null);
+		}
+
+		String displayName = (isDouble && partnerFullName != null)
+				? ParticipantMemberFactory.composeDoubleDisplayName(reg.getPlayerFullName(), partnerFullName)
+				: reg.getPlayerFullName();
+
 		Participant participant = Participant.builder()
-				.tournament(reg.getTournament())
+				.tournament(tournament)
 				.registration(reg)
-				.participantType(reg.getTournament().getParticipantType())
-				.displayName(reg.getPlayerFullName())
+				.participantType(tournament.getParticipantType())
+				.displayName(displayName)
 				.status(ParticipantStatus.ACTIVE.getValue())
 				.build();
-		participantRepository.save(participant);
+		participant = participantRepository.save(participant);
+
+		if (isDouble && partnerFullName != null) {
+			participantMemberRepository.saveAll(ParticipantMemberFactory.buildDoubleMembers(
+					participant,
+					reg.getPlayerFullName(), reg.getPlayerPhone(), reg.getUser(),
+					partnerFullName, partnerPhone));
+		}
+	}
+
+	private Map<String, String> loadFieldValues(Long registrationId) {
+		Map<String, String> values = new HashMap<>();
+		fieldValueRepository.findByRegistrationIdOrderByIdAsc(registrationId)
+				.forEach(v -> values.put(v.getId().getFieldKey(), v.getValue()));
+		return values;
 	}
 
 	private String resolveValue(Map<String, String> values, List<String> keys, String fallback) {
