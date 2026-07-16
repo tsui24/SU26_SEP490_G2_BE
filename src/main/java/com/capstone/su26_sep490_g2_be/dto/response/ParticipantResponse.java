@@ -12,6 +12,7 @@ public class ParticipantResponse {
     private Long tournamentId;
     private String tournamentName;
     private Long registrationId;
+    private Long userId;
     private String participantType;
     private String displayName;
     private String phone;

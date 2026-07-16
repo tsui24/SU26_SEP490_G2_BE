@@ -15,7 +15,9 @@ import java.util.List;
 public class PlayerPublicProfileResponse {
 
     private Long participantId;
+    private Long userId;
     private String displayName;
+    private String accountName;
     private String avatarUrl;
     private Integer seedNo;
     private String billiardRank;
