@@ -51,6 +51,12 @@ public class UpdateTournamentRequest {
 	@Schema(description = "Cho phép người chơi đăng ký")
 	private Boolean isRegister;
 
+	@Schema(description = "Hiển thị giải đấu trên trang công khai")
+	private Boolean isShowTournament;
+
+	@Schema(description = "Công khai tỉ số & xếp hạng cho người xem")
+	private Boolean isPublicRatio;
+
 	@Schema(description = "Template form đăng ký — bắt buộc khi isRegister=true")
 	private Long registrationFormTemplateId;
 
