@@ -55,6 +55,9 @@ public class SecurityConfig {
 						.requestMatchers(PUBLIC_URLS).permitAll()
 						.requestMatchers("/api/vi/profile/**").authenticated()
 
+						// Shared endpoints (Owner + Manager)
+						.requestMatchers("/api/v1/shared/facebook/**").hasAnyRole("OWNER", "MANAGER")
+
 						// Role-based URL authorization
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 						.requestMatchers("/api/v1/owner/**").hasRole("OWNER")

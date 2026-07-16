@@ -23,6 +23,7 @@ import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
+import com.capstone.su26_sep490_g2_be.service.TournamentPublishedEvent;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
@@ -197,6 +198,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(request.getStartAt())
 				.endAt(request.getEndAt())
 				.isRegister(isRegister)
+				.isShowTournament(Boolean.TRUE.equals(request.getIsShowTournament()))
+				.isPublicRatio(Boolean.TRUE.equals(request.getIsPublicRatio()))
 				.registrationFormTemplateId(isRegister ? request.getRegistrationFormTemplateId() : null)
 				.createdBy(creator)
 				.build();
@@ -292,6 +295,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				tournament.setRegistrationFormTemplateId(null);
 			}
 		}
+		if (request.getIsShowTournament() != null) {
+			tournament.setIsShowTournament(request.getIsShowTournament());
+		}
+		if (request.getIsPublicRatio() != null) {
+			tournament.setIsPublicRatio(request.getIsPublicRatio());
+		}
 		if (request.getRegistrationFormTemplateId() != null) {
 			tournament.setRegistrationFormTemplateId(request.getRegistrationFormTemplateId());
 		}
@@ -348,6 +357,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.endAt(tournament.getEndAt())
 				.configComplete(configComplete)
 				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+				.isPublicRatio(Boolean.TRUE.equals(tournament.getIsPublicRatio()))
+				.isShowTournament(Boolean.TRUE.equals(tournament.getIsShowTournament()))
 				.approvedCount(approved)
 				.remainingSlots(remaining)
 				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
@@ -382,6 +393,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 		Specification<Tournament> spec = buildSpec(null, statusParam, searchParam,
 				List.of(TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue()));
+		spec = spec.and((root, query, cb) -> cb.equal(root.get("isShowTournament"), true));
 		Page<Tournament> result = tournamentRepository.findAll(spec, pageable);
 		return PageResponse.of(result, this::toPublicListItem);
 	}
@@ -393,6 +405,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 		if (TournamentStatus.DRAFT.getValue().equals(tournament.getStatus())
 				|| TournamentStatus.CANCELLED.getValue().equals(tournament.getStatus())) {
+			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+		}
+		if (!Boolean.TRUE.equals(tournament.getIsShowTournament())) {
 			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
 		}
 		TournamentFormatDefinition format = formatRepository.findById(tournament.getFormat()).orElse(null);
@@ -420,6 +435,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+				.isPublicRatio(Boolean.TRUE.equals(tournament.getIsPublicRatio()))
+				.isShowTournament(Boolean.TRUE.equals(tournament.getIsShowTournament()))
 				.approvedCount(approved)
 				.remainingSlots(remaining)
 				.registrationFormTemplateCode(registrationTemplate != null ? registrationTemplate.getCode() : null)
@@ -705,6 +722,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.variables(variables)
 				.entityKey("TOURNAMENT-STATUS-" + tournament.getId() + "-" + newStatus)
 				.build());
+
+		if (TournamentStatus.OPEN_FOR_REGISTRATION.getValue().equals(newStatus)) {
+			eventPublisher.publishEvent(TournamentPublishedEvent.builder()
+					.tournamentId(tournament.getId())
+					.build());
+		}
 
 		return PatchTournamentStatusResponse.builder()
 				.id(tournamentId)

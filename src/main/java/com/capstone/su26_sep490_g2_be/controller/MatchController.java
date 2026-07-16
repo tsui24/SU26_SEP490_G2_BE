@@ -38,6 +38,7 @@ public class MatchController {
     private final MatchService matchService;
     private final MatchBroadcastService broadcastService;
     private final TournamentResultService tournamentResultService;
+    private final com.capstone.su26_sep490_g2_be.repository.TournamentRepository tournamentRepository;
 
     /* ─── Bracket generation ─────────────────────────────────── */
 
@@ -110,6 +111,7 @@ public class MatchController {
     @Operation(summary = "Danh sách stage + trận đấu — Public (khi tournament cho phép)")
     @GetMapping("/tournaments/{id}/stages")
     public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> stagesPublic(@PathVariable Long id) {
+        requirePublicRatio(id);
         return ResponseEntity.ok(ApiResponse.success(buildStageResponse(id)));
     }
 
@@ -139,6 +141,7 @@ public class MatchController {
     @Operation(summary = "Xếp hạng vòng tròn — Public")
     @GetMapping("/tournaments/{id}/standings")
     public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> standingsPublic(@PathVariable Long id) {
+        requirePublicRatio(id);
         return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.getLeagueStandings(id)));
     }
 
@@ -149,6 +152,7 @@ public class MatchController {
     @Operation(summary = "Xếp hạng giải đấu (theo bracket) — Public")
     @GetMapping("/tournaments/{id}/rankings")
     public ResponseEntity<ApiResponse<TournamentRankingResponse>> rankingsPublic(@PathVariable Long id) {
+        requirePublicRatio(id);
         return ResponseEntity.ok(ApiResponse.success(tournamentResultService.getRankings(id)));
     }
 
@@ -201,6 +205,7 @@ public class MatchController {
     @Operation(summary = "Tất cả trận đấu — Public")
     @GetMapping("/tournaments/{id}/matches")
     public ResponseEntity<ApiResponse<List<MatchResponse>>> matchesPublic(@PathVariable Long id) {
+        requirePublicRatio(id);
         return ResponseEntity.ok(ApiResponse.success(buildMatchList(id)));
     }
 
@@ -423,6 +428,14 @@ public class MatchController {
         broadcastService.broadcastBracketSync(tournamentId,
                 bracketHelper.getMatchesForTournament(tournamentId));
         return resp;
+    }
+
+    private void requirePublicRatio(Long tournamentId) {
+        var tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!Boolean.TRUE.equals(tournament.getIsPublicRatio())) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
     }
 
     private Long extractUserId(Authentication auth) {
