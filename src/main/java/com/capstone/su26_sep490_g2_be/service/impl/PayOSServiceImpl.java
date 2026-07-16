@@ -73,6 +73,34 @@ public class PayOSServiceImpl implements com.capstone.su26_sep490_g2_be.service.
     }
 
     @Override
+    public String getOrderStatus(long orderCode) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("x-client-id", payOSProperties.getClientId());
+        headers.set("x-api-key", payOSProperties.getApiKey());
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    payOSProperties.getApiUrl() + "/v2/payment-requests/" + orderCode,
+                    HttpMethod.GET,
+                    request,
+                    String.class);
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            String code = root.path("code").asText();
+            if (!"00".equals(code)) {
+                log.warn("PayOS getOrderStatus non-success: orderCode={} code={} desc={}",
+                        orderCode, code, root.path("desc").asText());
+                return null;
+            }
+            return root.path("data").path("status").asText(null);
+        } catch (Exception e) {
+            log.error("PayOS getOrderStatus error for orderCode={}: {}", orderCode, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    @Override
     public boolean verifyWebhookSignature(String rawBody) {
         try {
             JsonNode root = objectMapper.readTree(rawBody);

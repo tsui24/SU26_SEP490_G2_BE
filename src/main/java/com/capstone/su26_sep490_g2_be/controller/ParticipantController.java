@@ -11,18 +11,23 @@ import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.ParticipantMemberRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.impl.MailContextBuilder;
+import com.capstone.su26_sep490_g2_be.util.ParticipantMemberFactory;
 import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
 import org.springframework.security.core.Authentication;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.ParticipantExcelService;
+import com.capstone.su26_sep490_g2_be.service.RegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +39,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -49,8 +55,10 @@ public class ParticipantController {
 
     private final TournamentRepository tournamentRepository;
     private final ParticipantRepository participantRepository;
+    private final ParticipantMemberRepository participantMemberRepository;
     private final RegistrationRepository registrationRepository;
     private final ParticipantExcelService participantExcelService;
+    private final RegistrationService registrationService;
     private final SecurityUtil securityUtil;
     private final ApplicationEventPublisher eventPublisher;
     private final MailContextBuilder mailContextBuilder;
@@ -78,6 +86,7 @@ public class ParticipantController {
     /* ── Manual add ── */
     @Operation(summary = "Thêm người tham gia thủ công (Owner)")
     @PostMapping("/api/v1/owner/tournaments/{id}/participants/manual")
+    @Transactional
     public ResponseEntity<ApiResponse<ParticipantResponse>> addManualOwner(
             @PathVariable Long id,
             @Valid @RequestBody ManualAddParticipantRequest request,
@@ -88,6 +97,7 @@ public class ParticipantController {
 
     @Operation(summary = "Thêm người tham gia thủ công (Manager)")
     @PostMapping("/api/v1/manager/tournaments/{id}/participants/manual")
+    @Transactional
     public ResponseEntity<ApiResponse<ParticipantResponse>> addManualManager(
             @PathVariable Long id,
             @Valid @RequestBody ManualAddParticipantRequest request,
@@ -164,14 +174,7 @@ public class ParticipantController {
 
         for (Registration reg : approvedRegs) {
             if (!participantRepository.existsByRegistrationId(reg.getId())) {
-                Participant participant = Participant.builder()
-                        .tournament(tournament)
-                        .registration(reg)
-                        .participantType(tournament.getParticipantType())
-                        .displayName(reg.getPlayerFullName())
-                        .status(ParticipantStatus.ACTIVE.getValue())
-                        .build();
-                participantRepository.save(participant);
+                registrationService.autoCreateParticipant(reg);
                 log.info("Auto-synced participant from registration #{}", reg.getId());
             }
         }
@@ -183,8 +186,8 @@ public class ParticipantController {
         boolean asCsv = "csv".equalsIgnoreCase(format);
         try {
             byte[] bytes = asCsv
-                    ? participantExcelService.buildImportTemplateCsv()
-                    : participantExcelService.buildImportTemplate();
+                    ? participantExcelService.buildImportTemplateCsv(tournamentId)
+                    : participantExcelService.buildImportTemplate(tournamentId);
             String filename = asCsv
                     ? participantExcelService.getTemplateCsvFilename()
                     : participantExcelService.getTemplateFilename();
@@ -205,19 +208,49 @@ public class ParticipantController {
 
     private ParticipantResponse addManual(Long tournamentId, ManualAddParticipantRequest request,
                                           Authentication authentication) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
+        Tournament tournament = tournamentRepository.findByIdWithLock(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+            throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+        }
+
+        if (tournament.getMaxParticipants() != null) {
+            long activeCount = participantRepository.countByTournamentIdAndStatus(
+                    tournamentId, ParticipantStatus.ACTIVE.getValue());
+            if (activeCount >= tournament.getMaxParticipants()) {
+                throw new BusinessException(ErrorCode.TOURNAMENT_FULL);
+            }
+        }
+
+        if (request.getSeedNo() != null && participantRepository.existsByTournamentIdAndStatusAndSeedNo(
+                tournamentId, ParticipantStatus.ACTIVE.getValue(), request.getSeedNo())) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
+        }
 
         User approver = securityUtil.resolveCurrentUser(authentication);
 
         String phone = request.getPhone();
         if (phone != null) phone = phone.trim().isEmpty() ? null : phone.trim();
 
+        boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
+        String partnerFullName = request.getPartnerFullName() != null ? request.getPartnerFullName().trim() : null;
+        if (isDouble && (partnerFullName == null || partnerFullName.isEmpty())) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_PARTNER_REQUIRED);
+        }
+        String partnerPhone = request.getPartnerPhone();
+        if (partnerPhone != null) partnerPhone = partnerPhone.trim().isEmpty() ? null : partnerPhone.trim();
+
+        String displayName = request.getDisplayName().trim();
+        if (isDouble) {
+            displayName = ParticipantMemberFactory.composeDoubleDisplayName(displayName, partnerFullName);
+        }
+
         Registration registration = Registration.builder()
                 .tournament(tournament)
                 .user(null)
                 .registrationType(RegistrationType.MANUAL.getValue())
-                .playerFullName(request.getDisplayName().trim())
+                .playerFullName(displayName)
                 .playerPhone(phone)
                 .note(request.getNote())
                 .status(RegistrationStatus.APPROVED.getValue())
@@ -230,11 +263,18 @@ public class ParticipantController {
                 .tournament(tournament)
                 .registration(registration)
                 .participantType(tournament.getParticipantType())
-                .displayName(request.getDisplayName().trim())
+                .displayName(displayName)
                 .seedNo(request.getSeedNo())
                 .status(ParticipantStatus.ACTIVE.getValue())
                 .build();
         participant = participantRepository.save(participant);
+
+        if (isDouble) {
+            participantMemberRepository.saveAll(ParticipantMemberFactory.buildDoubleMembers(
+                    participant,
+                    request.getDisplayName().trim(), phone, null,
+                    partnerFullName, partnerPhone));
+        }
         return toResponse(findParticipantWithDetails(participant.getId()));
     }
 
@@ -276,6 +316,15 @@ public class ParticipantController {
                 ? RegistrationType.MANUAL.getValue()
                 : (reg != null ? RegistrationType.ONLINE_REGISTRATION.getValue() : RegistrationType.MANUAL.getValue());
         Long userId = (reg != null && reg.getUser() != null) ? reg.getUser().getId() : null;
+        List<ParticipantResponse.MemberItem> members = participantMemberRepository
+                .findByParticipantId(p.getId()).stream()
+                .map(m -> ParticipantResponse.MemberItem.builder()
+                        .fullName(m.getFullName())
+                        .phone(m.getPhone())
+                        .role(m.getRole())
+                        .build())
+                .toList();
+
         return ParticipantResponse.builder()
                 .id(p.getId())
                 .tournamentId(p.getTournament().getId())
@@ -289,6 +338,7 @@ public class ParticipantController {
                 .status(p.getStatus())
                 .source(source)
                 .avtarUrl(p.getAvtarUrl())
+                .members(members.isEmpty() ? null : members)
                 .build();
     }
 }

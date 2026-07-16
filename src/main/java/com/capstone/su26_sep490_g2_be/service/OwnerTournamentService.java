@@ -21,6 +21,8 @@ public interface OwnerTournamentService {
 
 	OwnerRegistrationFormTemplateListResponse listRegistrationFormTemplates();
 
+	RegistrationFormPreviewResponse previewRegistrationFormTemplate(Long templateId);
+
 	CreateTournamentResponse createTournament(Long userId, CreateTournamentRequest request);
 
 	UpdateTournamentResponse updateTournament(Long userId, Long tournamentId, UpdateTournamentRequest request,

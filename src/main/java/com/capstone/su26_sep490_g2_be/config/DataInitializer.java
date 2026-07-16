@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.config;
 
 import com.capstone.su26_sep490_g2_be.config.bootstrap.DatabaseSeedData;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
@@ -10,6 +11,7 @@ import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.repository.*;
+import com.capstone.su26_sep490_g2_be.util.ParticipantMemberFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 @Slf4j
 @Component
@@ -45,6 +48,8 @@ public class DataInitializer implements CommandLineRunner {
 	private final TournamentConfigRepository tournamentConfigRepository;
 	private final RegistrationRepository registrationRepository;
 	private final RegistrationFieldValueRepository registrationFieldValueRepository;
+	private final ParticipantRepository participantRepository;
+	private final ParticipantMemberRepository participantMemberRepository;
 	private final PasswordEncoder passwordEncoder;
 
 	@Override
@@ -62,6 +67,7 @@ public class DataInitializer implements CommandLineRunner {
 		seedManyPlayers();
 		seedSampleTournaments();
 		seedLargeTournamentRegistrations();
+		seedDoubleTournaments();
 		log.info("Database seed completed (Strategy B)");
 	}
 
@@ -715,5 +721,157 @@ public class DataInitializer implements CommandLineRunner {
 		String fullName = (profile != null && profile.getFullName() != null) ? profile.getFullName() : user.getEmail();
 		String phone = (user.getPhone() != null) ? user.getPhone() : "0900000000";
 		seedRegistration(tournament, user, RegistrationType.SINGLE.getValue(), fullName, phone, null, status, approvedBy, approvedAt);
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Seed giải đấu "Đôi" (2 vs 2) để test thủ công + đăng ký online cho đôi
+	// ─────────────────────────────────────────────────────────────────────────
+	private void seedDoubleTournaments() {
+		User owner = userRepository.findByEmail("owner@gmail.com").orElse(null);
+		if (owner == null) return;
+
+		seedRegistrationField("player2_full_name", "Họ và tên người chơi 2", "Nhập họ và tên đồng đội", "STRING", "TEXT");
+		seedRegistrationField("player2_phone", "Số điện thoại người chơi 2", "Nhập số điện thoại đồng đội", "PHONE", "PHONE_INPUT");
+		RegistrationFormTemplate doublesTemplate = seedDoublesRegistrationFormTemplate(owner);
+
+		Instant now = Instant.now();
+
+		seedDoubleTournamentIfMissing(
+				"BTMS Test Đôi - Mở đăng ký",
+				"Giải đôi 9-Ball để test đăng ký online cho 2 người (1 đội trưởng điền cả 2).",
+				"9_BALL", "SINGLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(),
+				BigDecimal.ZERO, BigDecimal.valueOf(2000000), 8,
+				true, owner, doublesTemplate.getId(),
+				now.plus(10, ChronoUnit.DAYS), now.plus(20, ChronoUnit.DAYS), now.plus(21, ChronoUnit.DAYS));
+
+		Tournament partialTournament = seedDoubleTournamentIfMissing(
+				"BTMS Test Đôi - Đang bổ sung đội",
+				"Giải đôi 8-Ball đã có vài đội — dùng để test thêm thủ công/import Excel cho đôi.",
+				"8_BALL", "SINGLE_ELIMINATION", TournamentStatus.OPEN_FOR_REGISTRATION.getValue(),
+				BigDecimal.valueOf(100000), BigDecimal.valueOf(4000000), 8,
+				true, owner, doublesTemplate.getId(),
+				now.plus(5, ChronoUnit.DAYS), now.plus(15, ChronoUnit.DAYS), now.plus(16, ChronoUnit.DAYS));
+
+		Tournament readyTournament = seedDoubleTournamentIfMissing(
+				"BTMS Test Đôi - Sẵn sàng bốc thăm",
+				"Giải đôi 10-Ball đã đủ 8 đội, đóng đăng ký — dùng để test bốc thăm/lịch đấu cho đôi.",
+				"10_BALL", "SINGLE_ELIMINATION", TournamentStatus.REGISTRATION_CLOSED.getValue(),
+				BigDecimal.valueOf(150000), BigDecimal.valueOf(6000000), 8,
+				false, owner, null,
+				now.minus(2, ChronoUnit.DAYS), now.plus(5, ChronoUnit.DAYS), now.plus(6, ChronoUnit.DAYS));
+
+		Instant approvedAt = now.minus(1, ChronoUnit.HOURS);
+		seedDoubleTeam(partialTournament, "player1@gmail.com", "player2@gmail.com", owner, approvedAt, 1);
+		seedDoubleTeam(partialTournament, "player3@gmail.com", "player4@gmail.com", owner, approvedAt, null);
+
+		Instant readyApprovedAt = now.minus(3, ChronoUnit.HOURS);
+		seedDoubleTeam(readyTournament, "player5@gmail.com", "player6@gmail.com", owner, readyApprovedAt, 1);
+		seedDoubleTeam(readyTournament, "player7@gmail.com", "player8@gmail.com", owner, readyApprovedAt, 2);
+		seedDoubleTeam(readyTournament, "player9@gmail.com", "player10@gmail.com", owner, readyApprovedAt, 3);
+		seedDoubleTeam(readyTournament, "player11@gmail.com", "player12@gmail.com", owner, readyApprovedAt, 4);
+		seedDoubleTeam(readyTournament, "player13@gmail.com", "player14@gmail.com", owner, readyApprovedAt, null);
+		seedDoubleTeam(readyTournament, "player15@gmail.com", "player16@gmail.com", owner, readyApprovedAt, null);
+		seedDoubleTeam(readyTournament, "player17@gmail.com", "player18@gmail.com", owner, readyApprovedAt, null);
+		seedDoubleTeam(readyTournament, "player19@gmail.com", "player20@gmail.com", owner, readyApprovedAt, null);
+	}
+
+	private RegistrationFormTemplate seedDoublesRegistrationFormTemplate(User owner) {
+		RegistrationFormTemplate template = registrationFormTemplateRepository.findByCode("PLAYER_REG_DOUBLES")
+				.orElseGet(() -> registrationFormTemplateRepository.save(RegistrationFormTemplate.builder()
+						.code("PLAYER_REG_DOUBLES")
+						.name("Form đăng ký đôi")
+						.description("Dùng để test đăng ký giải đôi — 1 người điền thông tin cho cả 2")
+						.isActive(true)
+						.sortOrder(1)
+						.createdBy(owner)
+						.build()));
+
+		seedTemplateField(template, "player_full_name", "Họ tên người chơi 1", "Họ tên của bạn (đội trưởng)", "Nguyễn Văn A", 1);
+		seedTemplateField(template, "player_phone", "SĐT người chơi 1", "Số điện thoại của bạn", "0900000000", 2);
+		seedTemplateField(template, "player2_full_name", "Họ tên người chơi 2", "Họ tên đồng đội", "Trần Văn B", 3);
+		seedTemplateField(template, "player2_phone", "SĐT người chơi 2", "Số điện thoại đồng đội", "0900000001", 4);
+		return template;
+	}
+
+	private Tournament seedDoubleTournamentIfMissing(String name, String description, String gameType,
+			String format, String status, BigDecimal entryFee, BigDecimal prizePool, int maxTeams,
+			boolean registerOnline, User owner, Long templateId,
+			Instant regDeadline, Instant start, Instant end) {
+		Optional<Tournament> existing = findTournamentByName(name);
+		if (existing.isPresent()) return existing.get();
+
+		Tournament tournament = Tournament.builder()
+				.name(name)
+				.description(description)
+				.gameType(gameType)
+				.format(format)
+				.participantType(ParticipantType.DOUBLE.getValue())
+				.status(status)
+				.maxParticipants(maxTeams)
+				.entryFee(entryFee)
+				.prizePool(prizePool)
+				.prizeDescription("Vô địch 50% · Á quân 30% · Hạng 3-4 20%")
+				.registrationDeadline(regDeadline)
+				.startAt(start)
+				.endAt(end)
+				.isRegister(registerOnline)
+				.registrationFormTemplateId(templateId)
+				.createdBy(owner)
+				.build();
+		tournament = tournamentRepository.save(tournament);
+
+		TournamentConfig config = TournamentConfig.builder()
+				.tournament(tournament)
+				.formatCode(format)
+				.seedingMethod(SeedingMethod.RANDOM.name())
+				.build();
+		tournamentConfigRepository.save(config);
+		log.info("Seeded double tournament: {}", name);
+		return tournament;
+	}
+
+	private void seedDoubleTeam(Tournament tournament, String captainEmail, String partnerEmail,
+			User approvedBy, Instant approvedAt, Integer seedNo) {
+		if (tournament == null) return;
+		User captain = userRepository.findByEmail(captainEmail).orElse(null);
+		User partner = userRepository.findByEmail(partnerEmail).orElse(null);
+		if (captain == null || partner == null) return;
+		if (registrationRepository.existsByTournamentIdAndUserId(tournament.getId(), captain.getId())) return;
+
+		String captainName = displayNameOf(captain);
+		String captainPhone = captain.getPhone() != null ? captain.getPhone() : "0900000000";
+		String partnerName = displayNameOf(partner);
+		String partnerPhone = partner.getPhone() != null ? partner.getPhone() : "0900000000";
+		String teamName = ParticipantMemberFactory.composeDoubleDisplayName(captainName, partnerName);
+
+		Registration registration = registrationRepository.save(Registration.builder()
+				.tournament(tournament)
+				.user(captain)
+				.registrationType(RegistrationType.DOUBLE.getValue())
+				.playerFullName(teamName)
+				.playerPhone(captainPhone)
+				.status(RegistrationStatus.APPROVED.getValue())
+				.approvedBy(approvedBy)
+				.approvedAt(approvedAt)
+				.build());
+
+		Participant participant = participantRepository.save(Participant.builder()
+				.tournament(tournament)
+				.registration(registration)
+				.participantType(ParticipantType.DOUBLE.getValue())
+				.displayName(teamName)
+				.seedNo(seedNo)
+				.status(ParticipantStatus.ACTIVE.getValue())
+				.build());
+
+		participantMemberRepository.saveAll(ParticipantMemberFactory.buildDoubleMembers(
+				participant, captainName, captainPhone, captain, partnerName, partnerPhone));
+
+		log.info("Seeded double team: tournament={} team={}", tournament.getName(), teamName);
+	}
+
+	private String displayNameOf(User user) {
+		UserProfile profile = user.getProfile();
+		return (profile != null && profile.getFullName() != null) ? profile.getFullName() : user.getEmail();
 	}
 }
