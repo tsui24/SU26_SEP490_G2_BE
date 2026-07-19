@@ -724,6 +724,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                 .nextMatchLoseId(m.getNextMatchLose() != null ? m.getNextMatchLose().getId() : null)
                 .winSlot(m.getWinSlot()).loseSlot(m.getLoseSlot())
                 .tableNo(m.getTableNo())
+                .tableId(m.getTable() != null ? m.getTable().getId() : null)
+                .tableName(m.getTable() != null ? m.getTable().getName() : null)
+                .tableNumber(m.getTable() != null ? m.getTable().getTableNumber() : null)
                 .assignedStaff(staffBrief(m.getAssignedStaff()))
                 .build();
     }

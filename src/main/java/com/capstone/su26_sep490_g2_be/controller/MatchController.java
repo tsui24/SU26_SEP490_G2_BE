@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.CompleteMatchRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.BulkAssignMatchRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.EliminateBottomRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.SwapPlayersRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.UpdateScoreRequest;
@@ -272,6 +273,22 @@ public class MatchController {
         return ResponseEntity.ok(ApiResponse.success(fetchAndBroadcast(matchId)));
     }
 
+    @Operation(summary = "Gán trọng tài/bàn/giờ cho nhiều trận cùng lúc (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/owner/matches/bulk-assignment")
+    public ResponseEntity<ApiResponse<List<MatchResponse>>> bulkAssignOwner(
+            Authentication auth, @Valid @RequestBody BulkAssignMatchRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(bulkAssignAndBroadcast(req, extractUserId(auth))));
+    }
+
+    @Operation(summary = "Gán trọng tài/bàn/giờ cho nhiều trận cùng lúc (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/manager/matches/bulk-assignment")
+    public ResponseEntity<ApiResponse<List<MatchResponse>>> bulkAssignManager(
+            Authentication auth, @Valid @RequestBody BulkAssignMatchRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(bulkAssignAndBroadcast(req, extractUserId(auth))));
+    }
+
     @Operation(summary = "Cập nhật tỷ số (Owner)")
     @SecurityRequirement(name = "bearerAuth")
     @PutMapping("/owner/matches/{matchId}/score")
@@ -402,6 +419,21 @@ public class MatchController {
 
     private List<MatchResponse> buildMatchList(Long tournamentId) {
         return bracketHelper.getMatchesForTournament(tournamentId);
+    }
+
+    private List<MatchResponse> bulkAssignAndBroadcast(BulkAssignMatchRequest req, Long updatedByUserId) {
+        AssignMatchRequest assignRequest = new AssignMatchRequest();
+        assignRequest.setAssignedStaffId(req.getAssignedStaffId());
+        assignRequest.setClearAssignedStaff(req.getClearAssignedStaff());
+        assignRequest.setTableId(req.getTableId());
+        assignRequest.setTableNo(req.getTableNo());
+        assignRequest.setClearTable(req.getClearTable());
+        assignRequest.setScheduledAt(req.getScheduledAt());
+        assignRequest.setClearScheduledAt(req.getClearScheduledAt());
+
+        return matchService.bulkAssignMatches(req.getMatchIds(), assignRequest, updatedByUserId).stream()
+                .map(m -> fetchAndBroadcast(m.getId()))
+                .toList();
     }
 
     /** Fetch + broadcast match update — dùng sau start / ghi điểm (không sync cả bracket). */

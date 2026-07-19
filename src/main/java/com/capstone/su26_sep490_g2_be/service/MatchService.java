@@ -24,6 +24,9 @@ public interface MatchService {
 
     Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId);
 
+    /** Gán bàn/giờ/trọng tài cho nhiều trận cùng lúc. Trận đã resolved (COMPLETED/WALKOVER/BYE) bị bỏ qua, không fail cả batch. */
+    List<Match> bulkAssignMatches(List<Long> matchIds, AssignMatchRequest request, Long updatedByUserId);
+
     Match startMatch(Long matchId, Long updatedByUserId);
 
     Match updateScore(Long matchId, Integer player1Score, Integer player2Score, Long updatedByUserId);

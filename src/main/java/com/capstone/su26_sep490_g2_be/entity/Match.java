@@ -94,6 +94,11 @@ public class Match extends BaseEntity {
 	@JoinColumn(name = "assigned_staff_id")
 	private User assignedStaff;
 
+	/** Số bàn tự do — legacy fallback, giữ đồng bộ từ {@code table.tableNumber} khi gán qua pool. */
 	@Column(name = "table_no")
 	private Integer tableNo;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "table_id")
+	private BilliardTable table;
 }

@@ -1,33 +1,32 @@
 package com.capstone.su26_sep490_g2_be.dto.request;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Setter
-public class AssignMatchRequest {
+public class BulkAssignMatchRequest {
 
-    /** null = bỏ gán trọng tài */
+    @NotEmpty(message = "Vui lòng chọn ít nhất một trận đấu")
+    private List<Long> matchIds;
+
     private Long assignedStaffId;
 
-    /** Legacy fallback — số bàn tự do, không có FK. Ưu tiên dùng {@link #tableId} khi có. */
     @Min(1)
     private Integer tableNo;
 
-    /** true = bỏ gán trọng tài */
     private Boolean clearAssignedStaff;
 
-    /** Bàn lấy từ pool bàn của Owner — ưu tiên hơn {@link #tableNo}. */
     private Long tableId;
 
-    /** true = bỏ gán bàn (xoá cả tableId lẫn tableNo) */
     private Boolean clearTable;
 
     private Instant scheduledAt;
 
-    /** true = bỏ giờ thi đấu */
     private Boolean clearScheduledAt;
 }
