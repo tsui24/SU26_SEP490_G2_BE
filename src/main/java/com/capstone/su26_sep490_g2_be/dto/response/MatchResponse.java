@@ -36,5 +36,8 @@ public class MatchResponse {
     private String loseSlot;
 
     private Integer tableNo;
+    private Long tableId;
+    private String tableName;
+    private Integer tableNumber;
     private StaffBriefResponse assignedStaff;
 }

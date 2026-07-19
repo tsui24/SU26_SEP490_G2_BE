@@ -24,6 +24,7 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		LEFT JOIN FETCH m.nextMatchLose
 		LEFT JOIN FETCH m.assignedStaff staff
 		LEFT JOIN FETCH staff.profile
+		LEFT JOIN FETCH m.table
 		WHERE m.stage.id = :stageId
 		ORDER BY m.roundNo ASC, m.positionNo ASC
 		""")
@@ -41,6 +42,7 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		LEFT JOIN FETCH m.nextMatchLose
 		LEFT JOIN FETCH m.assignedStaff staff
 		LEFT JOIN FETCH staff.profile
+		LEFT JOIN FETCH m.table
 		WHERE m.tournament.id = :tournamentId
 		ORDER BY m.roundNo ASC, m.positionNo ASC
 		""")
@@ -82,6 +84,7 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 		LEFT JOIN FETCH m.nextMatchLose
 		LEFT JOIN FETCH m.assignedStaff staff
 		LEFT JOIN FETCH staff.profile
+		LEFT JOIN FETCH m.table
 		WHERE m.id = :id
 		""")
 	java.util.Optional<Match> findByIdWithDetails(@Param("id") Long id);

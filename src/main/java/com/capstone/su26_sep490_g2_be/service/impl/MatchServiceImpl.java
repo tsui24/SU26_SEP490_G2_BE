@@ -1,6 +1,8 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
+import com.capstone.su26_sep490_g2_be.entity.BilliardTable;
+import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
@@ -12,6 +14,7 @@ import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.BilliardTableRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
@@ -25,6 +28,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +44,7 @@ public class MatchServiceImpl implements MatchService {
     private final MatchScoreEventRepository scoreEventRepository;
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final BilliardTableRepository billiardTableRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final MailContextBuilder mailContextBuilder;
 
@@ -100,7 +105,33 @@ public class MatchServiceImpl implements MatchService {
     public Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId) {
         Match match = getById(matchId);
         getUser(updatedByUserId);
+        applyAssignment(match, request);
+        return matchRepository.save(match);
+    }
 
+    @Override
+    @Transactional
+    public List<Match> bulkAssignMatches(List<Long> matchIds, AssignMatchRequest request, Long updatedByUserId) {
+        getUser(updatedByUserId);
+        List<Match> updated = new ArrayList<>();
+        for (Long matchId : matchIds) {
+            Match match = matchRepository.findById(matchId).orElse(null);
+            if (match == null) {
+                continue;
+            }
+            try {
+                applyAssignment(match, request);
+            } catch (BusinessException ex) {
+                // Trận đã resolved (COMPLETED/WALKOVER/BYE) không cho đổi bàn/giờ — bỏ qua, không fail cả batch.
+                continue;
+            }
+            updated.add(matchRepository.save(match));
+        }
+        return updated;
+    }
+
+    /** Áp dụng thay đổi trọng tài/bàn/giờ lên match trong bộ nhớ — chưa save. Dùng chung cho assignMatch & bulkAssignMatches. */
+    private void applyAssignment(Match match, AssignMatchRequest request) {
         if (Boolean.TRUE.equals(request.getClearAssignedStaff())) {
             match.setAssignedStaff(null);
         } else if (request.getAssignedStaffId() != null) {
@@ -111,11 +142,43 @@ public class MatchServiceImpl implements MatchService {
             match.setAssignedStaff(staff);
         }
 
-        if (request.getTableNo() != null) {
+        boolean wantsTableChange = Boolean.TRUE.equals(request.getClearTable())
+                || request.getTableId() != null || request.getTableNo() != null;
+        boolean wantsScheduleChange = Boolean.TRUE.equals(request.getClearScheduledAt())
+                || request.getScheduledAt() != null;
+
+        if ((wantsTableChange || wantsScheduleChange) && MatchStatus.valueOf(match.getStatus()).isResolved()) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
+
+        if (Boolean.TRUE.equals(request.getClearTable())) {
+            match.setTable(null);
+            match.setTableNo(null);
+        } else if (request.getTableId() != null) {
+            BilliardTable table = loadTableForMatch(match, request.getTableId());
+            match.setTable(table);
+            match.setTableNo(table.getTableNumber());
+        } else if (request.getTableNo() != null) {
             match.setTableNo(request.getTableNo());
         }
 
-        return matchRepository.save(match);
+        if (Boolean.TRUE.equals(request.getClearScheduledAt())) {
+            match.setScheduledAt(null);
+        } else if (request.getScheduledAt() != null) {
+            match.setScheduledAt(request.getScheduledAt());
+        }
+    }
+
+    /** Bàn phải thuộc cùng owner với chi nhánh tổ chức giải (nếu xác định được) — pool bàn không dùng chéo chuỗi. */
+    private BilliardTable loadTableForMatch(Match match, Long tableId) {
+        BilliardTable table = billiardTableRepository.findById(tableId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TABLE_NOT_FOUND));
+        Branch branch = match.getTournament().getBranch();
+        if (branch != null && branch.getOwner() != null
+                && !branch.getOwner().getId().equals(table.getOwner().getId())) {
+            throw new BusinessException(ErrorCode.TABLE_ACCESS_DENIED);
+        }
+        return table;
     }
 
     @Override

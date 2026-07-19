@@ -105,6 +105,11 @@ public enum ErrorCode {
 	BRANCH_INACTIVE("BRANCH_003", "Chi nhánh đang ngừng hoạt động", HttpStatus.UNPROCESSABLE_ENTITY),
 	BRANCH_REQUIRED("BRANCH_005", "Vui lòng chọn chi nhánh tổ chức", HttpStatus.BAD_REQUEST),
 
+	// Billiard table pool
+	TABLE_NOT_FOUND("TABLE_001", "Không tìm thấy bàn", HttpStatus.NOT_FOUND),
+	TABLE_ACCESS_DENIED("TABLE_002", "Bàn không thuộc quyền quản lý của bạn", HttpStatus.FORBIDDEN),
+	TABLE_INVALID_IMPORT_FILE("TABLE_003", "File không hợp lệ. Vui lòng tải mẫu từ nút \"Tải template\" hoặc upload file .xlsx / .csv", HttpStatus.BAD_REQUEST),
+
 	// Email notification
 	EMAIL_TEMPLATE_NOT_FOUND("EMAIL_001", "Không tìm thấy mẫu email", HttpStatus.NOT_FOUND),
 	EMAIL_TEMPLATE_CODE_EXISTS("EMAIL_002", "Mã mẫu email đã tồn tại", HttpStatus.CONFLICT),
