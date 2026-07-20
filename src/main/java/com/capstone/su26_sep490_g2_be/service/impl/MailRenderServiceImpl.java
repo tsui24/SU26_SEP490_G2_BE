@@ -2,9 +2,11 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.response.RenderedEmailResponse;
 import com.capstone.su26_sep490_g2_be.entity.EmailTemplate;
+import com.capstone.su26_sep490_g2_be.entity.MailLayoutSettings;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.EmailTemplateRepository;
+import com.capstone.su26_sep490_g2_be.repository.MailLayoutSettingsRepository;
 import com.capstone.su26_sep490_g2_be.service.MailRenderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +31,63 @@ public class MailRenderServiceImpl implements MailRenderService {
 			.and(Sanitizers.BLOCKS)
 			.and(Sanitizers.LINKS);
 
+	/**
+	 * Khung HTML dùng chung cho mọi email (header thương hiệu + card nội dung + footer), bọc
+	 * quanh bodyHtml đã render từ template trong DB — để mọi email đều có giao diện nhất quán
+	 * thay vì chỉ là text trần. Header/footer lấy từ {@link MailLayoutSettings} (chỉnh được qua
+	 * Admin UI); phần khung table/CSS bên ngoài (bố cục, màu nền, responsive) giữ cố định trong
+	 * code vì đây là phần kỹ thuật đảm bảo email hiển thị đúng trên các mail client.
+	 * <p>
+	 * Ghép bằng nối chuỗi thay vì thay thế token — vì headerHtml/footerHtml do admin tự nhập nên
+	 * không thể loại trừ khả năng chúng chứa trùng token, dẫn tới thay thế nhầm nếu dùng chuỗi
+	 * {@code .replace()} nhiều lần.
+	 */
+	private static final String LAYOUT_HEAD = """
+			<!DOCTYPE html>
+			<html lang="vi">
+			<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<style>
+			  .btms-mail p { margin:0 0 12px; }
+			  .btms-mail a { color:#5b3fd6; }
+			  .btms-mail .btn { display:inline-block; background:#010851; color:#ffffff !important; text-decoration:none; font-weight:600; padding:12px 28px; border-radius:8px; }
+			</style>
+			</head>
+			<body style="margin:0;padding:0;background:#f2f2f7;">
+			  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="btms-mail" style="background:#f2f2f7;padding:32px 16px;">
+			    <tr><td align="center">
+			      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(1,8,81,0.08);font-family:Arial,Helvetica,sans-serif;">
+			        <tr>
+			          <td style="background:linear-gradient(135deg,#010851,#241c7a);padding:28px 32px;color:#ffffff;">
+			""";
+
+	private static final String LAYOUT_AFTER_HEADER = """
+			          </td>
+			        </tr>
+			        <tr>
+			          <td style="padding:32px;color:#1f2430;font-size:15px;line-height:1.65;">
+			""";
+
+	private static final String LAYOUT_AFTER_BODY = """
+			          </td>
+			        </tr>
+			        <tr>
+			          <td style="background:#f7f7fb;padding:18px 32px;text-align:center;font-size:12px;color:#8a8fa3;border-top:1px solid #ececf3;">
+			""";
+
+	private static final String LAYOUT_TAIL = """
+			          </td>
+			        </tr>
+			      </table>
+			    </td></tr>
+			  </table>
+			</body>
+			</html>
+			""";
+
 	private final EmailTemplateRepository templateRepository;
+	private final MailLayoutSettingsRepository mailLayoutSettingsRepository;
 
 	@Override
 	public RenderedEmailResponse render(EmailTemplate template, Map<String, Object> variables) {
@@ -38,10 +96,11 @@ public class MailRenderServiceImpl implements MailRenderService {
 			Map<String, String> flatHtml = new LinkedHashMap<>();
 			flatten("", variables, flatPlain, flatHtml);
 
+			StringSubstitutor htmlSubstitutor = new StringSubstitutor(flatHtml, PREFIX, SUFFIX);
 			String subject = new StringSubstitutor(flatPlain, PREFIX, SUFFIX)
 					.replace(template.getSubjectTemplate());
-			String bodyHtml = new StringSubstitutor(flatHtml, PREFIX, SUFFIX)
-					.replace(template.getBodyHtmlTemplate());
+			String innerBodyHtml = htmlSubstitutor.replace(template.getBodyHtmlTemplate());
+			String bodyHtml = wrapLayout(innerBodyHtml, htmlSubstitutor);
 
 			return RenderedEmailResponse.builder()
 					.subject(subject)
@@ -51,6 +110,19 @@ public class MailRenderServiceImpl implements MailRenderService {
 			log.error("Render email template {} failed", template.getCode(), e);
 			throw new BusinessException(ErrorCode.EMAIL_RENDER_FAILED);
 		}
+	}
+
+	/** Bọc nội dung template đã render vào khung HTML thương hiệu chung (header/footer từ DB). */
+	private String wrapLayout(String innerBodyHtml, StringSubstitutor htmlSubstitutor) {
+		MailLayoutSettings layout = mailLayoutSettingsRepository.findFirstByOrderByIdAsc()
+				.orElseGet(() -> MailLayoutSettings.builder()
+						.headerHtml(MailLayoutSettings.DEFAULT_HEADER_HTML)
+						.footerHtml(MailLayoutSettings.DEFAULT_FOOTER_HTML)
+						.build());
+		String headerHtml = htmlSubstitutor.replace(layout.getHeaderHtml());
+		String footerHtml = htmlSubstitutor.replace(layout.getFooterHtml());
+		return LAYOUT_HEAD + headerHtml + LAYOUT_AFTER_HEADER + innerBodyHtml
+				+ LAYOUT_AFTER_BODY + footerHtml + LAYOUT_TAIL;
 	}
 
 	@Override

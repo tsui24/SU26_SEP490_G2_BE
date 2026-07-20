@@ -43,8 +43,12 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				EmailTemplateCategory.SYSTEM,
 				"Mã OTP đặt lại mật khẩu - {{system.appName}}",
 				"""
-				<p>Mã OTP của bạn là: <b>{{custom.otp}}</b></p>
-				<p>Mã có hiệu lực trong 5 phút. Vui lòng không chia sẻ mã này với bất kỳ ai.</p>
+				<p>Xin chào,</p>
+				<p>Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu. Nhập mã bên dưới để tiếp tục:</p>
+				<div style="text-align:center;margin:24px 0;">
+				  <span style="display:inline-block;background:#f2f0fd;color:#010851;font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 24px;border-radius:8px;">{{custom.otp}}</span>
+				</div>
+				<p style="color:#8a8fa3;font-size:13px;">Mã có hiệu lực trong 5 phút. Vui lòng không chia sẻ mã này với bất kỳ ai.</p>
 				""",
 				"[\"custom.otp\", \"system.appName\"]");
 
@@ -53,8 +57,9 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				"Đăng ký giải \"{{tournament.name}}\" đã được duyệt",
 				"""
 				<p>Xin chào {{registration.playerFullName}},</p>
-				<p>Đăng ký của bạn cho giải đấu <b>{{tournament.name}}</b> đã được <b>duyệt</b>.</p>
-				<p>Thời gian bắt đầu: {{tournament.startAt}}</p>
+				<p>Đăng ký của bạn cho giải đấu <b>{{tournament.name}}</b> đã được</p>
+				<p><span style="display:inline-block;background:#e7f7ec;color:#1d8a4a;font-weight:700;font-size:13px;padding:6px 14px;border-radius:999px;">✔ ĐÃ DUYỆT</span></p>
+				<p>Thời gian bắt đầu: <b>{{tournament.startAt}}</b></p>
 				<p>Hẹn gặp bạn tại giải đấu!</p>
 				""",
 				"[\"registration.playerFullName\", \"tournament.name\", \"tournament.startAt\"]");
@@ -65,7 +70,8 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				"""
 				<p>Xin chào {{registration.playerFullName}},</p>
 				<p>Rất tiếc, đăng ký của bạn cho giải đấu <b>{{tournament.name}}</b> không được chấp nhận.</p>
-				<p>Vui lòng liên hệ {{system.supportEmail}} nếu bạn cần hỗ trợ thêm.</p>
+				<p><span style="display:inline-block;background:#fdeceb;color:#c0392b;font-weight:700;font-size:13px;padding:6px 14px;border-radius:999px;">✘ TỪ CHỐI</span></p>
+				<p>Vui lòng liên hệ <a href="mailto:{{system.supportEmail}}">{{system.supportEmail}}</a> nếu bạn cần hỗ trợ thêm.</p>
 				""",
 				"[\"registration.playerFullName\", \"tournament.name\", \"system.supportEmail\"]");
 
@@ -74,7 +80,10 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				"Xác nhận thanh toán giải \"{{tournament.name}}\"",
 				"""
 				<p>Xin chào {{registration.playerFullName}},</p>
-				<p>Chúng tôi đã nhận được thanh toán <b>{{payment.amount}}</b> cho giải đấu <b>{{tournament.name}}</b>.</p>
+				<p>Chúng tôi đã nhận được thanh toán của bạn cho giải đấu <b>{{tournament.name}}</b>.</p>
+				<div style="text-align:center;margin:24px 0;">
+				  <span style="display:inline-block;background:#e7f7ec;color:#1d8a4a;font-size:24px;font-weight:700;padding:12px 24px;border-radius:8px;">{{payment.amount}}</span>
+				</div>
 				<p>Cảm ơn bạn đã đăng ký tham dự!</p>
 				""",
 				"[\"registration.playerFullName\", \"tournament.name\", \"payment.amount\"]");
@@ -94,8 +103,10 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				"Nhắc lịch: trận đấu của bạn sắp diễn ra tại \"{{tournament.name}}\"",
 				"""
 				<p>Xin chào {{user.fullName}},</p>
-				<p>Trận đấu vòng <b>{{match.roundNo}}</b> giữa <b>{{match.player1Name}}</b> và
-				<b>{{match.player2Name}}</b> sắp diễn ra tại giải <b>{{tournament.name}}</b>.</p>
+				<p>Trận đấu vòng <b>{{match.roundNo}}</b> tại giải <b>{{tournament.name}}</b> sắp diễn ra:</p>
+				<div style="text-align:center;margin:24px 0;font-size:17px;font-weight:700;color:#010851;">
+				  {{match.player1Name}} <span style="color:#9A7AF1;">vs</span> {{match.player2Name}}
+				</div>
 				<p>Vui lòng có mặt đúng giờ.</p>
 				""",
 				"[\"user.fullName\", \"match.roundNo\", \"match.player1Name\", \"match.player2Name\", \"tournament.name\"]");
