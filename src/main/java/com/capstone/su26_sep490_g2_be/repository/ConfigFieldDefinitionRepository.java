@@ -16,4 +16,6 @@ public interface ConfigFieldDefinitionRepository extends JpaRepository<ConfigFie
 	List<ConfigFieldDefinition> findByIsActiveTrueAndFieldScopeInOrderByFieldScopeAsc(List<String> scopes);
 
 	List<ConfigFieldDefinition> findByIsActiveFalseOrderByFieldScopeAsc();
+
+	void deleteByFieldKeyIn(List<String> fieldKeys);
 }

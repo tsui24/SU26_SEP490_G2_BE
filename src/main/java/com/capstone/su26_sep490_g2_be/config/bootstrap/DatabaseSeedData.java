@@ -22,12 +22,6 @@ public class DatabaseSeedData {
 						null, null, null, "Bốc thăm quyền break game đầu"),
 				field("scoring_unit", "Đơn vị tính điểm", "COMMON", "ENUM", "SELECT",
 						"[\"GAME\",\"FRAME\"]", null, null, "Đơn vị thắng trận"),
-				field("is_show_tournament", "Hiển thị giải đấu", "COMMON", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Hiển thị giải trên trang công khai"),
-				field("is_public_ratio", "Công khai tỷ lệ", "COMMON", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Công khai tỷ lệ thắng/thua của cơ thủ"),
-				field("is_register", "Cho phép đăng ký", "COMMON", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Cho phép người chơi đăng ký tham gia giải"),
 				field("bracket_size", "Số slot bracket", "KNOCKOUT", "INT", "NUMBER",
 						null, 8, 64, "Số slot trên nhánh đấu loại trực tiếp"),
 				field("allow_bye", "Cho phép BYE", "KNOCKOUT", "BOOLEAN", "CHECKBOX",
@@ -86,7 +80,7 @@ public class DatabaseSeedData {
 
 	public static List<FormatConfigFieldSeed> formatConfigFields() {
 		return List.of(
-				// SINGLE_ELIMINATION (10)
+				// SINGLE_ELIMINATION (7)
 				configField("SINGLE_ELIMINATION", "bracket_size", "16", true),
 				configField("SINGLE_ELIMINATION", "allow_bye", "true", true),
 				configField("SINGLE_ELIMINATION", "seeding_enabled", "true", true),
@@ -94,11 +88,8 @@ public class DatabaseSeedData {
 				configField("SINGLE_ELIMINATION", "break_rule", "ALTERNATE_BREAK", true),
 				configField("SINGLE_ELIMINATION", "lag_for_break", "true", true),
 				configField("SINGLE_ELIMINATION", "scoring_unit", "GAME", false),
-				configField("SINGLE_ELIMINATION", "is_show_tournament", "false", true),
-				configField("SINGLE_ELIMINATION", "is_public_ratio", "false", true),
-				configField("SINGLE_ELIMINATION", "is_register", "false", true),
 
-				// DOUBLE_ELIMINATION (10)
+				// DOUBLE_ELIMINATION (7)
 				configField("DOUBLE_ELIMINATION", "bracket_size", "16", true),
 				configField("DOUBLE_ELIMINATION", "allow_bye", "true", true),
 				configField("DOUBLE_ELIMINATION", "seeding_enabled", "true", true),
@@ -106,17 +97,11 @@ public class DatabaseSeedData {
 				configField("DOUBLE_ELIMINATION", "break_rule", "ALTERNATE_BREAK", true),
 				configField("DOUBLE_ELIMINATION", "lag_for_break", "true", true),
 				configField("DOUBLE_ELIMINATION", "scoring_unit", "GAME", false),
-				configField("DOUBLE_ELIMINATION", "is_show_tournament", "false", true),
-				configField("DOUBLE_ELIMINATION", "is_public_ratio", "false", true),
-				configField("DOUBLE_ELIMINATION", "is_register", "false", true),
 
-				// GROUP_PLAYOFF (15)
+				// GROUP_PLAYOFF (12)
 				configField("GROUP_PLAYOFF", "break_rule", "ALTERNATE_BREAK", true),
 				configField("GROUP_PLAYOFF", "lag_for_break", "true", true),
 				configField("GROUP_PLAYOFF", "scoring_unit", "GAME", false),
-				configField("GROUP_PLAYOFF", "is_show_tournament", "false", true),
-				configField("GROUP_PLAYOFF", "is_public_ratio", "false", true),
-				configField("GROUP_PLAYOFF", "is_register", "false", true),
 				configField("GROUP_PLAYOFF", "group_count", "4", true),
 				configField("GROUP_PLAYOFF", "players_per_group", "4", true),
 				configField("GROUP_PLAYOFF", "advance_per_group", "2", true),

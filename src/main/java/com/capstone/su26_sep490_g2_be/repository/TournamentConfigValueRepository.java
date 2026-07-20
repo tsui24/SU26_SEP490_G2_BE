@@ -14,4 +14,6 @@ public interface TournamentConfigValueRepository extends JpaRepository<Tournamen
 	Optional<TournamentConfigValue> findByIdTournamentIdAndIdFieldKey(Long tournamentId, String fieldKey);
 
 	void deleteByIdTournamentId(Long tournamentId);
+
+	void deleteByIdFieldKeyIn(List<String> fieldKeys);
 }
