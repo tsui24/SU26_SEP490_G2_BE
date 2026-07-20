@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -33,6 +34,8 @@ public class DataInitializer implements CommandLineRunner {
 
 	private static final String DEFAULT_ADMIN_EMAIL = "admin@gmail.com";
 	private static final String DEFAULT_ADMIN_PASSWORD = "admin1";
+	private static final List<String> REMOVED_CONFIG_FIELD_KEYS =
+			List.of("is_show_tournament", "is_public_ratio", "is_register");
 
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;
@@ -46,6 +49,7 @@ public class DataInitializer implements CommandLineRunner {
 	private final FormatRaceToRuleRepository formatRaceToRuleRepository;
 	private final TournamentRepository tournamentRepository;
 	private final TournamentConfigRepository tournamentConfigRepository;
+	private final TournamentConfigValueRepository tournamentConfigValueRepository;
 	private final RegistrationRepository registrationRepository;
 	private final RegistrationFieldValueRepository registrationFieldValueRepository;
 	private final ParticipantRepository participantRepository;
@@ -61,6 +65,7 @@ public class DataInitializer implements CommandLineRunner {
 		seedTournamentFormats();
 		seedFormatConfigFields();
 		seedFormatRaceToRules();
+		cleanupRemovedConfigFields();
 		seedAdminAccount();
 		seedOwnerAccount();
 		seedRegistrationTestData();
@@ -164,6 +169,12 @@ public class DataInitializer implements CommandLineRunner {
 		if (seeded > 0) {
 			log.info("Seeded format_race_to_rules: {} rows", seeded);
 		}
+	}
+
+	private void cleanupRemovedConfigFields() {
+		tournamentConfigValueRepository.deleteByIdFieldKeyIn(REMOVED_CONFIG_FIELD_KEYS);
+		formatConfigFieldRepository.deleteByFieldKeyIn(REMOVED_CONFIG_FIELD_KEYS);
+		configFieldRepository.deleteByFieldKeyIn(REMOVED_CONFIG_FIELD_KEYS);
 	}
 
 	private void seedAdminAccount() {

@@ -48,9 +48,6 @@ Admin có thể **thêm field qua API** (`POST /api/v1/admin/config-field-catalo
 | `break_rule` | COMMON | ENUM / SELECT |
 | `lag_for_break` | COMMON | BOOLEAN / CHECKBOX |
 | `scoring_unit` | COMMON | ENUM / SELECT |
-| `is_show_tournament` | COMMON | BOOLEAN / CHECKBOX — hiển thị giải công khai |
-| `is_public_ratio` | COMMON | BOOLEAN / CHECKBOX — công khai tỷ lệ thắng/thua |
-| `is_register` | COMMON | BOOLEAN / CHECKBOX — cho phép đăng ký tham gia |
 | `bracket_size` | KNOCKOUT | Single/Double elim |
 | `allow_bye` | KNOCKOUT | BOOLEAN / CHECKBOX |
 | `seeding_enabled` | KNOCKOUT | BOOLEAN / CHECKBOX |
@@ -66,18 +63,18 @@ Admin có thể **thêm field qua API** (`POST /api/v1/admin/config-field-catalo
 | `playoff_bracket_size` | PLAYOFF | |
 | `playoff_bye_top_seeds` | PLAYOFF | |
 
-**Số dòng:** **20** (seed **đủ catalog** một lần, dù phase 1 chỉ dùng 2–3 format)
+**Số dòng:** **17** (seed **đủ catalog** một lần, dù phase 1 chỉ dùng 2–3 format)
 
-> Ba field `is_show_tournament`, `is_public_ratio`, `is_register` dùng scope `COMMON`, lưu giá trị runtime tại `tournament_config_values` (không phải cột trên `tournaments`). Default mỗi format: `"false"`.
+> `is_show_tournament`, `is_public_ratio`, `is_register` đã bỏ khỏi catalog này — giờ là cột trực tiếp trên `tournaments`, set trong bước đăng ký/tạo giải (Owner), không còn là config field động.
 
 **Thêm field mới (không sửa `DatabaseSeedData`):**
 
 ```http
 POST /api/v1/admin/config-field-catalog
 {
-  "fieldKey": "is_show_tournament",
-  "label": "Hiển thị giải đấu",
-  "description": "Hiển thị giải trên trang công khai",
+  "fieldKey": "example_field",
+  "label": "Nhãn hiển thị",
+  "description": "Mô tả field",
   "dataType": "BOOLEAN",
   "fieldScope": "COMMON",
   "uiComponent": "CHECKBOX",
@@ -139,12 +136,10 @@ Default field **theo từng format** (FK → `config_field_definitions` + `tourn
 
 | format_code | Số dòng |
 |-------------|---------|
-| `SINGLE_ELIMINATION` | 10 |
-| `DOUBLE_ELIMINATION` | 10 |
-| `GROUP_PLAYOFF` | 15 |
-| **Tổng** | **35** |
-
-Mỗi format đều gồm 3 field CHECKBOX chung: `is_show_tournament`, `is_public_ratio`, `is_register` (default `"false"`, `is_visible_to_owner=true`).
+| `SINGLE_ELIMINATION` | 7 |
+| `DOUBLE_ELIMINATION` | 7 |
+| `GROUP_PLAYOFF` | 12 |
+| **Tổng** | **26** |
 
 Chi tiết Single Elim: [`seed-SINGLE_ELIMINATION-db.md`](./seed-SINGLE_ELIMINATION-db.md) mục ③.
 
@@ -259,9 +254,9 @@ Nếu init **cả catalog + Single Elim sẵn sàng**:
 
 | Bảng | Dòng |
 |------|------|
-| `config_field_definitions` | 7 field (hoặc 20 nếu seed full catalog) |
+| `config_field_definitions` | 4 field (hoặc 17 nếu seed full catalog) |
 | `tournament_format_definitions` | 1 |
-| `format_config_fields` | 10 (gồm 3 CHECKBOX: `is_show_tournament`, `is_public_ratio`, `is_register`) |
+| `format_config_fields` | 7 |
 | `format_race_to_rules` | 5 |
 
 → Xem payload đầy đủ: [`seed-SINGLE_ELIMINATION-db.md`](./seed-SINGLE_ELIMINATION-db.md)
