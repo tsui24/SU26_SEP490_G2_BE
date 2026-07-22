@@ -12,14 +12,19 @@ import com.capstone.su26_sep490_g2_be.repository.NewsPostRepository;
 import com.capstone.su26_sep490_g2_be.repository.NewsTagRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.NewsPostService;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -50,30 +55,59 @@ public class NewsPostServiceImpl implements NewsPostService {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public NewsPost getById(Long id) {
-		return postRepository.findById(id)
+		NewsPost post = postRepository.findById(id)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		if (post.isDeleted()) {
+			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+		}
+		initializeAssociations(post);
+		return post;
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public NewsPost getBySlug(String slug) {
-		return postRepository.findBySlug(slug)
+		NewsPost post = postRepository.findBySlug(slug)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		if (post.isDeleted()) {
+			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+		}
+		initializeAssociations(post);
+		return post;
 	}
 
 	@Override
-	public Page<NewsPost> getPublished(Pageable pageable) {
-		return postRepository.findByStatus(NewsPostStatus.PUBLISHED.getValue(), pageable);
+	@Transactional(readOnly = true)
+	public Page<NewsPost> getPublished(String search, Long categoryId, Pageable pageable) {
+		String searchParam = (search == null || search.isBlank()) ? null : search.trim().toLowerCase();
+		Specification<NewsPost> spec = (root, query, cb) -> {
+			List<Predicate> predicates = new ArrayList<>();
+			predicates.add(cb.equal(root.get("status"), NewsPostStatus.PUBLISHED.getValue()));
+			predicates.add(cb.isFalse(root.get("deleted")));
+			if (categoryId != null) {
+				predicates.add(cb.equal(root.get("category").get("id"), categoryId));
+			}
+			if (searchParam != null) {
+				String like = "%" + searchParam + "%";
+				predicates.add(cb.or(
+						cb.like(cb.lower(root.get("title")), like),
+						cb.like(cb.lower(root.get("content")), like)));
+			}
+			return cb.and(predicates.toArray(new Predicate[0]));
+		};
+		Page<NewsPost> page = postRepository.findAll(spec, pageable);
+		page.getContent().forEach(this::initializeAssociations);
+		return page;
 	}
 
 	@Override
-	public Page<NewsPost> getPublishedByCategory(Long categoryId, Pageable pageable) {
-		return postRepository.findByCategoryIdAndStatus(categoryId, NewsPostStatus.PUBLISHED.getValue(), pageable);
-	}
-
-	@Override
+	@Transactional(readOnly = true)
 	public Page<NewsPost> getAll(Pageable pageable) {
-		return postRepository.findAll(pageable);
+		Page<NewsPost> page = postRepository.findByDeletedFalse(pageable);
+		page.getContent().forEach(this::initializeAssociations);
+		return page;
 	}
 
 	@Override
@@ -115,7 +149,14 @@ public class NewsPostServiceImpl implements NewsPostService {
 	@Override
 	@Transactional
 	public void delete(Long id) {
-		postRepository.delete(getById(id));
+		NewsPost post = getById(id);
+		post.setDeleted(true);
+		postRepository.save(post);
+	}
+
+	private void initializeAssociations(NewsPost post) {
+		Hibernate.initialize(post.getCategory());
+		Hibernate.initialize(post.getTags());
 	}
 
 	private Set<NewsTag> resolveTags(Set<Long> tagIds) {

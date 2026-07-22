@@ -1,8 +1,10 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.entity.NewsPost;
 import com.capstone.su26_sep490_g2_be.entity.NewsTag;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.NewsPostRepository;
 import com.capstone.su26_sep490_g2_be.repository.NewsTagRepository;
 import com.capstone.su26_sep490_g2_be.service.NewsTagService;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import java.util.List;
 public class NewsTagServiceImpl implements NewsTagService {
 
 	private final NewsTagRepository tagRepository;
+	private final NewsPostRepository postRepository;
 
 	@Override
 	public List<NewsTag> getAll() {
@@ -59,6 +62,10 @@ public class NewsTagServiceImpl implements NewsTagService {
 	@Transactional
 	public void delete(Long id) {
 		NewsTag tag = getById(id);
+		for (NewsPost post : postRepository.findByTags_Id(id)) {
+			post.getTags().remove(tag);
+			postRepository.save(post);
+		}
 		tagRepository.delete(tag);
 	}
 }
