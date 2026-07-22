@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -55,4 +56,9 @@ public class NewsPost extends BaseEntity {
 	)
 	@Builder.Default
 	private Set<NewsTag> tags = new HashSet<>();
+
+	@Column(nullable = false)
+	@ColumnDefault("false")
+	@Builder.Default
+	private boolean deleted = false;
 }

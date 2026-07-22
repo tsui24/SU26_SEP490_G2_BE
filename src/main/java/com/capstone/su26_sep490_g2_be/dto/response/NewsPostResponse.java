@@ -18,6 +18,7 @@ public class NewsPostResponse {
     private Long categoryId;
     private String categoryName;
     private List<String> tags;
+    private List<Long> tagIds;
     private Instant publishedAt;
     private Instant createdAt;
     private Instant updatedAt;

@@ -14,9 +14,7 @@ public interface NewsPostService {
 
 	NewsPost getBySlug(String slug);
 
-	Page<NewsPost> getPublished(Pageable pageable);
-
-	Page<NewsPost> getPublishedByCategory(Long categoryId, Pageable pageable);
+	Page<NewsPost> getPublished(String search, Long categoryId, Pageable pageable);
 
 	Page<NewsPost> getAll(Pageable pageable);
 

@@ -47,9 +47,7 @@ public class NewsController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
-        var result = categoryId != null
-                ? postService.getPublishedByCategory(categoryId, pageable)
-                : postService.getPublished(pageable);
+        var result = postService.getPublished(search, categoryId, pageable);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(result, this::toResponse)));
     }
 
@@ -77,6 +75,13 @@ public class NewsController {
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(ApiResponse.success(
                 PageResponse.of(postService.getAll(pageable), this::toResponse)));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Chi tiết bài viết theo id (Owner CMS)")
+    @GetMapping("/owner/news/{id}")
+    public ResponseEntity<ApiResponse<NewsPostResponse>> ownerGetById(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(toResponse(postService.getById(id))));
     }
 
     @SecurityRequirement(name = "bearerAuth")
@@ -180,6 +185,12 @@ public class NewsController {
     }
 
     @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/manager/news/{id}")
+    public ResponseEntity<ApiResponse<NewsPostResponse>> managerGetById(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(toResponse(postService.getById(id))));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/news")
     public ResponseEntity<ApiResponse<NewsPostResponse>> managerCreate(
             Authentication auth, @Valid @RequestBody NewsPostRequest request) {
@@ -235,7 +246,24 @@ public class NewsController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(toCatResponse(categoryService.create(cat))));
     }
 
-    /* ── Add public news endpoints to SecurityConfig ── */
+    @SecurityRequirement(name = "bearerAuth")
+    @PutMapping("/manager/news/categories/{id}")
+    public ResponseEntity<ApiResponse<NewsCategoryResponse>> managerUpdateCategory(
+            @PathVariable Long id, @Valid @RequestBody NewsCategoryRequest request) {
+        NewsCategory cat = NewsCategory.builder()
+                .name(request.getName())
+                .slug(request.getSlug())
+                .build();
+        return ResponseEntity.ok(ApiResponse.success(toCatResponse(categoryService.update(id, cat))));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/manager/news/categories/{id}/status")
+    public ResponseEntity<ApiResponse<Void>> managerCategoryStatus(
+            @PathVariable Long id, @RequestParam String status) {
+        categoryService.setStatus(id, status);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 
     /* ── Helpers ── */
 
@@ -260,6 +288,8 @@ public class NewsController {
                 .categoryName(post.getCategory() != null ? post.getCategory().getName() : null)
                 .tags(post.getTags() != null ? post.getTags().stream()
                         .map(t -> t.getName()).toList() : List.of())
+                .tagIds(post.getTags() != null ? post.getTags().stream()
+                        .map(t -> t.getId()).toList() : List.of())
                 .publishedAt(post.getPublishedAt())
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
