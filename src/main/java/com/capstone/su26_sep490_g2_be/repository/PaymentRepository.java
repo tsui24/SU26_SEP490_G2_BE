@@ -20,4 +20,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 	Optional<Payment> findByTransactionCode(String transactionCode);
 
 	List<Payment> findByRegistration_Tournament_IdIn(List<Long> tournamentIds);
+
+	Optional<Payment> findFirstByRegistrationIdAndStatusOrderByPaidAtDesc(Long registrationId, String status);
 }

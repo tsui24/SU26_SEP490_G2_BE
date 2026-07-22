@@ -23,8 +23,9 @@ public class Registration extends BaseEntity {
 	@JoinColumn(name = "tournament_id", nullable = false)
 	private Tournament tournament;
 
+	/** Null với đăng ký MANUAL (import Excel) — người chơi walk-in chưa có tài khoản hệ thống. */
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "user_id")
+	@JoinColumn(name = "user_id", nullable = true)
 	private User user;
 
 	@Column(name = "registration_type", length = 30, nullable = false)
