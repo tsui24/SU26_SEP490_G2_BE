@@ -37,7 +37,7 @@ public class MailRecipientResolverImpl implements MailRecipientResolver {
 			case ALL_PARTICIPANTS -> resolveAllParticipants(tournamentId);
 			case REGISTRATION_USER -> resolveApprovedRegistrations(tournamentId);
 			case ROLE_STAFF -> resolveStaff(tournamentId);
-			case CUSTOM_LIST -> resolveCustomList(customEmails);
+			case CUSTOM_LIST -> resolveCustomList(tournamentId, customEmails);
 			case PLAYER, MATCH_PLAYERS -> {
 				log.warn("Recipient type {} phải được resolve tường minh tại nơi publish sự kiện", type);
 				yield List.of();
@@ -50,11 +50,12 @@ public class MailRecipientResolverImpl implements MailRecipientResolver {
 		List<Participant> participants = participantRepository
 				.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
 		return participants.stream()
-				.map(p -> p.getRegistration() != null ? p.getRegistration().getUser() : null)
+				.map(Participant::getRegistration)
 				.filter(Objects::nonNull)
-				.filter(u -> u.getEmail() != null)
-				.distinct()
-				.map(u -> new MailRecipient(u.getId(), u.getEmail()))
+				.filter(r -> r.getUser() != null && r.getUser().getEmail() != null)
+				.collect(java.util.stream.Collectors.toMap(r -> r.getUser().getId(), r -> r, (a, b) -> a))
+				.values().stream()
+				.map(r -> new MailRecipient(r.getUser().getId(), r.getUser().getEmail(), r.getId()))
 				.toList();
 	}
 
@@ -64,11 +65,10 @@ public class MailRecipientResolverImpl implements MailRecipientResolver {
 				.findByTournamentIdAndStatus(tournamentId, RegistrationStatus.APPROVED.getValue(), Pageable.unpaged())
 				.getContent();
 		return registrations.stream()
-				.map(Registration::getUser)
-				.filter(Objects::nonNull)
-				.filter(u -> u.getEmail() != null)
-				.distinct()
-				.map(u -> new MailRecipient(u.getId(), u.getEmail()))
+				.filter(r -> r.getUser() != null && r.getUser().getEmail() != null)
+				.collect(java.util.stream.Collectors.toMap(r -> r.getUser().getId(), r -> r, (a, b) -> a))
+				.values().stream()
+				.map(r -> new MailRecipient(r.getUser().getId(), r.getUser().getEmail(), r.getId()))
 				.toList();
 	}
 
@@ -80,16 +80,35 @@ public class MailRecipientResolverImpl implements MailRecipientResolver {
 		if (ownerId == null) return List.of();
 		return userRepository.searchStaffsByManager(ownerId, null, Pageable.unpaged())
 				.stream()
-				.map(u -> new MailRecipient(u.getId(), u.getEmail()))
+				.map(u -> new MailRecipient(u.getId(), u.getEmail(), null))
 				.toList();
 	}
 
-	private List<MailRecipient> resolveCustomList(List<String> customEmails) {
+	/**
+	 * Email tự nhập vẫn thuộc ngữ cảnh 1 giải đấu cụ thể — nếu email đó khớp một user đã có
+	 * registration trong chính giải đấu này thì vẫn gắn registrationId để điền {{registration.*}}
+	 * / {{payment.*}}; email lạ (không khớp ai) thì registrationId để null, biến tương ứng render rỗng.
+	 */
+	private List<MailRecipient> resolveCustomList(Long tournamentId, List<String> customEmails) {
 		if (customEmails == null) return List.of();
 		return customEmails.stream()
 				.filter(e -> e != null && !e.isBlank())
 				.distinct()
-				.map(e -> new MailRecipient(null, e))
+				.map(email -> {
+					Long userId = null;
+					Long registrationId = null;
+					var user = userRepository.findByEmail(email).orElse(null);
+					if (user != null) {
+						userId = user.getId();
+						if (tournamentId != null) {
+							registrationId = registrationRepository
+									.findByTournamentIdAndUserId(tournamentId, userId)
+									.map(Registration::getId)
+									.orElse(null);
+						}
+					}
+					return new MailRecipient(userId, email, registrationId);
+				})
 				.toList();
 	}
 }

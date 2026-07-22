@@ -130,6 +130,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		registration = registrationRepository.save(registration);
 		registrationFormService.saveFieldValues(
 				registration, tournament.getRegistrationFormTemplateId(), normalizedValues);
+		publishRegistrationEvent(EmailEventType.REGISTRATION_SUBMITTED, registration);
 
 		// Giải miễn phí → tự động xét duyệt ngay (slot check + pessimistic lock)
 		BigDecimal fee = tournament.getEntryFee();
@@ -283,7 +284,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.id(registration.getId())
 				.tournamentId(registration.getTournament().getId())
 				.tournamentName(registration.getTournament().getName())
-				.userId(registration.getUser().getId())
+				.userId(registration.getUser() != null ? registration.getUser().getId() : null)
 				.registrationType(registration.getRegistrationType())
 				.playerFullName(registration.getPlayerFullName())
 				.playerPhone(registration.getPlayerPhone())

@@ -10,15 +10,19 @@ import com.capstone.su26_sep490_g2_be.dto.response.RenderedEmailResponse;
 import com.capstone.su26_sep490_g2_be.entity.EmailAutomationRule;
 import com.capstone.su26_sep490_g2_be.entity.EmailSendLog;
 import com.capstone.su26_sep490_g2_be.entity.EmailTemplate;
+import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.EmailRecipientType;
 import com.capstone.su26_sep490_g2_be.enums.EmailSendStatus;
 import com.capstone.su26_sep490_g2_be.enums.EmailTriggerType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.EmailAutomationRuleRepository;
 import com.capstone.su26_sep490_g2_be.repository.EmailSendLogRepository;
 import com.capstone.su26_sep490_g2_be.repository.EmailTemplateRepository;
+import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
+import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.MailAutomationService;
 import com.capstone.su26_sep490_g2_be.service.MailRecipient;
@@ -44,6 +48,8 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 	private final EmailTemplateRepository emailTemplateRepository;
 	private final EmailAutomationRuleRepository emailAutomationRuleRepository;
 	private final EmailSendLogRepository emailSendLogRepository;
+	private final RegistrationRepository registrationRepository;
+	private final PaymentRepository paymentRepository;
 	private final MailRecipientResolver mailRecipientResolver;
 	private final MailRenderService mailRenderService;
 	private final MailSendService mailSendService;
@@ -95,25 +101,26 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 
 		// Override tạm thời chỉ dùng để render — FK log vẫn trỏ về template thật (đã persist).
 		boolean hasOverride = request.getSubjectOverride() != null || request.getBodyOverride() != null;
-		RenderedEmailResponse renderedOverride = null;
-		if (hasOverride) {
-			EmailTemplate transientTemplate = EmailTemplate.builder()
-					.code(template.getCode())
-					.subjectTemplate(request.getSubjectOverride() != null
-							? request.getSubjectOverride() : template.getSubjectTemplate())
-					.bodyHtmlTemplate(request.getBodyOverride() != null
-							? request.getBodyOverride() : template.getBodyHtmlTemplate())
-					.build();
-			renderedOverride = mailRenderService.render(transientTemplate, baseVariables);
-		}
+		EmailTemplate renderTemplate = hasOverride
+				? EmailTemplate.builder()
+						.code(template.getCode())
+						.subjectTemplate(request.getSubjectOverride() != null
+								? request.getSubjectOverride() : template.getSubjectTemplate())
+						.bodyHtmlTemplate(request.getBodyOverride() != null
+								? request.getBodyOverride() : template.getBodyHtmlTemplate())
+						.build()
+				: null;
 
 		for (MailRecipient recipient : recipients) {
+			Map<String, Object> variables = new HashMap<>(baseVariables);
+			enrichWithRegistration(variables, recipient.registrationId());
+
 			mailSendService.queueAndSend(MailSendCommand.builder()
 					.template(template)
 					.recipientEmail(recipient.email())
 					.recipientUserId(recipient.userId())
-					.variables(baseVariables)
-					.renderedOverride(renderedOverride)
+					.variables(variables)
+					.renderedOverride(hasOverride ? mailRenderService.render(renderTemplate, variables) : null)
 					.triggerType(EmailTriggerType.MANUAL)
 					.tournament(tournament)
 					.createdByUserId(userId)
@@ -121,6 +128,17 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 		}
 
 		return ManualSendResultResponse.builder().queuedCount(recipients.size()).build();
+	}
+
+	/** Điền {{registration.*}}/{{user.*}}/{{payment.*}} khi người nhận có gắn 1 registration thật trong giải này. */
+	private void enrichWithRegistration(Map<String, Object> variables, Long registrationId) {
+		if (registrationId == null) return;
+		Registration registration = registrationRepository.findById(registrationId).orElse(null);
+		if (registration == null) return;
+		mailContextBuilder.putRegistration(variables, registration);
+		paymentRepository
+				.findFirstByRegistrationIdAndStatusOrderByPaidAtDesc(registrationId, PaymentStatus.SUCCESS.getValue())
+				.ifPresent(payment -> mailContextBuilder.putPayment(variables, payment));
 	}
 
 	@Override
