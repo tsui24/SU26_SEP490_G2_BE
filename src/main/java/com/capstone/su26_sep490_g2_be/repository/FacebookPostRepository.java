@@ -12,6 +12,8 @@ public interface FacebookPostRepository extends JpaRepository<FacebookPost, Long
 
 	List<FacebookPost> findByTournamentIdOrderByPostedAtDesc(Long tournamentId);
 
+	List<FacebookPost> findByTournamentIdIn(List<Long> tournamentIds);
+
 	Page<FacebookPost> findAllByOrderByPostedAtDesc(Pageable pageable);
 
 	Optional<FacebookPost> findByFacebookPostId(String facebookPostId);

@@ -16,6 +16,8 @@ public interface TournamentResultRepository extends JpaRepository<TournamentResu
 
 	boolean existsByTournamentIdAndParticipantId(Long tournamentId, Long participantId);
 
+	List<TournamentResult> findByTournamentIdIn(List<Long> tournamentIds);
+
 	@Query("""
 		SELECT tr FROM TournamentResult tr
 		JOIN FETCH tr.tournament
