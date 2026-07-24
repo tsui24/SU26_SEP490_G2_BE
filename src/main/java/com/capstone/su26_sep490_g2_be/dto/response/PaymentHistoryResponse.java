@@ -13,9 +13,11 @@ public class PaymentHistoryResponse {
     private Long registrationId;
     private Long tournamentId;
     private String tournamentName;
+    private String playerName;
     private BigDecimal amount;
     private String paymentMethod;
     private String status;
+    private String statusLabel;
     private String transactionCode;
     private String checkoutUrl;
     private Instant paidAt;
