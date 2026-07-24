@@ -1,8 +1,10 @@
 package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.ManualAddParticipantRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.ParticipantImportConfirmRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ImportParticipantResultResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ParticipantResponse;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
@@ -123,20 +125,36 @@ public class ParticipantController {
         return buildTemplateResponse(id, format);
     }
 
-    @Operation(summary = "Import người tham gia từ Excel (Owner)")
-    @PostMapping("/api/v1/owner/tournaments/{id}/participants/import-excel")
-    public ResponseEntity<ApiResponse<ImportParticipantResultResponse>> importOwner(
+    @Operation(summary = "Xem trước import người tham gia từ Excel (Owner)", description = "Chỉ validate, không lưu DB. Dùng kết quả để gọi confirm.")
+    @PostMapping("/api/v1/owner/tournaments/{id}/participants/import-excel/preview")
+    public ResponseEntity<ApiResponse<ParticipantImportPreviewResponse>> previewImportOwner(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(ApiResponse.success(participantExcelService.importFromExcel(id, file)));
+        return ResponseEntity.ok(ApiResponse.success(participantExcelService.previewFromExcel(id, file)));
     }
 
-    @Operation(summary = "Import người tham gia từ Excel (Manager)")
-    @PostMapping("/api/v1/manager/tournaments/{id}/participants/import-excel")
-    public ResponseEntity<ApiResponse<ImportParticipantResultResponse>> importManager(
+    @Operation(summary = "Xem trước import người tham gia từ Excel (Manager)", description = "Chỉ validate, không lưu DB. Dùng kết quả để gọi confirm.")
+    @PostMapping("/api/v1/manager/tournaments/{id}/participants/import-excel/preview")
+    public ResponseEntity<ApiResponse<ParticipantImportPreviewResponse>> previewImportManager(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(ApiResponse.success(participantExcelService.importFromExcel(id, file)));
+        return ResponseEntity.ok(ApiResponse.success(participantExcelService.previewFromExcel(id, file)));
+    }
+
+    @Operation(summary = "Xác nhận import người tham gia từ Excel (Owner)", description = "Lưu các dòng hợp lệ vào DB sau khi người dùng xem trước và xác nhận.")
+    @PostMapping("/api/v1/owner/tournaments/{id}/participants/import-excel/confirm")
+    public ResponseEntity<ApiResponse<ImportParticipantResultResponse>> confirmImportOwner(
+            @PathVariable Long id,
+            @Valid @RequestBody ParticipantImportConfirmRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(participantExcelService.confirmImport(id, request)));
+    }
+
+    @Operation(summary = "Xác nhận import người tham gia từ Excel (Manager)", description = "Lưu các dòng hợp lệ vào DB sau khi người dùng xem trước và xác nhận.")
+    @PostMapping("/api/v1/manager/tournaments/{id}/participants/import-excel/confirm")
+    public ResponseEntity<ApiResponse<ImportParticipantResultResponse>> confirmImportManager(
+            @PathVariable Long id,
+            @Valid @RequestBody ParticipantImportConfirmRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(participantExcelService.confirmImport(id, request)));
     }
 
     /* ── Withdraw ── */

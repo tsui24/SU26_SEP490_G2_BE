@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -53,4 +54,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	Page<User> searchStaffsByManager(@Param("ownerId") Long ownerId,
 	                                 @Param("search") String search,
 	                                 Pageable pageable);
+
+	/** STAFF đang hoạt động thuộc 1 chi nhánh — dùng để chọn trọng tài cho trận của giải ở chi nhánh đó. */
+	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
+			"WHERE r.code = 'STAFF' AND u.status = 'ACTIVE' AND u.branch.id = :branchId " +
+			"ORDER BY p.fullName ASC")
+	List<User> findActiveStaffByBranch(@Param("branchId") Long branchId);
 }

@@ -101,4 +101,13 @@ public class Match extends BaseEntity {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "table_id")
 	private BilliardTable table;
+
+	/** Giờ kết thúc dự kiến — auto-scheduler tính theo race-to + loại bi. */
+	@Column(name = "estimated_end_at")
+	private Instant estimatedEndAt;
+
+	/** true = owner đã gán bàn/giờ thủ công → auto-scheduler bỏ qua, không ghi đè. */
+	@Column(name = "schedule_locked", nullable = false)
+	@Builder.Default
+	private Boolean scheduleLocked = false;
 }

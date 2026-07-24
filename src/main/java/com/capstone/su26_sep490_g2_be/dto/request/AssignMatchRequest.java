@@ -30,4 +30,10 @@ public class AssignMatchRequest {
 
     /** true = bỏ giờ thi đấu */
     private Boolean clearScheduledAt;
+
+    /** true = trả trận về chế độ tự động xếp lịch (bỏ khóa, auto được phép xếp lại bàn/giờ). */
+    private Boolean resetToAuto;
+
+    /** true = bỏ qua cảnh báo trùng bàn/giờ (owner đã xác nhận vẫn lưu). */
+    private Boolean ignoreTableConflict;
 }

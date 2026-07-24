@@ -9,4 +9,5 @@ public class ParticipantBriefResponse {
     private Long id;
     private String displayName;
     private Integer seedNo;
+    private String avatarUrl;
 }

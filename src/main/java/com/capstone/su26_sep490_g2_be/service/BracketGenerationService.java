@@ -31,4 +31,13 @@ public interface BracketGenerationService {
      * loại bottom → INACTIVE, auto-WALKOVER các trận còn lại của họ.
      */
     void eliminateBottomParticipants(Long tournamentId, int keepCount);
+
+    /**
+     * PROGRESSIVE_ROUND_ROBIN: chuyển sang giai đoạn kế tiếp — tính standings GĐ hiện tại,
+     * loại người ngoài top-survivors, rồi sinh lịch RR mới cho nhóm đi tiếp hoặc bracket Playoff.
+     */
+    void advanceProgressiveStage(Long tournamentId);
+
+    /** Bảng xếp hạng riêng của một giai đoạn (theo stageId) — có head-to-head. */
+    List<StandingsEntryResponse> computeStageStandings(Long stageId);
 }

@@ -55,6 +55,11 @@ public class Tournament extends BaseEntity {
 	@Column(name = "max_participants", nullable = false)
 	private Integer maxParticipants;
 
+	/** Số bàn thi đấu của giải — auto-scheduler gán bàn 1..tableCount. */
+	@Column(name = "table_count")
+	@Builder.Default
+	private Integer tableCount = 1;
+
 	@Column(name = "entry_fee", precision = 15, scale = 2)
 	@Builder.Default
 	private BigDecimal entryFee = BigDecimal.ZERO;
