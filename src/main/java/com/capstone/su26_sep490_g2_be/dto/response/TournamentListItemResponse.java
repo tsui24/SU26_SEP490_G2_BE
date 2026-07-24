@@ -21,6 +21,7 @@ public class TournamentListItemResponse {
 	private String participantType;
 	private String status;
 	private Integer maxParticipants;
+	private Integer tableCount;
 	private BigDecimal entryFee;
 	private Boolean isRegister;
 	private Boolean configComplete;

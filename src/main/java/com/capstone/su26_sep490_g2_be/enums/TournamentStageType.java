@@ -16,7 +16,9 @@ public enum TournamentStageType {
 	KNOCKOUT("Knockout"),
 	WINNERS("Nhánh thắng"),
 	LOSERS("Nhánh thua"),
-	GRAND_FINAL("Chung kết lớn");
+	GRAND_FINAL("Chung kết lớn"),
+	PROGRESSIVE_ROUND("Vòng tròn loại dần"),
+	PROGRESSIVE_PLAYOFF("Playoff");
 
 	private final String displayName;
 

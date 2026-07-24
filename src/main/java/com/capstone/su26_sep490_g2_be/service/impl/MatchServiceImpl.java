@@ -14,13 +14,16 @@ import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.dto.response.StaffBriefResponse;
 import com.capstone.su26_sep490_g2_be.repository.BilliardTableRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
+import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.MailRecipient;
+import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import com.capstone.su26_sep490_g2_be.service.MatchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -44,9 +48,11 @@ public class MatchServiceImpl implements MatchService {
     private final MatchScoreEventRepository scoreEventRepository;
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final TournamentRepository tournamentRepository;
     private final BilliardTableRepository billiardTableRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final MailContextBuilder mailContextBuilder;
+    private final MatchSchedulingService matchSchedulingService;
 
     @Override
     public Match getById(Long id) {
@@ -105,8 +111,159 @@ public class MatchServiceImpl implements MatchService {
     public Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId) {
         Match match = getById(matchId);
         getUser(updatedByUserId);
+        Long oldStaffId = match.getAssignedStaff() != null ? match.getAssignedStaff().getId() : null;
         applyAssignment(match, request);
-        return matchRepository.save(match);
+        // Chỉ validate khi gán giờ thủ công (không phải reset/clear)
+        if (request.getScheduledAt() != null && !Boolean.TRUE.equals(request.getResetToAuto())) {
+            validateManualSchedule(match, Boolean.TRUE.equals(request.getIgnoreTableConflict()));
+        }
+        // Validate trọng tài không trùng giờ / đang bận (khi thực sự gán trọng tài mới)
+        boolean assigningReferee = request.getAssignedStaffId() != null
+                && !Boolean.TRUE.equals(request.getResetToAuto())
+                && !Boolean.TRUE.equals(request.getClearAssignedStaff());
+        if (assigningReferee) {
+            validateRefereeAvailability(match);
+        }
+        matchRepository.save(match);
+        // Đồng bộ lại lịch xung quanh (tôn trọng trận đã khóa / trả về auto)
+        matchSchedulingService.reschedule(match.getTournament().getId());
+        // Thông báo cho trọng tài khi được phân công mới
+        Long newStaffId = match.getAssignedStaff() != null ? match.getAssignedStaff().getId() : null;
+        if (newStaffId != null && !newStaffId.equals(oldStaffId)) {
+            publishRefereeAssignedEvent(match);
+        }
+        return matchRepository.findById(matchId).orElse(match);
+    }
+
+    /**
+     * Trọng tài không thể giám sát 2 trận cùng lúc. Xét TOÀN CỤC mọi trận của trọng tài (mọi giải):
+     * - Đang có trận IN_PROGRESS (kể cả đã quá giờ dự kiến) → chặn.
+     * - Trùng khung giờ [start, end) với trận khác chưa kết thúc → chặn.
+     */
+    private void validateRefereeAvailability(Match match) {
+        User staff = match.getAssignedStaff();
+        if (staff == null) return;
+
+        List<Match> refMatches = matchRepository.findByAssignedStaffId(staff.getId(), null, null, null);
+        Instant mStart = match.getScheduledAt();
+        Instant mEnd = matchEnd(match);
+
+        for (Match other : refMatches) {
+            if (other.getId().equals(match.getId())) continue;
+            if (MatchStatus.valueOf(other.getStatus()).isResolved()) continue;
+
+            // Đang điều hành trận dở → không rảnh
+            if (MatchStatus.IN_PROGRESS.getValue().equals(other.getStatus())) {
+                throw new BusinessException(ErrorCode.REFEREE_BUSY_ONGOING);
+            }
+            // Trùng khung giờ với trận PENDING khác
+            if (mStart != null && mEnd != null) {
+                Instant oStart = other.getScheduledAt();
+                Instant oEnd = matchEnd(other);
+                if (oStart != null && oEnd != null && mStart.isBefore(oEnd) && oStart.isBefore(mEnd)) {
+                    throw new BusinessException(ErrorCode.REFEREE_TIME_CONFLICT);
+                }
+            }
+        }
+    }
+
+    private void publishRefereeAssignedEvent(Match match) {
+        User staff = match.getAssignedStaff();
+        if (staff == null || staff.getEmail() == null) return;
+        Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+        mailContextBuilder.putMatch(variables, match);
+        eventPublisher.publishEvent(MailDomainEvent.builder()
+                .eventType(EmailEventType.MATCH_REFEREE_ASSIGNED)
+                .tournamentId(match.getTournament().getId())
+                .variables(variables)
+                .explicitRecipients(List.of(new MailRecipient(staff.getId(), staff.getEmail())))
+                .entityKey("MATCH-REFEREE-" + match.getId() + "-" + staff.getId())
+                .build());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StaffBriefResponse> getRefereesForTournament(Long tournamentId) {
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        Long branchId = tournament.getBranch() != null ? tournament.getBranch().getId() : null;
+        if (branchId == null) return List.of();
+        return userRepository.findActiveStaffByBranch(branchId).stream()
+                .map(u -> StaffBriefResponse.builder()
+                        .id(u.getId())
+                        .displayName(staffDisplayName(u))
+                        .build())
+                .toList();
+    }
+
+    private String staffDisplayName(User u) {
+        try {
+            if (u.getProfile() != null) {
+                if (u.getProfile().getDisplayName() != null && !u.getProfile().getDisplayName().isBlank())
+                    return u.getProfile().getDisplayName();
+                if (u.getProfile().getFullName() != null && !u.getProfile().getFullName().isBlank())
+                    return u.getProfile().getFullName();
+            }
+        } catch (Exception ignored) {}
+        return u.getEmail();
+    }
+
+    /**
+     * Validate khi gán bàn/giờ thủ công cho 1 trận:
+     * - KHÔNG cho xếp trước khi các trận nguồn (feeder — VD tứ kết/bán kết) kết thúc.
+     * - Cảnh báo (chặn trừ khi ignoreTableConflict) nếu trùng bàn + khung giờ với trận khác.
+     */
+    private void validateManualSchedule(Match match, boolean ignoreTableConflict) {
+        Instant start = match.getScheduledAt();
+        if (start == null) return;
+        Instant end = match.getEstimatedEndAt() != null
+                ? match.getEstimatedEndAt()
+                : start.plusSeconds(matchSchedulingService.estimateDurationMinutes(match) * 60);
+
+        // 0) Không được xếp trước giờ bắt đầu giải
+        Instant tournamentStart = match.getTournament().getStartAt();
+        if (tournamentStart != null && start.isBefore(tournamentStart)) {
+            throw new BusinessException(ErrorCode.MATCH_SCHEDULE_BEFORE_START);
+        }
+
+        List<Match> all = matchRepository.findByTournamentIdOrderByRoundNoAscPositionNoAsc(
+                match.getTournament().getId());
+
+        // 1) Phụ thuộc: không được bắt đầu trước khi feeder kết thúc
+        for (Match other : all) {
+            if (other.getId().equals(match.getId())) continue;
+            boolean feeder = (other.getNextMatchWin() != null && match.getId().equals(other.getNextMatchWin().getId()))
+                    || (other.getNextMatchLose() != null && match.getId().equals(other.getNextMatchLose().getId()));
+            if (!feeder) continue;
+            Instant feederEnd = matchEnd(other);
+            if (feederEnd != null && start.isBefore(feederEnd)) {
+                throw new BusinessException(ErrorCode.MATCH_SCHEDULE_BEFORE_FEEDER);
+            }
+        }
+
+        // 2) Trùng bàn + giờ (chồng khung giờ) — chỉ chặn nếu owner chưa xác nhận bỏ qua
+        if (!ignoreTableConflict && match.getTableNo() != null) {
+            for (Match other : all) {
+                if (other.getId().equals(match.getId())) continue;
+                if (MatchStatus.valueOf(other.getStatus()).isResolved()) continue;
+                if (!Objects.equals(other.getTableNo(), match.getTableNo())) continue;
+                Instant oStart = other.getScheduledAt();
+                Instant oEnd = matchEnd(other);
+                if (oStart == null || oEnd == null) continue;
+                if (start.isBefore(oEnd) && oStart.isBefore(end)) { // [start,end) giao [oStart,oEnd)
+                    throw new BusinessException(ErrorCode.MATCH_TABLE_TIME_CONFLICT);
+                }
+            }
+        }
+    }
+
+    /** Giờ kết thúc (dự kiến hoặc suy ra) của 1 trận, dùng cho check phụ thuộc/trùng giờ. */
+    private Instant matchEnd(Match m) {
+        if (m.getEstimatedEndAt() != null) return m.getEstimatedEndAt();
+        if (m.getScheduledAt() != null) {
+            return m.getScheduledAt().plusSeconds(matchSchedulingService.estimateDurationMinutes(m) * 60);
+        }
+        return null;
     }
 
     @Override
@@ -114,6 +271,7 @@ public class MatchServiceImpl implements MatchService {
     public List<Match> bulkAssignMatches(List<Long> matchIds, AssignMatchRequest request, Long updatedByUserId) {
         getUser(updatedByUserId);
         List<Match> updated = new ArrayList<>();
+        Long tournamentId = null;
         for (Long matchId : matchIds) {
             Match match = matchRepository.findById(matchId).orElse(null);
             if (match == null) {
@@ -126,6 +284,10 @@ public class MatchServiceImpl implements MatchService {
                 continue;
             }
             updated.add(matchRepository.save(match));
+            tournamentId = match.getTournament().getId();
+        }
+        if (tournamentId != null) {
+            matchSchedulingService.reschedule(tournamentId);
         }
         return updated;
     }
@@ -139,11 +301,24 @@ public class MatchServiceImpl implements MatchService {
             if (!"STAFF".equals(staff.getRole().getCode())) {
                 throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
             }
+            // Trọng tài phải thuộc chi nhánh tổ chức giải (nếu giải có chi nhánh)
+            Branch tBranch = match.getTournament().getBranch();
+            if (tBranch != null) {
+                Long staffBranchId = staff.getBranch() != null ? staff.getBranch().getId() : null;
+                if (!tBranch.getId().equals(staffBranchId)) {
+                    throw new BusinessException(ErrorCode.REFEREE_NOT_IN_BRANCH);
+                }
+            }
             match.setAssignedStaff(staff);
         }
 
-        boolean wantsTableChange = Boolean.TRUE.equals(request.getClearTable())
-                || request.getTableId() != null || request.getTableNo() != null;
+        // Trả trận về chế độ tự động: bỏ khóa, auto-scheduler sẽ tính lại bàn/giờ.
+        if (Boolean.TRUE.equals(request.getResetToAuto())) {
+            match.setScheduleLocked(false);
+            return;
+        }
+
+        boolean wantsTableChange = Boolean.TRUE.equals(request.getClearTable()) || request.getTableNo() != null;
         boolean wantsScheduleChange = Boolean.TRUE.equals(request.getClearScheduledAt())
                 || request.getScheduledAt() != null;
 
@@ -151,21 +326,31 @@ public class MatchServiceImpl implements MatchService {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
 
+        // Bàn: chỉ dùng số bàn 1..tableCount (không còn phụ thuộc pool BilliardTable)
         if (Boolean.TRUE.equals(request.getClearTable())) {
-            match.setTable(null);
             match.setTableNo(null);
-        } else if (request.getTableId() != null) {
-            BilliardTable table = loadTableForMatch(match, request.getTableId());
-            match.setTable(table);
-            match.setTableNo(table.getTableNumber());
+            match.setTable(null);
         } else if (request.getTableNo() != null) {
+            Integer tableCount = match.getTournament().getTableCount();
+            int max = (tableCount != null && tableCount > 0) ? tableCount : 1;
+            if (request.getTableNo() < 1 || request.getTableNo() > max) {
+                throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+            }
             match.setTableNo(request.getTableNo());
         }
 
         if (Boolean.TRUE.equals(request.getClearScheduledAt())) {
             match.setScheduledAt(null);
+            match.setEstimatedEndAt(null);
         } else if (request.getScheduledAt() != null) {
             match.setScheduledAt(request.getScheduledAt());
+            match.setEstimatedEndAt(request.getScheduledAt()
+                    .plusSeconds(matchSchedulingService.estimateDurationMinutes(match) * 60));
+        }
+
+        // Chỉnh bàn/giờ thủ công → khóa lịch, auto không ghi đè
+        if (wantsTableChange || wantsScheduleChange) {
+            match.setScheduleLocked(true);
         }
     }
 
@@ -314,6 +499,9 @@ public class MatchServiceImpl implements MatchService {
         advanceParticipants(match, winner, loser);
         publishMatchCompletedEvent(match);
 
+        // Bàn vừa trống + trận vừa đủ người → xếp lại giờ dự kiến (chỉ lùi, không nhảy sớm)
+        matchSchedulingService.reschedule(match.getTournament().getId());
+
         return match;
     }
 
@@ -368,6 +556,7 @@ public class MatchServiceImpl implements MatchService {
 
         matchRepository.save(match);
         advanceParticipants(match, winner, loser);
+        matchSchedulingService.reschedule(match.getTournament().getId());
         return match;
     }
 

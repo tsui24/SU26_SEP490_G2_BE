@@ -46,6 +46,10 @@ public class CreateTournamentRequest {
 	@Schema(description = "Số người tham gia tối đa", example = "16")
 	private Integer maxParticipants;
 
+	@Min(value = 1, message = "Số bàn thi đấu phải từ 1 trở lên")
+	@Schema(description = "Số bàn thi đấu", example = "4")
+	private Integer tableCount;
+
 	@DecimalMin(value = "0", message = "Phí đăng ký không được âm")
 	@Schema(description = "Phí đăng ký", example = "200000")
 	private BigDecimal entryFee;

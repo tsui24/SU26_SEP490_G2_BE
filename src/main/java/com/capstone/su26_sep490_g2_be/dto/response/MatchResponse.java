@@ -22,6 +22,8 @@ public class MatchResponse {
     private String status;
     private Boolean isBye;
     private Instant scheduledAt;
+    private Instant estimatedEndAt;
+    private Boolean scheduleLocked;
 
     private ParticipantBriefResponse player1;
     private ParticipantBriefResponse player2;
