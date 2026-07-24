@@ -4,12 +4,13 @@ import com.capstone.su26_sep490_g2_be.entity.Payment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.EntityGraph;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface PaymentRepository extends JpaRepository<Payment, Long> {
+public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpecificationExecutor<Payment> {
 
 	@EntityGraph(attributePaths = { "registration", "registration.tournament" })
 	List<Payment> findByRegistrationId(Long registrationId);
@@ -19,6 +20,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
 	Optional<Payment> findByTransactionCode(String transactionCode);
 
+	@EntityGraph(attributePaths = { "registration", "registration.tournament" })
 	List<Payment> findByRegistration_Tournament_IdIn(List<Long> tournamentIds);
 
 	Optional<Payment> findFirstByRegistrationIdAndStatusOrderByPaidAtDesc(Long registrationId, String status);

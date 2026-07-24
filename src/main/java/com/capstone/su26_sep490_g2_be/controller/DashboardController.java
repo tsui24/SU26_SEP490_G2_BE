@@ -2,9 +2,11 @@ package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.DashboardStatsResponse;
+import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.service.DashboardService;
+import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final SecurityUtil securityUtil;
 
     @Operation(summary = "Thống kê tổng quan — Owner")
     @GetMapping("/owner/dashboard/stats")
@@ -33,8 +36,10 @@ public class DashboardController {
 
     @Operation(summary = "Thống kê tổng quan — Manager")
     @GetMapping("/manager/dashboard/stats")
-    public ResponseEntity<ApiResponse<DashboardStatsResponse>> managerStats() {
-        return ResponseEntity.ok(ApiResponse.success(dashboardService.buildStats(null)));
+    public ResponseEntity<ApiResponse<DashboardStatsResponse>> managerStats(Authentication authentication) {
+        User manager = securityUtil.resolveCurrentUser(authentication);
+        Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
+        return ResponseEntity.ok(ApiResponse.success(dashboardService.buildStats(ownerId)));
     }
 
     private Long extractUserId(Authentication auth) {
