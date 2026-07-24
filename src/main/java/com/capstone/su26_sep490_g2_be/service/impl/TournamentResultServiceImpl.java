@@ -8,6 +8,7 @@ import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.TournamentResult;
+import com.capstone.su26_sep490_g2_be.entity.TournamentStage;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.entity.UserProfile;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
@@ -22,6 +23,7 @@ import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.repository.TournamentStageRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentResultRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserProfileRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
@@ -59,6 +61,7 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	private final BracketGenerationService bracketGenerationService;
 	private final ParticipantRepository participantRepository;
 	private final UserProfileRepository userProfileRepository;
+	private final TournamentStageRepository stageRepository;
 
 	@Override
 	public List<TournamentResult> getByTournament(Long tournamentId) {
@@ -133,6 +136,10 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 			// Vòng tròn: hạng = thứ tự trên bảng điểm (điểm, hiệu số, đối đầu...)
 			return fromGroupStandings(tournament.getId());
 		}
+		if (TournamentFormat.PROGRESSIVE_ROUND_ROBIN.getValue().equals(formatCode)) {
+			// Vòng tròn loại dần: top playoff theo kết quả knockout; còn lại theo GĐ bị loại
+			return fromProgressiveRankings(tournament);
+		}
 		// Single/Double elimination và knockout playoff: hạng = vòng bị loại
 		return computeSingleEliminationRankings(tournament.getId());
 	}
@@ -163,6 +170,99 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 					.build());
 		}
 		return entries;
+	}
+
+	/**
+	 * Xếp hạng cho giải PROGRESSIVE_ROUND_ROBIN.
+	 *
+	 * <p>Top {@code final_playoff_size} người xếp theo kết quả vòng Playoff (VĐ, Á quân, hạng 3-4...).
+	 * Số còn lại xếp theo giai đoạn League bị loại — bị loại càng MUỘN hạng càng cao; trong cùng
+	 * giai đoạn theo bảng xếp hạng của giai đoạn đó (đã tính head-to-head).
+	 */
+	private List<TournamentRankingEntryResponse> fromProgressiveRankings(Tournament tournament) {
+		Long tid = tournament.getId();
+		List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tid);
+
+		TournamentStage playoff = stages.stream()
+				.filter(s -> TournamentStageType.PROGRESSIVE_PLAYOFF.getValue().equals(s.getStageType()))
+				.findFirst().orElse(null);
+		List<TournamentStage> leagueStages = stages.stream()
+				.filter(s -> TournamentStageType.PROGRESSIVE_ROUND.getValue().equals(s.getStageType()))
+				.sorted(Comparator.comparingInt(TournamentStage::getOrderNo))
+				.toList();
+
+		List<TournamentRankingEntryResponse> entries = new ArrayList<>();
+		Set<Long> placed = new HashSet<>();
+
+		// 1) Placement từ vòng Playoff (nếu đã sinh)
+		if (playoff != null) {
+			addProgressivePlayoffPlacements(playoff.getId(), entries, placed);
+		}
+
+		// 2) Các giai đoạn League — muộn nhất trước (hạng cao hơn), theo standings từng GĐ
+		int nextRank = entries.size() + 1;
+		for (int si = leagueStages.size() - 1; si >= 0; si--) {
+			List<StandingsEntryResponse> standings =
+					bracketGenerationService.computeStageStandings(leagueStages.get(si).getId());
+			for (StandingsEntryResponse s : standings) {
+				if (placed.contains(s.getParticipantId())) {
+					continue;
+				}
+				entries.add(TournamentRankingEntryResponse.builder()
+						.sortOrder(nextRank)
+						.rankLabel(RankingLabelFormat.single(nextRank))
+						.rankFrom(nextRank)
+						.rankTo(nextRank)
+						.participantId(s.getParticipantId())
+						.displayName(s.getDisplayName())
+						.build());
+				placed.add(s.getParticipantId());
+				nextRank++;
+			}
+		}
+
+		entries.sort(Comparator
+				.comparingInt(TournamentRankingEntryResponse::getSortOrder)
+				.thenComparing(TournamentRankingEntryResponse::getDisplayName,
+						Comparator.nullsLast(String::compareToIgnoreCase)));
+		return entries;
+	}
+
+	/** Placement cho bracket Playoff single-elimination (không có trận tranh hạng 3). */
+	private void addProgressivePlayoffPlacements(Long stageId,
+			List<TournamentRankingEntryResponse> entries, Set<Long> placed) {
+		List<Match> matches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(stageId);
+		if (matches.isEmpty()) {
+			return;
+		}
+		int maxRound = matches.stream().mapToInt(Match::getRoundNo).max().orElse(0);
+		if (maxRound == 0) {
+			return;
+		}
+
+		Match finalMatch = matches.stream()
+				.filter(m -> m.getRoundNo() == maxRound && m.getPositionNo() == 1)
+				.findFirst().orElse(null);
+		if (finalMatch != null && isFinished(finalMatch)) {
+			addEntry(entries, placed, finalMatch.getWinner(), 1, 1, RankingPlacementNote.CHAMPION.getValue());
+			addEntry(entries, placed, finalMatch.getLoser(), 2, 2, RankingPlacementNote.RUNNER_UP.getValue());
+		}
+		if (maxRound >= 2) {
+			int sfRound = maxRound - 1;
+			for (Match m : matches) {
+				if (m.getRoundNo() == sfRound && isFinished(m) && m.getLoser() != null) {
+					addEntry(entries, placed, m.getLoser(), 3, 4, RankingPlacementNote.SEMI_FINAL.getValue());
+				}
+			}
+		}
+		for (int er = maxRound - 2; er >= 1; er--) {
+			int[] range = placementRangeForEliminationRound(er, maxRound);
+			for (Match m : matches) {
+				if (m.getRoundNo() == er && isFinished(m) && m.getLoser() != null) {
+					addEntry(entries, placed, m.getLoser(), range[0], range[1], null);
+				}
+			}
+		}
 	}
 
 	/**

@@ -17,4 +17,6 @@ public interface FormatConfigFieldRepository extends JpaRepository<FormatConfigF
 	boolean existsByFormatCodeAndFieldKey(String formatCode, String fieldKey);
 
 	long countByFormatCode(String formatCode);
+
+	void deleteByFieldKeyIn(List<String> fieldKeys);
 }

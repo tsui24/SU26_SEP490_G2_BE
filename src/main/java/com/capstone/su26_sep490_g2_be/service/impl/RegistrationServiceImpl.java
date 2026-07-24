@@ -105,6 +105,13 @@ public class RegistrationServiceImpl implements RegistrationService {
 		if (tournament.getRegistrationFormTemplateId() == null) {
 			throw new BusinessException(ErrorCode.REG_TEMPLATE_REQUIRED);
 		}
+		if (tournament.getMaxParticipants() != null) {
+			long approvedCount = registrationRepository.countByTournamentIdAndStatus(
+					tournamentId, RegistrationStatus.APPROVED.getValue());
+			if (approvedCount >= tournament.getMaxParticipants()) {
+				throw new BusinessException(ErrorCode.TOURNAMENT_FULL);
+			}
+		}
 
 		registrationFormService.loadActiveTemplate(tournament.getRegistrationFormTemplateId());
 		Map<String, String> normalizedValues = registrationFormService.validateAndNormalizeFieldValues(

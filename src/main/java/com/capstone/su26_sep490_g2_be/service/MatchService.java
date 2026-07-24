@@ -1,6 +1,7 @@
 package com.capstone.su26_sep490_g2_be.service;
 
 import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
+import com.capstone.su26_sep490_g2_be.dto.response.StaffBriefResponse;
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
 
@@ -21,6 +22,9 @@ public interface MatchService {
     List<Match> getMatchesForReferee(Long refereeUserId, Long tournamentId, String status, String tournamentName);
 
     void assertStaffAssigned(Long matchId, Long staffUserId);
+
+    /** Danh sách trọng tài (STAFF) khả dụng để gán cho trận của giải — chỉ staff thuộc chi nhánh tổ chức. */
+    List<StaffBriefResponse> getRefereesForTournament(Long tournamentId);
 
     Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId);
 

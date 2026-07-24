@@ -34,6 +34,9 @@ public class UpdateTournamentRequest {
 	@Min(value = 2, message = "Số người tham gia tối đa phải từ 2 trở lên")
 	private Integer maxParticipants;
 
+	@Min(value = 1, message = "Số bàn thi đấu phải từ 1 trở lên")
+	private Integer tableCount;
+
 	@DecimalMin(value = "0", message = "Phí đăng ký không được âm")
 	private BigDecimal entryFee;
 

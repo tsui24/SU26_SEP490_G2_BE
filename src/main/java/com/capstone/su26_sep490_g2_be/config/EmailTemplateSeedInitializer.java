@@ -122,6 +122,18 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				""",
 				"[\"user.fullName\", \"match.roundNo\", \"match.player1Name\", \"match.player2Name\", \"tournament.name\"]");
 
+		EmailTemplate refereeAssigned = seedTemplate(admin, "MATCH_REFEREE_ASSIGNED", "Phân công điều hành trận",
+				EmailTemplateCategory.TRANSACTIONAL,
+				"Bạn được phân công điều hành một trận đấu — {{tournament.name}}",
+				"""
+				<p>Xin chào,</p>
+				<p>Bạn vừa được phân công làm <b>trọng tài</b> điều hành một trận đấu thuộc giải
+				<b>{{tournament.name}}</b>.</p>
+				<p>Cặp đấu: <b>{{match.player1Name}}</b> vs <b>{{match.player2Name}}</b> (Vòng {{match.roundNo}}).</p>
+				<p>Vui lòng đăng nhập ứng dụng, vào mục <b>"Trận của tôi"</b> để theo dõi và điều hành trận đấu.</p>
+				""",
+				"[\"tournament.name\", \"match.player1Name\", \"match.player2Name\", \"match.roundNo\"]");
+
 		seedTemplate(admin, "MANUAL_BROADCAST", "Thông báo thủ công",
 				EmailTemplateCategory.MARKETING,
 				"{{custom.subject}}",
@@ -144,6 +156,8 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				EmailEventType.TOURNAMENT_DRAW_COMPLETED, drawDone, EmailRecipientType.ALL_PARTICIPANTS, true);
 		seedRule(admin, "AUTO_MATCH_REMINDER", "Nhắc lịch thi đấu (job định kỳ)",
 				EmailEventType.MATCH_SCHEDULED_REMINDER, matchReminder, EmailRecipientType.MATCH_PLAYERS, false);
+		seedRule(admin, "AUTO_MATCH_REFEREE_ASSIGNED", "Gửi email khi phân công trọng tài",
+				EmailEventType.MATCH_REFEREE_ASSIGNED, refereeAssigned, EmailRecipientType.CUSTOM_LIST, true);
 
 		log.info("Email template + automation rule seed completed");
 	}

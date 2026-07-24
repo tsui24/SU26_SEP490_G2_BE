@@ -20,6 +20,7 @@ public enum EmailEventType {
 	MATCH_SCHEDULED_REMINDER("Nhắc lịch thi đấu"),
 	MATCH_STARTING_SOON("Trận đấu sắp bắt đầu"),
 	MATCH_COMPLETED("Trận đấu đã kết thúc"),
+	MATCH_REFEREE_ASSIGNED("Được phân công điều hành trận"),
 	PARTICIPANT_WITHDRAWN("Vận động viên rút lui"),
 	STAFF_ACCOUNT_CREATED("Tài khoản nhân viên được tạo"),
 	MANAGER_ACCOUNT_CREATED("Tài khoản quản lý được tạo"),

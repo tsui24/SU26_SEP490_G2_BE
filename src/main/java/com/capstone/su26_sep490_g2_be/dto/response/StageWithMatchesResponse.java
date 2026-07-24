@@ -14,5 +14,8 @@ public class StageWithMatchesResponse {
     private String stageType;
     private Integer orderNo;
     private String status;
+    private Integer peRoundNo;
+    private Integer peActiveCount;
+    private Integer peEliminateCount;
     private List<MatchResponse> matches;
 }

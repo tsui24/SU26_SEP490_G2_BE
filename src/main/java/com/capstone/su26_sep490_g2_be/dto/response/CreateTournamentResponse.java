@@ -16,6 +16,7 @@ public class CreateTournamentResponse {
 	private String participantType;
 	private String status;
 	private Integer maxParticipants;
+	private Integer tableCount;
 	private Boolean configComplete;
 	private Boolean isRegister;
 	private Long registrationFormTemplateId;

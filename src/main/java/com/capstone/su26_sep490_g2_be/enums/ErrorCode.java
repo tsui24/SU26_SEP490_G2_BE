@@ -75,6 +75,12 @@ public enum ErrorCode {
 	MATCH_SCORE_OUT_OF_RANGE("MATCH_005", "Điểm phải nằm trong khoảng 0 đến race-to", HttpStatus.BAD_REQUEST),
 	MATCH_WINNER_MUST_BE_RACE_LEADER("MATCH_006", "Người thắng phải là cơ thủ đã đạt điểm thắng", HttpStatus.BAD_REQUEST),
 	MATCH_WINNER_NOT_IN_MATCH("MATCH_007", "Người thắng phải thuộc trận này", HttpStatus.BAD_REQUEST),
+	MATCH_SCHEDULE_BEFORE_FEEDER("MATCH_008", "Không thể xếp trận này trước khi các trận vòng trước (tứ kết/bán kết…) kết thúc", HttpStatus.CONFLICT),
+	MATCH_SCHEDULE_BEFORE_START("MATCH_010", "Không thể xếp giờ thi đấu trước thời gian bắt đầu giải", HttpStatus.BAD_REQUEST),
+	REFEREE_NOT_IN_BRANCH("MATCH_011", "Trọng tài phải thuộc chi nhánh tổ chức giải", HttpStatus.BAD_REQUEST),
+	REFEREE_BUSY_ONGOING("MATCH_012", "Trọng tài đang điều hành một trận khác chưa kết thúc — không thể phân công thêm", HttpStatus.CONFLICT),
+	REFEREE_TIME_CONFLICT("MATCH_013", "Trọng tài đã được phân công một trận khác trùng khung giờ", HttpStatus.CONFLICT),
+	MATCH_TABLE_TIME_CONFLICT("MATCH_009", "Bàn này đã có trận khác thi đấu trong khung giờ đó — hãy chọn bàn/giờ khác", HttpStatus.CONFLICT),
 
 	// Tournament participation
 	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),
@@ -85,6 +91,8 @@ public enum ErrorCode {
 	PARTICIPANT_SEED_DUPLICATE("TOURNAMENT_006", "Số hạt giống này đã được gán cho người tham gia khác", HttpStatus.CONFLICT),
 	TOURNAMENT_SEED_COUNT_INSUFFICIENT("TOURNAMENT_007", "Số người đã được gán hạt giống chưa đủ theo cấu hình — hãy gán thêm hạt giống hoặc giảm số lượng cấu hình trước khi bốc thăm", HttpStatus.CONFLICT),
 	PARTICIPANT_PARTNER_REQUIRED("TOURNAMENT_008", "Giải đôi yêu cầu nhập đủ thông tin cả 2 thành viên", HttpStatus.BAD_REQUEST),
+	PROGRESSIVE_STAGE_NOT_FINISHED("TOURNAMENT_009", "Vẫn còn trận của giai đoạn hiện tại chưa kết thúc — hãy hoàn thành tất cả trước khi chuyển giai đoạn", HttpStatus.CONFLICT),
+	PROGRESSIVE_CONFIG_INVALID("TOURNAMENT_010", "Cấu hình vòng tròn loại dần không hợp lệ", HttpStatus.BAD_REQUEST),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),
