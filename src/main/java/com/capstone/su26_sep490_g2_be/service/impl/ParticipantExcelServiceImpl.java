@@ -1,6 +1,9 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.dto.request.ParticipantImportConfirmRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ImportParticipantResultResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewRowResponse;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
@@ -145,14 +148,14 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	}
 
 	@Override
-	@Transactional
-	public ImportParticipantResultResponse importFromExcel(Long tournamentId, MultipartFile file) {
+	public ParticipantImportPreviewResponse previewFromExcel(Long tournamentId, MultipartFile file) {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
 		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
 		}
+		assertNotFull(tournament);
 
 		validateUploadFile(file);
 
@@ -163,35 +166,125 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 			throw new BusinessException(ErrorCode.PARTICIPANT_INVALID_EXCEL);
 		}
 
+		List<String[]> rows;
 		if (isCsvUpload(file, content)) {
-			return importRows(tournament, parseCsvRows(content));
+			rows = parseCsvRows(content);
+		} else {
+			try {
+				rows = parseExcelRows(content);
+			} catch (NotOfficeXmlFileException e) {
+				log.warn("Excel parse failed, retry as CSV for tournament {}: {}", tournamentId, e.getMessage());
+				rows = parseCsvRows(content);
+			} catch (BusinessException e) {
+				throw e;
+			} catch (Exception e) {
+				log.error("Preview parse failed for tournament {}: {}", tournamentId, e.getMessage(), e);
+				throw new BusinessException(ErrorCode.PARTICIPANT_INVALID_EXCEL);
+			}
 		}
 
-		try {
-			return importRows(tournament, parseExcelRows(content));
-		} catch (NotOfficeXmlFileException e) {
-			log.warn("Excel parse failed, retry as CSV for tournament {}: {}", tournamentId, e.getMessage());
-			return importRows(tournament, parseCsvRows(content));
-		} catch (BusinessException e) {
-			throw e;
-		} catch (Exception e) {
-			log.error("Import failed for tournament {}: {}", tournamentId, e.getMessage(), e);
-			throw new BusinessException(ErrorCode.PARTICIPANT_INVALID_EXCEL);
+		return buildPreviewResponse(validateRows(tournament, rows));
+	}
+
+	@Override
+	@Transactional
+	public ImportParticipantResultResponse confirmImport(Long tournamentId, ParticipantImportConfirmRequest request) {
+		Tournament tournament = tournamentRepository.findById(tournamentId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+
+		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+		}
+		assertNotFull(tournament);
+
+		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
+		List<String[]> rows = request.getRows().stream()
+				.map(r -> {
+					String seedStr = r.getSeedNo() == null ? null : String.valueOf(r.getSeedNo());
+					return isDouble
+							? new String[] {r.getName1(), r.getPhone1(), r.getName2(), r.getPhone2(), seedStr}
+							: new String[] {r.getName1(), r.getPhone1(), seedStr, null, null};
+				})
+				.toList();
+
+		// Re-validate against current DB state (not the client-supplied preview) to guard against
+		// races, e.g. another admin importing/adding a participant with the same seed in the meantime.
+		return persistRows(tournament, validateRows(tournament, rows));
+	}
+
+	private ParticipantImportPreviewResponse buildPreviewResponse(List<ParsedRow> parsedRows) {
+		List<ParticipantImportPreviewRowResponse> rows = parsedRows.stream()
+				.map(p -> ParticipantImportPreviewRowResponse.builder()
+						.rowNo(p.rowNo)
+						.name1(p.name1)
+						.phone1(p.phone1)
+						.name2(p.name2)
+						.phone2(p.phone2)
+						.seedNo(p.seedNo)
+						.valid(p.valid)
+						.error(p.error)
+						.build())
+				.toList();
+
+		int validCount = (int) parsedRows.stream().filter(p -> p.valid).count();
+
+		return ParticipantImportPreviewResponse.builder()
+				.totalRows(parsedRows.size())
+				.validCount(validCount)
+				.invalidCount(parsedRows.size() - validCount)
+				.rows(rows)
+				.build();
+	}
+
+	private static final class ParsedRow {
+		final int rowNo;
+		final String name1;
+		final String phone1;
+		final String name2;
+		final String phone2;
+		final Integer seedNo;
+		final boolean valid;
+		final String error;
+
+		private ParsedRow(int rowNo, String name1, String phone1, String name2, String phone2,
+				Integer seedNo, boolean valid, String error) {
+			this.rowNo = rowNo;
+			this.name1 = name1;
+			this.phone1 = phone1;
+			this.name2 = name2;
+			this.phone2 = phone2;
+			this.seedNo = seedNo;
+			this.valid = valid;
+			this.error = error;
+		}
+
+		static ParsedRow ok(int rowNo, String name1, String phone1, String name2, String phone2, Integer seedNo) {
+			return new ParsedRow(rowNo, name1, phone1, name2, phone2, seedNo, true, null);
+		}
+
+		static ParsedRow invalid(int rowNo, String name1, String phone1, String name2, String phone2,
+				Integer seedNo, String error) {
+			return new ParsedRow(rowNo, name1, phone1, name2, phone2, seedNo, false, error);
 		}
 	}
 
-	private ImportParticipantResultResponse importRows(Tournament tournament, List<String[]> rows) {
-		List<String> errors = new ArrayList<>();
-		int imported = 0;
-		int skipped = 0;
-		int totalRows = 0;
+	/** Validates rows without persisting anything. Reused by both preview and confirm. */
+	private List<ParsedRow> validateRows(Tournament tournament, List<String[]> rows) {
+		List<ParsedRow> result = new ArrayList<>();
 
 		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
 		int seedCol = isDouble ? 4 : 2;
 
+		List<Participant> activeParticipants = participantRepository
+				.findByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+
 		Set<Integer> usedSeeds = new HashSet<>();
-		participantRepository.findByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue())
-				.forEach(p -> { if (p.getSeedNo() != null) usedSeeds.add(p.getSeedNo()); });
+		activeParticipants.forEach(p -> { if (p.getSeedNo() != null) usedSeeds.add(p.getSeedNo()); });
+
+		Integer maxParticipants = tournament.getMaxParticipants();
+		int remainingSlots = maxParticipants == null
+				? Integer.MAX_VALUE
+				: maxParticipants - activeParticipants.size();
 
 		for (int i = 0; i < rows.size(); i++) {
 			String[] cols = rows.get(i);
@@ -199,48 +292,49 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				continue;
 			}
 
-			totalRows++;
 			int rowNo = i + 2;
 
 			String name1 = normalizeCell(cols, 0);
+			String phone1 = normalizePhone(normalizeCell(cols, 1));
+			String name2 = isDouble ? normalizeCell(cols, 2) : null;
+			String phone2 = isDouble ? normalizePhone(normalizeCell(cols, 3)) : null;
+
 			if (name1 == null || name1.isBlank()) {
-				errors.add("Hàng " + rowNo + ": Tên VĐV 1 không được để trống");
-				skipped++;
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+						"Tên VĐV 1 không được để trống"));
 				continue;
 			}
 			if (name1.length() > 255) {
-				errors.add("Hàng " + rowNo + ": Tên quá dài");
-				skipped++;
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null, "Tên quá dài"));
 				continue;
 			}
-
-			String phone1 = normalizePhone(normalizeCell(cols, 1));
 			if (phone1 != null && !phone1.isBlank() && !isValidPhone(phone1)) {
-				errors.add("Hàng " + rowNo + ": Số điện thoại VĐV 1 không hợp lệ");
-				skipped++;
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+						"Số điện thoại VĐV 1 không hợp lệ"));
 				continue;
 			}
 
-			String name2 = null;
-			String phone2 = null;
 			if (isDouble) {
-				name2 = normalizeCell(cols, 2);
 				if (name2 == null || name2.isBlank()) {
-					errors.add("Hàng " + rowNo + ": Tên VĐV 2 không được để trống (giải đôi)");
-					skipped++;
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+							"Tên VĐV 2 không được để trống (giải đôi)"));
 					continue;
 				}
 				if (name2.length() > 255) {
-					errors.add("Hàng " + rowNo + ": Tên VĐV 2 quá dài");
-					skipped++;
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null, "Tên VĐV 2 quá dài"));
 					continue;
 				}
-				phone2 = normalizePhone(normalizeCell(cols, 3));
 				if (phone2 != null && !phone2.isBlank() && !isValidPhone(phone2)) {
-					errors.add("Hàng " + rowNo + ": Số điện thoại VĐV 2 không hợp lệ");
-					skipped++;
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+							"Số điện thoại VĐV 2 không hợp lệ"));
 					continue;
 				}
+			}
+
+			if (remainingSlots <= 0) {
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+						"Giải đã đủ " + maxParticipants + " người tham gia, không thể thêm nữa"));
+				continue;
 			}
 
 			Integer seedNo = null;
@@ -248,36 +342,57 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 			if (seedRaw != null && !seedRaw.isBlank()) {
 				try {
 					int parsed = Integer.parseInt(seedRaw.trim());
-					if (parsed >= 1) {
-						seedNo = parsed;
-					} else {
-						errors.add("Hàng " + rowNo + ": Hạt giống phải từ 1 trở lên");
-						skipped++;
+					if (parsed < 1) {
+						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+								"Hạt giống phải từ 1 trở lên"));
 						continue;
 					}
+					seedNo = parsed;
 				} catch (NumberFormatException e) {
-					errors.add("Hàng " + rowNo + ": Hạt giống phải là số nguyên");
-					skipped++;
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+							"Hạt giống phải là số nguyên"));
 					continue;
 				}
 				if (usedSeeds.contains(seedNo)) {
-					errors.add("Hàng " + rowNo + ": Hạt giống " + seedNo + " đã được dùng cho người khác");
-					skipped++;
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, seedNo,
+							"Hạt giống " + seedNo + " đã được dùng cho người khác"));
 					continue;
 				}
 				usedSeeds.add(seedNo);
 			}
 
+			remainingSlots--;
+			result.add(ParsedRow.ok(rowNo, name1, phone1, name2, phone2, seedNo));
+		}
+
+		return result;
+	}
+
+	/** Persists already-validated rows. Invalid rows are counted as skipped with their reason. */
+	private ImportParticipantResultResponse persistRows(Tournament tournament, List<ParsedRow> parsedRows) {
+		List<String> errors = new ArrayList<>();
+		int imported = 0;
+		int skipped = 0;
+
+		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
+
+		for (ParsedRow row : parsedRows) {
+			if (!row.valid) {
+				errors.add("Hàng " + row.rowNo + ": " + row.error);
+				skipped++;
+				continue;
+			}
+
 			String displayName = isDouble
-					? ParticipantMemberFactory.composeDoubleDisplayName(name1, name2)
-					: name1;
+					? ParticipantMemberFactory.composeDoubleDisplayName(row.name1, row.name2)
+					: row.name1;
 
 			Registration registration = registrationRepository.save(Registration.builder()
 					.tournament(tournament)
 					.user(null)
 					.registrationType(RegistrationType.MANUAL.getValue())
 					.playerFullName(displayName)
-					.playerPhone(phone1)
+					.playerPhone(row.phone1)
 					.status(RegistrationStatus.APPROVED.getValue())
 					.build());
 
@@ -286,19 +401,19 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 					.registration(registration)
 					.participantType(tournament.getParticipantType())
 					.displayName(displayName)
-					.seedNo(seedNo)
+					.seedNo(row.seedNo)
 					.status(ParticipantStatus.ACTIVE.getValue())
 					.build());
 
 			if (isDouble) {
 				participantMemberRepository.saveAll(ParticipantMemberFactory.buildDoubleMembers(
-						participant, name1, phone1, null, name2, phone2));
+						participant, row.name1, row.phone1, null, row.name2, row.phone2));
 			}
 			imported++;
 		}
 
 		return ImportParticipantResultResponse.builder()
-				.totalRows(totalRows)
+				.totalRows(parsedRows.size())
 				.imported(imported)
 				.skipped(skipped)
 				.errors(errors)
@@ -378,6 +493,18 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		}
 		cols.add(current.toString());
 		return cols.toArray(String[]::new);
+	}
+
+	/** Chặn ngay từ đầu nếu giải đã đủ số người — nhất quán với "Thêm thủ công". */
+	private void assertNotFull(Tournament tournament) {
+		if (tournament.getMaxParticipants() == null) {
+			return;
+		}
+		long activeCount = participantRepository.countByTournamentIdAndStatus(
+				tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+		if (activeCount >= tournament.getMaxParticipants()) {
+			throw new BusinessException(ErrorCode.TOURNAMENT_FULL);
+		}
 	}
 
 	private void validateUploadFile(MultipartFile file) {

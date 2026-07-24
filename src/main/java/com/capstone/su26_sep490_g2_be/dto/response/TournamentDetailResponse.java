@@ -21,6 +21,7 @@ public class TournamentDetailResponse {
 	private String participantType;
 	private String status;
 	private Integer maxParticipants;
+	private Integer tableCount;
 	private BigDecimal entryFee;
 	private BigDecimal prizePool;
 	private String prizeDescription;

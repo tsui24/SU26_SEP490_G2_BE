@@ -189,6 +189,48 @@ public class MatchController {
         return ResponseEntity.ok(ApiResponse.success("Đã loại bottom", bracketGenerationService.getLeagueStandings(id)));
     }
 
+    /* ─── PROGRESSIVE_ROUND_ROBIN: chuyển giai đoạn + standings từng GĐ ── */
+
+    @Operation(summary = "[PROGRESSIVE] Chuyển sang giai đoạn tiếp theo (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/owner/tournaments/{id}/advance-stage")
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> advanceStageOwner(@PathVariable Long id) {
+        bracketGenerationService.advanceProgressiveStage(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã chuyển giai đoạn", buildStageResponse(id)));
+    }
+
+    @Operation(summary = "[PROGRESSIVE] Chuyển sang giai đoạn tiếp theo (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/manager/tournaments/{id}/advance-stage")
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> advanceStageManager(@PathVariable Long id) {
+        bracketGenerationService.advanceProgressiveStage(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã chuyển giai đoạn", buildStageResponse(id)));
+    }
+
+    @Operation(summary = "[PROGRESSIVE] Bảng xếp hạng của một giai đoạn (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/owner/tournaments/{id}/stage-standings")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> stageStandingsOwner(
+            @PathVariable Long id, @RequestParam Long stageId) {
+        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.computeStageStandings(stageId)));
+    }
+
+    @Operation(summary = "[PROGRESSIVE] Bảng xếp hạng của một giai đoạn (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/manager/tournaments/{id}/stage-standings")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> stageStandingsManager(
+            @PathVariable Long id, @RequestParam Long stageId) {
+        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.computeStageStandings(stageId)));
+    }
+
+    @Operation(summary = "[PROGRESSIVE] Bảng xếp hạng của một giai đoạn — Public")
+    @GetMapping("/tournaments/{id}/stage-standings")
+    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> stageStandingsPublic(
+            @PathVariable Long id, @RequestParam Long stageId) {
+        requirePublicRatio(id);
+        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.computeStageStandings(stageId)));
+    }
+
     @Operation(summary = "Tất cả trận đấu của một giải (Owner/Manager)")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/owner/tournaments/{id}/matches")
@@ -251,6 +293,20 @@ public class MatchController {
         matchService.assertStaffAssigned(matchId, staffId);
         matchService.startMatch(matchId, staffId);
         return ResponseEntity.ok(ApiResponse.success(fetchAndBroadcast(matchId)));
+    }
+
+    @Operation(summary = "Danh sách trọng tài khả dụng cho giải (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/owner/tournaments/{id}/referees")
+    public ResponseEntity<ApiResponse<List<StaffBriefResponse>>> refereesOwner(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(matchService.getRefereesForTournament(id)));
+    }
+
+    @Operation(summary = "Danh sách trọng tài khả dụng cho giải (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/manager/tournaments/{id}/referees")
+    public ResponseEntity<ApiResponse<List<StaffBriefResponse>>> refereesManager(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(matchService.getRefereesForTournament(id)));
     }
 
     @Operation(summary = "Gán trọng tài và/hoặc số bàn (Owner)")

@@ -43,6 +43,14 @@ public class FormatBootstrapTemplates {
 					field("group_tiebreaker_order", "HEAD_TO_HEAD,SCORE_DIFF"),
 					field("playoff_bracket_size", "8"),
 					field("playoff_bye_top_seeds", "0")
+			),
+			"PROGRESSIVE_ROUND_ROBIN", List.of(
+					field("pe_survivors_per_stage", "10,6,4"),
+					field("final_playoff_size", "4"),
+					field("group_tiebreaker_order", "POINTS,RACK_DIFF,RACKS_WON,HEAD_TO_HEAD"),
+					field("break_rule", "ALTERNATE_BREAK"),
+					field("lag_for_break", "true"),
+					field("scoring_unit", "GAME", false)
 			)
 	);
 
@@ -71,6 +79,10 @@ public class FormatBootstrapTemplates {
 					rule("playoff_sf", "Playoff — Bán kết", "PLAYOFF", 7),
 					rule("playoff_final", "Playoff — Chung kết", "KNOCKOUT", 9),
 					rule("third_place", "Tranh hạng 3", "KNOCKOUT", 7)
+			),
+			"PROGRESSIVE_ROUND_ROBIN", List.of(
+					rule("league_stage", "Vòng tròn loại dần", "PROGRESSIVE_ROUND", 5),
+					rule("playoff", "Playoff", "PROGRESSIVE_PLAYOFF", 7)
 			)
 	);
 

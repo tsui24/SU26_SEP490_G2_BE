@@ -49,7 +49,13 @@ public class DatabaseSeedData {
 				field("playoff_bracket_size", "Số slot playoff", "PLAYOFF", "INT", "NUMBER",
 						null, 4, 32, "Kích thước nhánh playoff sau vòng bảng"),
 				field("playoff_bye_top_seeds", "BYE cho hạt giống playoff", "PLAYOFF", "INT", "NUMBER",
-						null, 0, 8, "Số hạt giống được BYE vòng playoff đầu")
+						null, 0, 8, "Số hạt giống được BYE vòng playoff đầu"),
+				field("pe_survivors_per_stage", "Số người đi tiếp mỗi giai đoạn", "PROGRESSIVE", "STRING", "TEXT",
+						null, null, null,
+						"Danh sách số người còn lại SAU mỗi giai đoạn vòng tròn, cách nhau bởi dấu phẩy (vd 10,6,4). "
+								+ "Phần tử cuối là số người vào Playoff. Mọi phần tử phải là số chẵn, giảm dần."),
+				field("final_playoff_size", "Số người vào Playoff", "PROGRESSIVE", "INT", "NUMBER",
+						null, 4, 8, "Số cơ thủ xếp hạng cao nhất vào vòng Playoff loại trực tiếp (4 hoặc 8).")
 		);
 	}
 
@@ -74,7 +80,11 @@ public class DatabaseSeedData {
 				format("GROUP_PLAYOFF",
 						"Vòng bảng + Playoff",
 						"Chia bảng round-robin, top bảng vào knockout.",
-						"pool_group_playoff_handler")
+						"pool_group_playoff_handler"),
+				format("PROGRESSIVE_ROUND_ROBIN",
+						"Vòng tròn loại dần + Playoff",
+						"Nhiều giai đoạn vòng tròn loại dần, nhóm còn lại vào Playoff loại trực tiếp.",
+						"pool_progressive_round_robin_handler")
 		);
 	}
 
@@ -110,7 +120,15 @@ public class DatabaseSeedData {
 				configField("GROUP_PLAYOFF", "group_points_loss", "0", true),
 				configField("GROUP_PLAYOFF", "group_tiebreaker_order", "HEAD_TO_HEAD,SCORE_DIFF", true),
 				configField("GROUP_PLAYOFF", "playoff_bracket_size", "8", true),
-				configField("GROUP_PLAYOFF", "playoff_bye_top_seeds", "0", true)
+				configField("GROUP_PLAYOFF", "playoff_bye_top_seeds", "0", true),
+
+				// PROGRESSIVE_ROUND_ROBIN (6)
+				configField("PROGRESSIVE_ROUND_ROBIN", "pe_survivors_per_stage", "10,6,4", true),
+				configField("PROGRESSIVE_ROUND_ROBIN", "final_playoff_size", "4", true),
+				configField("PROGRESSIVE_ROUND_ROBIN", "group_tiebreaker_order", "POINTS,RACK_DIFF,RACKS_WON,HEAD_TO_HEAD", true),
+				configField("PROGRESSIVE_ROUND_ROBIN", "break_rule", "ALTERNATE_BREAK", true),
+				configField("PROGRESSIVE_ROUND_ROBIN", "lag_for_break", "true", true),
+				configField("PROGRESSIVE_ROUND_ROBIN", "scoring_unit", "GAME", false)
 		);
 	}
 
@@ -139,7 +157,11 @@ public class DatabaseSeedData {
 				raceTo("GROUP_PLAYOFF", "playoff_qf", "Playoff — Tứ kết", "PLAYOFF", 7),
 				raceTo("GROUP_PLAYOFF", "playoff_sf", "Playoff — Bán kết", "PLAYOFF", 7),
 				raceTo("GROUP_PLAYOFF", "playoff_final", "Playoff — Chung kết", "KNOCKOUT", 9),
-				raceTo("GROUP_PLAYOFF", "third_place", "Tranh hạng 3", "KNOCKOUT", 7)
+				raceTo("GROUP_PLAYOFF", "third_place", "Tranh hạng 3", "KNOCKOUT", 7),
+
+				// PROGRESSIVE_ROUND_ROBIN (2)
+				raceTo("PROGRESSIVE_ROUND_ROBIN", "league_stage", "Vòng tròn loại dần", "PROGRESSIVE_ROUND", 5),
+				raceTo("PROGRESSIVE_ROUND_ROBIN", "playoff", "Playoff", "PROGRESSIVE_PLAYOFF", 7)
 		);
 	}
 

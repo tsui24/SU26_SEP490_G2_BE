@@ -13,7 +13,8 @@ public enum TournamentFormat {
 
 	SINGLE_ELIMINATION("Loại trực tiếp"),
 	DOUBLE_ELIMINATION("Loại trực tiếp kép"),
-	GROUP_PLAYOFF("Vòng tròn + Playoff");
+	GROUP_PLAYOFF("Vòng tròn + Playoff"),
+	PROGRESSIVE_ROUND_ROBIN("Vòng tròn loại dần + Playoff");
 
 	private final String displayName;
 

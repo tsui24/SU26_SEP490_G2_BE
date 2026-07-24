@@ -11,7 +11,9 @@ import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
+import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
+import com.capstone.su26_sep490_g2_be.util.ProgressiveSurvivorsUtil;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.exception.ConfigValidationException;
 import com.capstone.su26_sep490_g2_be.config.MinioProperties;
@@ -191,6 +193,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.participantType(request.getParticipantType())
 				.status(TournamentStatus.DRAFT.getValue())
 				.maxParticipants(request.getMaxParticipants())
+				.tableCount(request.getTableCount() != null && request.getTableCount() > 0 ? request.getTableCount() : 1)
 				.entryFee(request.getEntryFee() != null ? request.getEntryFee() : BigDecimal.ZERO)
 				.prizePool(request.getPrizePool())
 				.prizeDescription(request.getPrizeDescription())
@@ -223,6 +226,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.participantType(tournament.getParticipantType())
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
+				.tableCount(tournament.getTableCount())
 				.configComplete(false)
 				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
 				.registrationFormTemplateId(tournament.getRegistrationFormTemplateId())
@@ -270,6 +274,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 		if (request.getMaxParticipants() != null) {
 			tournament.setMaxParticipants(request.getMaxParticipants());
+		}
+		if (request.getTableCount() != null && request.getTableCount() > 0) {
+			tournament.setTableCount(request.getTableCount());
 		}
 		if (request.getEntryFee() != null) {
 			tournament.setEntryFee(request.getEntryFee());
@@ -349,6 +356,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.participantType(tournament.getParticipantType())
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
+				.tableCount(tournament.getTableCount())
 				.entryFee(tournament.getEntryFee())
 				.prizePool(tournament.getPrizePool())
 				.prizeDescription(tournament.getPrizeDescription())
@@ -428,6 +436,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.participantType(tournament.getParticipantType())
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
+				.tableCount(tournament.getTableCount())
 				.entryFee(tournament.getEntryFee())
 				.prizePool(tournament.getPrizePool())
 				.prizeDescription(tournament.getPrizeDescription())
@@ -761,6 +770,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.participantType(tournament.getParticipantType())
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
+				.tableCount(tournament.getTableCount())
 				.entryFee(tournament.getEntryFee())
 				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
 				.configComplete(isConfigComplete(tournament.getId(), tournament.getFormat()))
@@ -791,6 +801,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.participantType(tournament.getParticipantType())
 				.status(tournament.getStatus())
 				.maxParticipants(tournament.getMaxParticipants())
+				.tableCount(tournament.getTableCount())
 				.entryFee(tournament.getEntryFee())
 				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
 				.approvedCount(approved)
@@ -953,7 +964,60 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 					.build());
 		}
 
+		if (TournamentFormat.PROGRESSIVE_ROUND_ROBIN.getValue().equals(formatCode)) {
+			errors.addAll(validateProgressiveConfig(tournamentId, formatFields));
+		}
+
 		return errors;
+	}
+
+	/**
+	 * Validate cấu hình riêng cho PROGRESSIVE_ROUND_ROBIN: dãy {@code pe_survivors_per_stage}
+	 * phải giảm dần nghiêm ngặt, mọi phần tử chẵn ≥ 4, phần tử cuối == {@code final_playoff_size},
+	 * và {@code maxParticipants} lớn hơn phần tử đầu.
+	 */
+	private List<ConfigValidationDetailResponse> validateProgressiveConfig(
+			Long tournamentId, List<FormatConfigField> formatFields) {
+		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
+
+		String survivorsCsv = resolveFieldValueByKey(tournamentId, formatFields, "pe_survivors_per_stage");
+		String playoffSizeStr = resolveFieldValueByKey(tournamentId, formatFields, "final_playoff_size");
+		if (survivorsCsv == null || survivorsCsv.isBlank() || playoffSizeStr == null || playoffSizeStr.isBlank()) {
+			return errors; // thiếu field đã được báo ở vòng lặp trước
+		}
+
+		int playoffSize;
+		try {
+			playoffSize = Integer.parseInt(playoffSizeStr.trim());
+		} catch (NumberFormatException e) {
+			errors.add(detail("final_playoff_size", "Số người vào Playoff phải là số nguyên"));
+			return errors;
+		}
+
+		List<Integer> survivors;
+		try {
+			survivors = ProgressiveSurvivorsUtil.parse(survivorsCsv);
+		} catch (IllegalArgumentException e) {
+			errors.add(detail("pe_survivors_per_stage", e.getMessage()));
+			return errors;
+		}
+
+		Integer maxParticipants = tournamentRepository.findById(tournamentId)
+				.map(Tournament::getMaxParticipants).orElse(null);
+		int max = maxParticipants != null ? maxParticipants : 0;
+
+		for (String msg : ProgressiveSurvivorsUtil.validate(survivors, max, playoffSize)) {
+			errors.add(detail("pe_survivors_per_stage", msg));
+		}
+		return errors;
+	}
+
+	private String resolveFieldValueByKey(Long tournamentId, List<FormatConfigField> formatFields, String fieldKey) {
+		return formatFields.stream()
+				.filter(f -> fieldKey.equals(f.getFieldKey()))
+				.findFirst()
+				.map(f -> resolveFieldValue(tournamentId, f))
+				.orElse(null);
 	}
 
 	private String resolveFieldValue(Long tournamentId, FormatConfigField formatField) {
