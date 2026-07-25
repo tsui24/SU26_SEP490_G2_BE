@@ -121,7 +121,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 		Specification<Tournament> spec = buildSpec(createdById, statusParam, searchParam, null);
 		Page<Tournament> tournamentPage = tournamentRepository.findAll(spec, pageable);
-		return PageResponse.of(tournamentPage, this::toListItem);
+		return toListResponse(tournamentPage, true);
 	}
 
 	@Override
@@ -395,7 +395,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				List.of(TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue()));
 		spec = spec.and((root, query, cb) -> cb.equal(root.get("isShowTournament"), true));
 		Page<Tournament> result = tournamentRepository.findAll(spec, pageable);
-		return PageResponse.of(result, this::toPublicListItem);
+		return toListResponse(result, false);
 	}
 
 	@Override
@@ -745,63 +745,107 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		return tournamentAuditService.getHistory(tournamentId);
 	}
 
-	private TournamentListItemResponse toListItem(Tournament tournament) {
-		String formatName = formatRepository.findById(tournament.getFormat())
-				.map(TournamentFormatDefinition::getName)
-				.orElse(null);
-		long approved = participantRepository.countByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+	/**
+	 * Xây PageResponse cho danh sách giải đấu mà KHÔNG phát sinh N+1: mọi lookup
+	 * (format name, số người tham gia đã duyệt, config-complete) được batch 1 lần
+	 * cho cả trang thay vì lặp query theo từng dòng như {@code toListItem}/{@code toPublicListItem} cũ.
+	 */
+	private PageResponse<TournamentListItemResponse> toListResponse(
+			Page<Tournament> tournamentPage, boolean includeConfigComplete) {
+		List<Tournament> tournaments = tournamentPage.getContent();
+		if (tournaments.isEmpty()) {
+			return PageResponse.of(tournamentPage, t -> null);
+		}
 
-		return TournamentListItemResponse.builder()
-				.id(tournament.getId())
-				.name(tournament.getName())
-				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
-				.gameType(tournament.getGameType())
-				.format(tournament.getFormat())
-				.formatName(formatName)
-				.participantType(tournament.getParticipantType())
-				.status(tournament.getStatus())
-				.maxParticipants(tournament.getMaxParticipants())
-				.entryFee(tournament.getEntryFee())
-				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
-				.configComplete(isConfigComplete(tournament.getId(), tournament.getFormat()))
-				.approvedCount(approved)
-				.registrationDeadline(tournament.getRegistrationDeadline())
-				.startAt(tournament.getStartAt())
-				.endAt(tournament.getEndAt())
-				.createdAt(tournament.getCreatedAt())
-				.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
-				.venueName(tournament.getVenueName())
-				.venueAddress(tournament.getVenueAddress())
-				.build();
+		List<Long> tournamentIds = tournaments.stream().map(Tournament::getId).toList();
+		Set<String> formatCodes = tournaments.stream().map(Tournament::getFormat).collect(Collectors.toSet());
+
+		Map<String, String> formatNameByCode = formatRepository.findAllById(formatCodes).stream()
+				.collect(Collectors.toMap(TournamentFormatDefinition::getCode, TournamentFormatDefinition::getName));
+
+		Map<Long, Long> approvedCountByTournamentId = participantRepository
+				.countGroupedByTournamentIdInAndStatus(tournamentIds, ParticipantStatus.ACTIVE.getValue()).stream()
+				.collect(Collectors.toMap(ParticipantRepository.TournamentParticipantCount::getTournamentId,
+						ParticipantRepository.TournamentParticipantCount::getTotal));
+
+		Map<Long, Boolean> configCompleteByTournamentId = includeConfigComplete
+				? batchConfigComplete(tournaments, formatCodes)
+				: Map.of();
+
+		return PageResponse.of(tournamentPage, tournament -> {
+			var builder = TournamentListItemResponse.builder()
+					.id(tournament.getId())
+					.name(tournament.getName())
+					.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
+					.gameType(tournament.getGameType())
+					.format(tournament.getFormat())
+					.formatName(formatNameByCode.get(tournament.getFormat()))
+					.participantType(tournament.getParticipantType())
+					.status(tournament.getStatus())
+					.maxParticipants(tournament.getMaxParticipants())
+					.entryFee(tournament.getEntryFee())
+					.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+					.approvedCount(approvedCountByTournamentId.getOrDefault(tournament.getId(), 0L))
+					.registrationDeadline(tournament.getRegistrationDeadline())
+					.startAt(tournament.getStartAt())
+					.endAt(tournament.getEndAt())
+					.createdAt(tournament.getCreatedAt())
+					.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
+					.venueName(tournament.getVenueName())
+					.venueAddress(tournament.getVenueAddress());
+			if (includeConfigComplete) {
+				builder.configComplete(configCompleteByTournamentId.getOrDefault(tournament.getId(), false));
+			}
+			return builder.build();
+		});
 	}
 
-	private TournamentListItemResponse toPublicListItem(Tournament tournament) {
-		String formatName = formatRepository.findById(tournament.getFormat())
-				.map(TournamentFormatDefinition::getName)
-				.orElse(null);
-		long approved = participantRepository.countByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+	/** Bản batch của {@link #isConfigComplete(Long, String)} — dùng riêng cho list endpoint, 1 query/loại lookup cho cả trang. */
+	private Map<Long, Boolean> batchConfigComplete(List<Tournament> tournaments, Set<String> formatCodes) {
+		List<Long> tournamentIds = tournaments.stream().map(Tournament::getId).toList();
 
-		return TournamentListItemResponse.builder()
-				.id(tournament.getId())
-				.name(tournament.getName())
-				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
-				.gameType(tournament.getGameType())
-				.format(tournament.getFormat())
-				.formatName(formatName)
-				.participantType(tournament.getParticipantType())
-				.status(tournament.getStatus())
-				.maxParticipants(tournament.getMaxParticipants())
-				.entryFee(tournament.getEntryFee())
-				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
-				.approvedCount(approved)
-				.registrationDeadline(tournament.getRegistrationDeadline())
-				.startAt(tournament.getStartAt())
-				.endAt(tournament.getEndAt())
-				.createdAt(tournament.getCreatedAt())
-				.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
-				.venueName(tournament.getVenueName())
-				.venueAddress(tournament.getVenueAddress())
-				.build();
+		Map<Long, TournamentConfig> configByTournamentId = tournamentConfigRepository.findAllById(tournamentIds).stream()
+				.collect(Collectors.toMap(TournamentConfig::getTournamentId, c -> c));
+
+		Map<String, List<FormatConfigField>> fieldsByFormat = formatConfigFieldRepository
+				.findByFormatCodeInOrderByIdAsc(formatCodes).stream()
+				.collect(Collectors.groupingBy(FormatConfigField::getFormatCode));
+
+		Map<String, Long> raceCountByFormat = formatCodes.stream()
+				.collect(Collectors.toMap(fc -> fc, formatRaceToRuleRepository::countByFormatCode));
+
+		Map<Long, Map<String, String>> valuesByTournamentId = configValueService.getByTournamentIds(tournamentIds).stream()
+				.collect(Collectors.groupingBy(cv -> cv.getId().getTournamentId(),
+						Collectors.toMap(cv -> cv.getId().getFieldKey(), TournamentConfigValue::getValue, (a, b) -> a)));
+
+		Map<Long, Boolean> result = new HashMap<>();
+		for (Tournament tournament : tournaments) {
+			Long tournamentId = tournament.getId();
+			String formatCode = tournament.getFormat();
+			TournamentConfig config = configByTournamentId.get(tournamentId);
+			if (config == null || config.getSeedingMethod() == null || config.getSeedingMethod().isBlank()) {
+				result.put(tournamentId, false);
+				continue;
+			}
+
+			Map<String, String> savedValues = valuesByTournamentId.getOrDefault(tournamentId, Map.of());
+			boolean complete = true;
+			for (FormatConfigField field : fieldsByFormat.getOrDefault(formatCode, List.of())) {
+				if (!Boolean.TRUE.equals(field.getIsRequired())) {
+					continue;
+				}
+				String value = savedValues.getOrDefault(field.getFieldKey(), field.getDefaultValue());
+				if (value == null || value.isBlank() || !validateFieldValue(field, value).isEmpty()) {
+					complete = false;
+					break;
+				}
+			}
+			if (complete && raceCountByFormat.getOrDefault(formatCode, 0L) == 0) {
+				complete = false;
+			}
+			result.put(tournamentId, complete);
+		}
+		return result;
 	}
 
 	private OwnerFormatListItemResponse toOwnerFormatItem(TournamentFormatDefinition format) {

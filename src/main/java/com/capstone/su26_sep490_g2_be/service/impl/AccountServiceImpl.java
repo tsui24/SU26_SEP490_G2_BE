@@ -257,7 +257,7 @@ public class AccountServiceImpl implements AccountService {
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
 		Page<User> userPage = userRepository.searchUsers(roleParam, searchParam, pageable);
-		return PageResponse.of(userPage, user -> toEmployeeResponse(user, user.getProfile()));
+		return toEmployeeResponsePage(userPage);
 	}
 
 	@Override
@@ -273,7 +273,7 @@ public class AccountServiceImpl implements AccountService {
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
 		Page<User> userPage = userRepository.searchEmployees(ownerId, roleParam, searchParam, pageable);
-		return PageResponse.of(userPage, user -> toEmployeeResponse(user, user.getProfile()));
+		return toEmployeeResponsePage(userPage);
 	}
 
 
@@ -285,7 +285,7 @@ public class AccountServiceImpl implements AccountService {
 		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
 		Page<User> userPage = userRepository.searchStaffsByManager(ownerId, searchParam, pageable);
-		return PageResponse.of(userPage, user -> toEmployeeResponse(user, user.getProfile()));
+		return toEmployeeResponsePage(userPage);
 	}
 
 	@Override
@@ -343,14 +343,44 @@ public class AccountServiceImpl implements AccountService {
 				.build();
 	}
 
+	/**
+	 * Batch tương đương {@link #toEmployeeResponse(User, UserProfile)} cho cả 1 trang — batch 1 query
+	 * lấy chi nhánh quản lý cho mọi MANAGER trong trang, thay vì lặp lại theo từng dòng.
+	 */
+	private PageResponse<EmployeeAccountResponse> toEmployeeResponsePage(Page<User> userPage) {
+		List<User> users = userPage.getContent();
+		if (users.isEmpty()) {
+			return PageResponse.of(userPage, u -> null);
+		}
+		List<Long> managerIds = users.stream()
+				.filter(u -> "MANAGER".equals(u.getRole().getCode()))
+				.map(User::getId)
+				.toList();
+		Map<Long, List<Long>> branchIdsByManagerId = managerIds.isEmpty()
+				? Map.of()
+				: branchManagerRepository.findByManagerIdIn(managerIds).stream()
+						.collect(Collectors.groupingBy(bm -> bm.getManager().getId(),
+								Collectors.mapping(bm -> bm.getBranch().getId(), Collectors.toList())));
+		return PageResponse.of(userPage, user -> toEmployeeResponse(
+				user, user.getProfile(),
+				"MANAGER".equals(user.getRole().getCode())
+						? branchIdsByManagerId.getOrDefault(user.getId(), List.of())
+						: null));
+	}
+
 	private EmployeeAccountResponse toEmployeeResponse(User user, UserProfile profile) {
 		boolean isManager = "MANAGER".equals(user.getRole().getCode());
-		boolean isStaff = "STAFF".equals(user.getRole().getCode());
 		List<Long> branchIds = isManager
 				? branchManagerRepository.findByManagerId(user.getId()).stream()
 						.map(bm -> bm.getBranch().getId())
 						.toList()
 				: null;
+		return toEmployeeResponse(user, profile, branchIds);
+	}
+
+	private EmployeeAccountResponse toEmployeeResponse(User user, UserProfile profile, List<Long> branchIds) {
+		boolean isManager = "MANAGER".equals(user.getRole().getCode());
+		boolean isStaff = "STAFF".equals(user.getRole().getCode());
 
 		return EmployeeAccountResponse.builder()
 				.id(user.getId())
