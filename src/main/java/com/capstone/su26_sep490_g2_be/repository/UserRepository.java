@@ -19,7 +19,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	// Tìm user theo ID và trạng thái ACTIVE cùng một lúc
 	Optional<User> findByIdAndStatus(Long id, UserStatus status);
-	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
+	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN FETCH u.profile p " +
 			"WHERE r.code IN ('STAFF', 'MANAGER') " +
 			"AND u.status = 'ACTIVE' " +
 			"AND u.owner.id = :ownerId " +
@@ -32,7 +32,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	                           Pageable pageable);
 
 
-	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
+	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN FETCH u.profile p " +
 			"WHERE r.code IN ('ADMIN', 'STAFF', 'MANAGER', 'OWNER', 'PLAYER') " +
 			"AND u.status = 'ACTIVE' " +
 			"AND (:roleCode IS NULL OR r.code = :roleCode) " +
@@ -43,7 +43,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	                       Pageable pageable);
 
 
-	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
+	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN FETCH u.profile p " +
 			"WHERE r.code = 'STAFF' " +
 			"AND u.status = 'ACTIVE' " +
 			"AND u.owner.id = :ownerId " +

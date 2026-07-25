@@ -10,13 +10,28 @@ import java.util.Optional;
 
 public interface TournamentResultRepository extends JpaRepository<TournamentResult, Long> {
 
-	List<TournamentResult> findByTournamentIdOrderByFinalRankAsc(Long tournamentId);
+	@Query("""
+		SELECT tr FROM TournamentResult tr
+		LEFT JOIN FETCH tr.participant p
+		LEFT JOIN FETCH p.registration r
+		LEFT JOIN FETCH r.user
+		WHERE tr.tournament.id = :tournamentId
+		ORDER BY tr.finalRank ASC
+		""")
+	List<TournamentResult> findByTournamentIdOrderByFinalRankAsc(@Param("tournamentId") Long tournamentId);
 
 	Optional<TournamentResult> findByTournamentIdAndParticipantId(Long tournamentId, Long participantId);
 
 	boolean existsByTournamentIdAndParticipantId(Long tournamentId, Long participantId);
 
-	List<TournamentResult> findByTournamentIdIn(List<Long> tournamentIds);
+	@Query("""
+		SELECT tr FROM TournamentResult tr
+		LEFT JOIN FETCH tr.participant p
+		LEFT JOIN FETCH p.registration r
+		LEFT JOIN FETCH r.user
+		WHERE tr.tournament.id IN :tournamentIds
+		""")
+	List<TournamentResult> findByTournamentIdIn(@Param("tournamentIds") List<Long> tournamentIds);
 
 	@Query("""
 		SELECT tr FROM TournamentResult tr
