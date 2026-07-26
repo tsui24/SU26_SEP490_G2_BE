@@ -1,8 +1,13 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/su26_sep490_g2?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    url: jdbc:mysql://capstone26-test.c3q2cuga2avz.ap-southeast-1.rds.amazonaws.com:3306/capstone26_g2_test
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      # RDS 1GiB: giữ pool nhỏ để không chiếm hết connection/CPU
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
 
   jpa:
     hibernate:
@@ -10,6 +15,9 @@ spring:
     show-sql: false
     properties:
       hibernate.format_sql: true
+      hibernate.jdbc.batch_size: 25
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
 
 # Dev: cho phép mọi origin (React/Vite/Angular/Next trên localhost bất kỳ port)
 app:

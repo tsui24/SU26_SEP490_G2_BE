@@ -34,7 +34,10 @@ public class TournamentConfigValueServiceImpl implements TournamentConfigValueSe
 
 	@Override
 	public List<TournamentConfigValue> getByTournamentIds(List<Long> tournamentIds) {
-		return tournamentIds.isEmpty() ? List.of() : valueRepository.findByIdTournamentIdIn(tournamentIds);
+		if (tournamentIds == null || tournamentIds.isEmpty()) {
+			return List.of();
+		}
+		return valueRepository.findByIdTournamentIdIn(tournamentIds);
 	}
 
 	@Override

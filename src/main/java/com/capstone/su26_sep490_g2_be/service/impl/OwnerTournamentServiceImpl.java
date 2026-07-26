@@ -785,7 +785,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			var builder = TournamentListItemResponse.builder()
 					.id(tournament.getId())
 					.name(tournament.getName())
-					.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
+					.thumbnailUrl(resolveImageForList(tournament.getThumbnailUrl()))
 					.gameType(tournament.getGameType())
 					.format(tournament.getFormat())
 					.formatName(formatNameByCode.get(tournament.getFormat()))
@@ -839,8 +839,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			}
 
 			Map<String, String> savedValues = valuesByTournamentId.getOrDefault(tournamentId, Map.of());
+			List<FormatConfigField> formatFields = fieldsByFormat.getOrDefault(formatCode, List.of());
 			boolean complete = true;
-			for (FormatConfigField field : fieldsByFormat.getOrDefault(formatCode, List.of())) {
+			for (FormatConfigField field : formatFields) {
 				if (!Boolean.TRUE.equals(field.getIsRequired())) {
 					continue;
 				}
@@ -853,9 +854,36 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			if (complete && raceCountByFormat.getOrDefault(formatCode, 0L) == 0) {
 				complete = false;
 			}
+			if (complete && TournamentFormat.PROGRESSIVE_ROUND_ROBIN.getValue().equals(formatCode)) {
+				String survivorsCsv = resolveCachedField(formatFields, savedValues, "pe_survivors_per_stage");
+				String playoffSizeStr = resolveCachedField(formatFields, savedValues, "final_playoff_size");
+				if (survivorsCsv == null || survivorsCsv.isBlank() || playoffSizeStr == null || playoffSizeStr.isBlank()) {
+					complete = false;
+				} else {
+					try {
+						int playoffSize = Integer.parseInt(playoffSizeStr.trim());
+						List<Integer> survivors = ProgressiveSurvivorsUtil.parse(survivorsCsv);
+						int max = tournament.getMaxParticipants() != null ? tournament.getMaxParticipants() : 0;
+						if (!ProgressiveSurvivorsUtil.validate(survivors, max, playoffSize).isEmpty()) {
+							complete = false;
+						}
+					} catch (Exception ex) {
+						complete = false;
+					}
+				}
+			}
 			result.put(tournamentId, complete);
 		}
 		return result;
+	}
+
+	private static String resolveCachedField(
+			List<FormatConfigField> formatFields, Map<String, String> savedValues, String fieldKey) {
+		return formatFields.stream()
+				.filter(f -> fieldKey.equals(f.getFieldKey()))
+				.findFirst()
+				.map(f -> savedValues.containsKey(fieldKey) ? savedValues.get(fieldKey) : f.getDefaultValue())
+				.orElse(null);
 	}
 
 	private OwnerFormatListItemResponse toOwnerFormatItem(TournamentFormatDefinition format) {
@@ -1356,6 +1384,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	 */
 	private String resolveImageForResponse(String storedValue) {
 		return AvatarUrlResolver.resolveForResponse(
+				storedValue, minioStorageService, minioProperties.getBucket());
+	}
+
+	/** Presign nhanh cho list — không StatObject MinIO. */
+	private String resolveImageForList(String storedValue) {
+		return AvatarUrlResolver.resolveForList(
 				storedValue, minioStorageService, minioProperties.getBucket());
 	}
 }
