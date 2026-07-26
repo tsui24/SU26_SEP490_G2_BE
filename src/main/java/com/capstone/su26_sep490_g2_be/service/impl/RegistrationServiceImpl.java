@@ -39,8 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -166,9 +168,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 	@Transactional(readOnly = true)
 	public PageResponse<TournamentRegistrationResponse> getMyRegistrations(Long userId, int page, int size) {
 		Pageable pageable = PageableUtil.create(page, size, "createdAt");
-		return PageResponse.of(
-				registrationRepository.findByUserId(userId, pageable),
-				this::toResponse);
+		return toResponsePage(registrationRepository.findByUserId(userId, pageable));
 	}
 
 	@Override
@@ -181,7 +181,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		Page<Registration> result = (status == null || status.isBlank())
 				? registrationRepository.findByTournamentId(tournamentId, pageable)
 				: registrationRepository.findByTournamentIdAndStatus(tournamentId, status.trim(), pageable);
-		return PageResponse.of(result, this::toResponse);
+		return toResponsePage(result);
 	}
 
 	@Override
@@ -271,22 +271,50 @@ public class RegistrationServiceImpl implements RegistrationService {
 	}
 
 	private TournamentRegistrationResponse toResponse(Registration registration) {
-		List<TournamentRegistrationResponse.FieldValueItem> fieldValues = fieldValueRepository
-				.findByRegistrationIdOrderByIdAsc(registration.getId()).stream()
-				.map(value -> {
-					RegistrationFieldDefinition definition = value.getFieldDefinition();
-					if (definition == null) {
-						definition = fieldDefinitionRepository
-								.findById(value.getId().getFieldKey()).orElse(null);
-					}
-					return TournamentRegistrationResponse.FieldValueItem.builder()
-							.fieldKey(value.getId().getFieldKey())
-							.label(definition != null ? definition.getLabel() : value.getId().getFieldKey())
-							.value(value.getValue())
-							.build();
-				})
-				.toList();
+		List<TournamentRegistrationResponse.FieldValueItem> fieldValues = toFieldValueItems(
+				fieldValueRepository.findByRegistrationIdOrderByIdAsc(registration.getId()));
+		return buildRegistrationResponse(registration, fieldValues);
+	}
 
+	/**
+	 * Batch tương đương {@link #toResponse(Registration)} cho cả 1 trang — chỉ 1 query
+	 * lấy field values cho toàn bộ registration thay vì lặp lại theo từng dòng.
+	 */
+	private PageResponse<TournamentRegistrationResponse> toResponsePage(Page<Registration> page) {
+		List<Registration> registrations = page.getContent();
+		if (registrations.isEmpty()) {
+			return PageResponse.of(page, r -> null);
+		}
+		List<Long> registrationIds = registrations.stream().map(Registration::getId).toList();
+		Map<Long, List<TournamentRegistrationResponse.FieldValueItem>> fieldValuesByRegistrationId =
+				fieldValueRepository.findByRegistrationIdInOrderByIdAsc(registrationIds).stream()
+						.collect(Collectors.groupingBy(
+								v -> v.getId().getRegistrationId(),
+								LinkedHashMap::new,
+								Collectors.mapping(this::toFieldValueItem, Collectors.toList())));
+		return PageResponse.of(page, registration -> buildRegistrationResponse(
+				registration, fieldValuesByRegistrationId.getOrDefault(registration.getId(), List.of())));
+	}
+
+	private List<TournamentRegistrationResponse.FieldValueItem> toFieldValueItems(
+			List<RegistrationFieldValue> values) {
+		return values.stream().map(this::toFieldValueItem).toList();
+	}
+
+	private TournamentRegistrationResponse.FieldValueItem toFieldValueItem(RegistrationFieldValue value) {
+		RegistrationFieldDefinition definition = value.getFieldDefinition();
+		if (definition == null) {
+			definition = fieldDefinitionRepository.findById(value.getId().getFieldKey()).orElse(null);
+		}
+		return TournamentRegistrationResponse.FieldValueItem.builder()
+				.fieldKey(value.getId().getFieldKey())
+				.label(definition != null ? definition.getLabel() : value.getId().getFieldKey())
+				.value(value.getValue())
+				.build();
+	}
+
+	private TournamentRegistrationResponse buildRegistrationResponse(
+			Registration registration, List<TournamentRegistrationResponse.FieldValueItem> fieldValues) {
 		return TournamentRegistrationResponse.builder()
 				.id(registration.getId())
 				.tournamentId(registration.getTournament().getId())

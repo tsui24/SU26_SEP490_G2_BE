@@ -42,11 +42,33 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 
     long countByTournamentIdAndStatus(Long tournamentId, String status);
 
+    @Query("""
+        SELECT p.tournament.id AS tournamentId, COUNT(p) AS total
+        FROM Participant p
+        WHERE p.tournament.id IN :tournamentIds AND p.status = :status
+        GROUP BY p.tournament.id
+        """)
+    List<TournamentParticipantCount> countGroupedByTournamentIdInAndStatus(
+            @Param("tournamentIds") List<Long> tournamentIds,
+            @Param("status") String status);
+
+    interface TournamentParticipantCount {
+        Long getTournamentId();
+        Long getTotal();
+    }
+
     boolean existsByTournamentIdAndStatusAndSeedNo(Long tournamentId, String status, Integer seedNo);
 
     boolean existsByRegistrationId(Long registrationId);
 
-    List<Participant> findByTournamentIdIn(List<Long> tournamentIds);
+    @Query("""
+        SELECT p FROM Participant p
+        LEFT JOIN FETCH p.tournament
+        LEFT JOIN FETCH p.registration r
+        LEFT JOIN FETCH r.user
+        WHERE p.tournament.id IN :tournamentIds
+        """)
+    List<Participant> findByTournamentIdIn(@Param("tournamentIds") List<Long> tournamentIds);
 
     @Query("""
         SELECT p FROM Participant p

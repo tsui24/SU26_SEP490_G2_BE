@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.time.Instant;
@@ -54,6 +55,7 @@ public class NewsPost extends BaseEntity {
 			joinColumns = @JoinColumn(name = "post_id"),
 			inverseJoinColumns = @JoinColumn(name = "tag_id")
 	)
+	@BatchSize(size = 50)
 	@Builder.Default
 	private Set<NewsTag> tags = new HashSet<>();
 
