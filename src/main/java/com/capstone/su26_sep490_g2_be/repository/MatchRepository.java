@@ -52,7 +52,12 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 
 	boolean existsByTournamentIdAndStatusNotIn(Long tournamentId, List<String> statuses);
 
-	List<Match> findByTournamentIdIn(List<Long> tournamentIds);
+	@Query("""
+		SELECT m FROM Match m
+		LEFT JOIN FETCH m.tournament
+		WHERE m.tournament.id IN :tournamentIds
+		""")
+	List<Match> findByTournamentIdIn(@Param("tournamentIds") List<Long> tournamentIds);
 
 	@Query("SELECT m FROM Match m WHERE m.tournament.id = :tournamentId AND m.roundNo = :roundNo AND m.stage.id = :stageId ORDER BY m.positionNo ASC")
 	List<Match> findByTournamentIdAndStageIdAndRoundNo(

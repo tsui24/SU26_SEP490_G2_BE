@@ -3,6 +3,7 @@ package com.capstone.su26_sep490_g2_be.repository;
 import com.capstone.su26_sep490_g2_be.entity.Payment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -11,6 +12,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpecificationExecutor<Payment> {
+
+	@Override
+	@EntityGraph(attributePaths = { "registration", "registration.tournament" })
+	Page<Payment> findAll(Specification<Payment> spec, Pageable pageable);
 
 	@EntityGraph(attributePaths = { "registration", "registration.tournament" })
 	List<Payment> findByRegistrationId(Long registrationId);

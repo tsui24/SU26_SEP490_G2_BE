@@ -270,26 +270,24 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public List<Match> bulkAssignMatches(List<Long> matchIds, AssignMatchRequest request, Long updatedByUserId) {
         getUser(updatedByUserId);
+        List<Match> matches = matchRepository.findAllById(matchIds);
         List<Match> updated = new ArrayList<>();
         Long tournamentId = null;
-        for (Long matchId : matchIds) {
-            Match match = matchRepository.findById(matchId).orElse(null);
-            if (match == null) {
-                continue;
-            }
+        for (Match match : matches) {
             try {
                 applyAssignment(match, request);
             } catch (BusinessException ex) {
                 // Trận đã resolved (COMPLETED/WALKOVER/BYE) không cho đổi bàn/giờ — bỏ qua, không fail cả batch.
                 continue;
             }
-            updated.add(matchRepository.save(match));
+            updated.add(match);
             tournamentId = match.getTournament().getId();
         }
+        List<Match> saved = matchRepository.saveAll(updated);
         if (tournamentId != null) {
             matchSchedulingService.reschedule(tournamentId);
         }
-        return updated;
+        return saved;
     }
 
     /** Áp dụng thay đổi trọng tài/bàn/giờ lên match trong bộ nhớ — chưa save. Dùng chung cho assignMatch & bulkAssignMatches. */
