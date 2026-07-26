@@ -33,6 +33,14 @@ public class TournamentConfigValueServiceImpl implements TournamentConfigValueSe
 	}
 
 	@Override
+	public List<TournamentConfigValue> findByTournamentIds(java.util.Collection<Long> tournamentIds) {
+		if (tournamentIds == null || tournamentIds.isEmpty()) {
+			return List.of();
+		}
+		return valueRepository.findByIdTournamentIdIn(tournamentIds);
+	}
+
+	@Override
 	public Optional<TournamentConfigValue> getByTournamentAndField(Long tournamentId, String fieldKey) {
 		return valueRepository.findByIdTournamentIdAndIdFieldKey(tournamentId, fieldKey);
 	}

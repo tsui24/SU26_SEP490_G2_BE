@@ -123,7 +123,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 		Specification<Tournament> spec = buildSpec(createdById, statusParam, searchParam, null);
 		Page<Tournament> tournamentPage = tournamentRepository.findAll(spec, pageable);
-		return PageResponse.of(tournamentPage, this::toListItem);
+		return mapTournamentListPage(tournamentPage, true);
 	}
 
 	@Override
@@ -403,7 +403,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				List.of(TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue()));
 		spec = spec.and((root, query, cb) -> cb.equal(root.get("isShowTournament"), true));
 		Page<Tournament> result = tournamentRepository.findAll(spec, pageable);
-		return PageResponse.of(result, this::toPublicListItem);
+		return mapTournamentListPage(result, false);
 	}
 
 	@Override
@@ -754,47 +754,177 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		return tournamentAuditService.getHistory(tournamentId);
 	}
 
-	private TournamentListItemResponse toListItem(Tournament tournament) {
-		String formatName = formatRepository.findById(tournament.getFormat())
-				.map(TournamentFormatDefinition::getName)
-				.orElse(null);
-		long approved = participantRepository.countByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+	private PageResponse<TournamentListItemResponse> mapTournamentListPage(
+			Page<Tournament> tournamentPage, boolean includeConfigComplete) {
+		List<Tournament> tournaments = tournamentPage.getContent();
+		if (tournaments.isEmpty()) {
+			return PageResponse.<TournamentListItemResponse>builder()
+					.content(List.of())
+					.pageNumber(tournamentPage.getNumber())
+					.pageSize(tournamentPage.getSize())
+					.totalElements(tournamentPage.getTotalElements())
+					.totalPages(tournamentPage.getTotalPages())
+					.isLast(tournamentPage.isLast())
+					.build();
+		}
 
-		return TournamentListItemResponse.builder()
-				.id(tournament.getId())
-				.name(tournament.getName())
-				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
-				.gameType(tournament.getGameType())
-				.format(tournament.getFormat())
-				.formatName(formatName)
-				.participantType(tournament.getParticipantType())
-				.status(tournament.getStatus())
-				.maxParticipants(tournament.getMaxParticipants())
-				.tableCount(tournament.getTableCount())
-				.entryFee(tournament.getEntryFee())
-				.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
-				.configComplete(isConfigComplete(tournament.getId(), tournament.getFormat()))
-				.approvedCount(approved)
-				.registrationDeadline(tournament.getRegistrationDeadline())
-				.startAt(tournament.getStartAt())
-				.endAt(tournament.getEndAt())
-				.createdAt(tournament.getCreatedAt())
-				.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
-				.venueName(tournament.getVenueName())
-				.venueAddress(tournament.getVenueAddress())
+		List<Long> ids = tournaments.stream().map(Tournament::getId).toList();
+		Map<Long, Long> approvedById = loadApprovedCounts(ids);
+		Map<String, String> formatNames = loadFormatNames(tournaments);
+		Map<Long, Boolean> configCompleteById = includeConfigComplete
+				? loadConfigCompleteFlags(tournaments)
+				: Map.of();
+
+		List<TournamentListItemResponse> content = tournaments.stream()
+				.map(t -> toListItemFast(
+						t,
+						formatNames.get(t.getFormat()),
+						approvedById.getOrDefault(t.getId(), 0L),
+						includeConfigComplete ? configCompleteById.getOrDefault(t.getId(), false) : null))
+				.toList();
+
+		return PageResponse.<TournamentListItemResponse>builder()
+				.content(content)
+				.pageNumber(tournamentPage.getNumber())
+				.pageSize(tournamentPage.getSize())
+				.totalElements(tournamentPage.getTotalElements())
+				.totalPages(tournamentPage.getTotalPages())
+				.isLast(tournamentPage.isLast())
 				.build();
 	}
 
-	private TournamentListItemResponse toPublicListItem(Tournament tournament) {
-		String formatName = formatRepository.findById(tournament.getFormat())
-				.map(TournamentFormatDefinition::getName)
-				.orElse(null);
-		long approved = participantRepository.countByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+	private Map<Long, Long> loadApprovedCounts(List<Long> tournamentIds) {
+		if (tournamentIds.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, Long> result = new HashMap<>();
+		for (Object[] row : participantRepository.countGroupedByTournamentIdAndStatus(
+				tournamentIds, ParticipantStatus.ACTIVE.getValue())) {
+			result.put((Long) row[0], (Long) row[1]);
+		}
+		return result;
+	}
 
-		return TournamentListItemResponse.builder()
+	private Map<String, String> loadFormatNames(List<Tournament> tournaments) {
+		Set<String> codes = tournaments.stream()
+				.map(Tournament::getFormat)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toSet());
+		if (codes.isEmpty()) {
+			return Map.of();
+		}
+		Map<String, String> names = new HashMap<>();
+		for (TournamentFormatDefinition def : formatRepository.findAllById(codes)) {
+			names.put(def.getCode(), def.getName());
+		}
+		return names;
+	}
+
+	/**
+	 * Tính configComplete cho cả page bằng vài query batch — cùng logic {@link #isConfigComplete}
+	 * nhưng không N+1 từng giải.
+	 */
+	private Map<Long, Boolean> loadConfigCompleteFlags(List<Tournament> tournaments) {
+		List<Long> ids = tournaments.stream().map(Tournament::getId).toList();
+		Map<Long, TournamentConfig> configs = new HashMap<>();
+		for (TournamentConfig c : tournamentConfigRepository.findAllById(ids)) {
+			configs.put(c.getTournamentId(), c);
+		}
+
+		Set<String> formatCodes = tournaments.stream()
+				.map(Tournament::getFormat)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toSet());
+		Map<String, List<FormatConfigField>> fieldsByFormat = new HashMap<>();
+		Map<String, Long> raceCountByFormat = new HashMap<>();
+		for (String code : formatCodes) {
+			fieldsByFormat.put(code, formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(code));
+			raceCountByFormat.put(code, formatRaceToRuleRepository.countByFormatCode(code));
+		}
+
+		Map<Long, Map<String, String>> valuesByTournament = new HashMap<>();
+		for (TournamentConfigValue v : configValueService.findByTournamentIds(ids)) {
+			valuesByTournament
+					.computeIfAbsent(v.getId().getTournamentId(), k -> new HashMap<>())
+					.put(v.getId().getFieldKey(), v.getValue());
+		}
+
+		Map<Long, Boolean> result = new HashMap<>();
+		for (Tournament t : tournaments) {
+			result.put(t.getId(), isConfigCompleteCached(
+					t,
+					configs.get(t.getId()),
+					fieldsByFormat.getOrDefault(t.getFormat(), List.of()),
+					valuesByTournament.getOrDefault(t.getId(), Map.of()),
+					raceCountByFormat.getOrDefault(t.getFormat(), 0L)));
+		}
+		return result;
+	}
+
+	private boolean isConfigCompleteCached(
+			Tournament tournament,
+			TournamentConfig config,
+			List<FormatConfigField> formatFields,
+			Map<String, String> savedValues,
+			long raceCount) {
+		if (config == null || config.getSeedingMethod() == null || config.getSeedingMethod().isBlank()) {
+			return false;
+		}
+		for (FormatConfigField formatField : formatFields) {
+			if (!Boolean.TRUE.equals(formatField.getIsRequired())) {
+				continue;
+			}
+			String value = savedValues.containsKey(formatField.getFieldKey())
+					? savedValues.get(formatField.getFieldKey())
+					: formatField.getDefaultValue();
+			if (value == null || value.isBlank()) {
+				return false;
+			}
+			if (!validateFieldValue(formatField, value).isEmpty()) {
+				return false;
+			}
+		}
+		if (raceCount == 0) {
+			return false;
+		}
+		if (TournamentFormat.PROGRESSIVE_ROUND_ROBIN.getValue().equals(tournament.getFormat())) {
+			String survivorsCsv = resolveCachedField(formatFields, savedValues, "pe_survivors_per_stage");
+			String playoffSizeStr = resolveCachedField(formatFields, savedValues, "final_playoff_size");
+			if (survivorsCsv == null || survivorsCsv.isBlank() || playoffSizeStr == null || playoffSizeStr.isBlank()) {
+				return false;
+			}
+			try {
+				int playoffSize = Integer.parseInt(playoffSizeStr.trim());
+				List<Integer> survivors = ProgressiveSurvivorsUtil.parse(survivorsCsv);
+				int max = tournament.getMaxParticipants() != null ? tournament.getMaxParticipants() : 0;
+				if (!ProgressiveSurvivorsUtil.validate(survivors, max, playoffSize).isEmpty()) {
+					return false;
+				}
+			} catch (Exception ex) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static String resolveCachedField(
+			List<FormatConfigField> formatFields, Map<String, String> savedValues, String fieldKey) {
+		return formatFields.stream()
+				.filter(f -> fieldKey.equals(f.getFieldKey()))
+				.findFirst()
+				.map(f -> savedValues.containsKey(fieldKey) ? savedValues.get(fieldKey) : f.getDefaultValue())
+				.orElse(null);
+	}
+
+	private TournamentListItemResponse toListItemFast(
+			Tournament tournament,
+			String formatName,
+			long approved,
+			Boolean configComplete) {
+		TournamentListItemResponse.TournamentListItemResponseBuilder builder = TournamentListItemResponse.builder()
 				.id(tournament.getId())
 				.name(tournament.getName())
-				.thumbnailUrl(resolveImageForResponse(tournament.getThumbnailUrl()))
+				.thumbnailUrl(resolveImageForList(tournament.getThumbnailUrl()))
 				.gameType(tournament.getGameType())
 				.format(tournament.getFormat())
 				.formatName(formatName)
@@ -809,10 +939,13 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
 				.createdAt(tournament.getCreatedAt())
-				.branchId(tournament.getBranch() != null ? tournament.getBranch().getId() : null)
+				.branchId(tournament.getBranchId())
 				.venueName(tournament.getVenueName())
-				.venueAddress(tournament.getVenueAddress())
-				.build();
+				.venueAddress(tournament.getVenueAddress());
+		if (configComplete != null) {
+			builder.configComplete(configComplete);
+		}
+		return builder.build();
 	}
 
 	private OwnerFormatListItemResponse toOwnerFormatItem(TournamentFormatDefinition format) {
@@ -1313,6 +1446,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	 */
 	private String resolveImageForResponse(String storedValue) {
 		return AvatarUrlResolver.resolveForResponse(
+				storedValue, minioStorageService, minioProperties.getBucket());
+	}
+
+	/** Presign nhanh cho list — không StatObject MinIO. */
+	private String resolveImageForList(String storedValue) {
+		return AvatarUrlResolver.resolveForList(
 				storedValue, minioStorageService, minioProperties.getBucket());
 	}
 }

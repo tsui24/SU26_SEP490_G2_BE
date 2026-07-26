@@ -3,13 +3,22 @@ package com.capstone.su26_sep490_g2_be.repository;
 import com.capstone.su26_sep490_g2_be.entity.TournamentConfigValue;
 import com.capstone.su26_sep490_g2_be.entity.TournamentConfigValueId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface TournamentConfigValueRepository extends JpaRepository<TournamentConfigValue, TournamentConfigValueId> {
 
 	List<TournamentConfigValue> findByIdTournamentId(Long tournamentId);
+
+	@Query("""
+		SELECT v FROM TournamentConfigValue v
+		WHERE v.id.tournamentId IN :tournamentIds
+		""")
+	List<TournamentConfigValue> findByIdTournamentIdIn(@Param("tournamentIds") Collection<Long> tournamentIds);
 
 	Optional<TournamentConfigValue> findByIdTournamentIdAndIdFieldKey(Long tournamentId, String fieldKey);
 
