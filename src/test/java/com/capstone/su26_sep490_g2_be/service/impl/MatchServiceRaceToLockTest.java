@@ -12,6 +12,7 @@ import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,7 @@ class MatchServiceRaceToLockTest {
 	@Mock MatchScoreEventRepository scoreEventRepository;
 	@Mock ParticipantRepository participantRepository;
 	@Mock UserRepository userRepository;
+	@Mock MatchSchedulingService matchSchedulingService;
 
 	@InjectMocks MatchServiceImpl matchService;
 
