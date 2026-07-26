@@ -21,6 +21,10 @@ jobs:
           SPRING_PROFILES_ACTIVE: dev
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          # MinIO không chạy trong CI — chỉ cần giá trị khác rỗng để MinioClient khởi tạo được,
+          # kết nối thật sự thất bại sẽ được bỏ qua (xem MinioConfig#minioBucketInitializer)
+          MINIO_ACCESS_KEY: ci-placeholder
+          MINIO_SECRET_KEY: ci-placeholder
         run: ./mvnw test -B
 
   deploy:
