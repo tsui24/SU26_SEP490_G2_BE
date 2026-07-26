@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Component
-@Order(5)
+@Order(3)
 @RequiredArgsConstructor
 public class EmailTemplateSeedInitializer implements CommandLineRunner {
 

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,6 +42,16 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
     Optional<Participant> findByIdWithDetails(@Param("id") Long id);
 
     long countByTournamentIdAndStatus(Long tournamentId, String status);
+
+    @Query("""
+        SELECT p.tournament.id, COUNT(p)
+        FROM Participant p
+        WHERE p.tournament.id IN :tournamentIds AND p.status = :status
+        GROUP BY p.tournament.id
+        """)
+    List<Object[]> countGroupedByTournamentIdAndStatus(
+            @Param("tournamentIds") Collection<Long> tournamentIds,
+            @Param("status") String status);
 
     boolean existsByTournamentIdAndStatusAndSeedNo(Long tournamentId, String status, Integer seedNo);
 

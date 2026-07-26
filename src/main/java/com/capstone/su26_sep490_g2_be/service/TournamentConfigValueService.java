@@ -10,6 +10,8 @@ public interface TournamentConfigValueService {
 
 	List<TournamentConfigValue> getByTournament(Long tournamentId);
 
+	List<TournamentConfigValue> findByTournamentIds(java.util.Collection<Long> tournamentIds);
+
 	Optional<TournamentConfigValue> getByTournamentAndField(Long tournamentId, String fieldKey);
 
 	/**
