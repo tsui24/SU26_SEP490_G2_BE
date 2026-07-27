@@ -9,11 +9,11 @@ import lombok.Setter;
 @Setter
 public class NewsTagRequest {
 
-    @NotBlank
-    @Size(max = 100)
+    @NotBlank(message = "Tên tag không được để trống")
+    @Size(max = 100, message = "Tên tag tối đa 100 ký tự")
     private String name;
 
-    @NotBlank
-    @Size(max = 100)
+    @NotBlank(message = "Slug không được để trống")
+    @Size(max = 100, message = "Slug tối đa 100 ký tự")
     private String slug;
 }

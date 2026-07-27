@@ -14,23 +14,23 @@ import java.util.List;
 @Schema(description = "Tạo field catalog cho form đăng ký")
 public class CreateRegistrationFieldRequest {
 
-	@NotBlank
-	@Size(max = 80)
-	@Pattern(regexp = "^[a-z][a-z0-9_]*$", message = "fieldKey must be lowercase snake_case")
+	@NotBlank(message = "Field key không được để trống")
+	@Size(max = 80, message = "Field key tối đa 80 ký tự")
+	@Pattern(regexp = "^[a-z][a-z0-9_]*$", message = "Field key phải là chữ thường dạng snake_case")
 	@Schema(example = "player_full_name")
 	private String fieldKey;
 
-	@NotBlank
-	@Size(max = 255)
+	@NotBlank(message = "Nhãn hiển thị không được để trống")
+	@Size(max = 255, message = "Nhãn hiển thị tối đa 255 ký tự")
 	private String label;
 
 	private String description;
 
-	@NotBlank
+	@NotBlank(message = "Kiểu dữ liệu không được để trống")
 	@Schema(example = "STRING")
 	private String dataType;
 
-	@NotBlank
+	@NotBlank(message = "UI component không được để trống")
 	@Schema(example = "TEXT")
 	private String uiComponent;
 

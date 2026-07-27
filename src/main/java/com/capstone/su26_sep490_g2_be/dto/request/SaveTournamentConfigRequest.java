@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -48,6 +49,7 @@ public class SaveTournamentConfigRequest {
 		private String roundKey;
 
 		@NotNull(message = "Race-to không được để trống")
+		@Min(value = 1, message = "Race-to phải lớn hơn 0")
 		private Integer raceTo;
 	}
 }

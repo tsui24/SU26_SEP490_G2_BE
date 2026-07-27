@@ -37,7 +37,7 @@ public class ManagerTournamentController {
 			@RequestParam(defaultValue = "10") int size) {
 		return ResponseEntity.ok(ApiResponse.success(
 				ownerTournamentService.listTournaments(
-						extractUserId(authentication), false, status, search, page, size)));
+						extractUserId(authentication), true, status, search, page, size)));
 	}
 
 	@Operation(summary = "Danh sách thể thức")
@@ -73,22 +73,25 @@ public class ManagerTournamentController {
 			@PathVariable Long id,
 			@Valid @RequestBody UpdateTournamentRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.updateTournament(extractUserId(authentication), id, request, false)));
+				ownerTournamentService.updateTournament(extractUserId(authentication), id, request, true)));
 	}
 
 	@Operation(summary = "Chi tiết giải đấu")
 	@GetMapping("/tournaments/{id}")
 	public ResponseEntity<ApiResponse<TournamentDetailResponse>> getTournament(
+			Authentication authentication,
 			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getTournament(null, id, false)));
+				ownerTournamentService.getTournament(extractUserId(authentication), id, true)));
 	}
 
 	@Operation(summary = "Load form config")
 	@GetMapping("/tournaments/{id}/config-form")
-	public ResponseEntity<ApiResponse<TournamentConfigFormResponse>> getConfigForm(@PathVariable Long id) {
+	public ResponseEntity<ApiResponse<TournamentConfigFormResponse>> getConfigForm(
+			Authentication authentication,
+			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getConfigForm(null, id, false)));
+				ownerTournamentService.getConfigForm(extractUserId(authentication), id, true)));
 	}
 
 	@Operation(summary = "Lưu config giải")
@@ -98,21 +101,25 @@ public class ManagerTournamentController {
 			@PathVariable Long id,
 			@Valid @RequestBody SaveTournamentConfigRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.saveConfig(extractUserId(authentication), id, request, false)));
+				ownerTournamentService.saveConfig(extractUserId(authentication), id, request, true)));
 	}
 
 	@Operation(summary = "Config đã resolve")
 	@GetMapping("/tournaments/{id}/config")
-	public ResponseEntity<ApiResponse<TournamentConfigResolvedResponse>> getResolvedConfig(@PathVariable Long id) {
+	public ResponseEntity<ApiResponse<TournamentConfigResolvedResponse>> getResolvedConfig(
+			Authentication authentication,
+			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getResolvedConfig(null, id, false)));
+				ownerTournamentService.getResolvedConfig(extractUserId(authentication), id, true)));
 	}
 
 	@Operation(summary = "Validate config giải")
 	@PostMapping("/tournaments/{id}/config/validate")
-	public ResponseEntity<ApiResponse<TournamentConfigValidateResponse>> validateConfig(@PathVariable Long id) {
+	public ResponseEntity<ApiResponse<TournamentConfigValidateResponse>> validateConfig(
+			Authentication authentication,
+			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.validateConfig(null, id, false)));
+				ownerTournamentService.validateConfig(extractUserId(authentication), id, true)));
 	}
 
 	@Operation(summary = "Đổi trạng thái giải")
@@ -122,7 +129,7 @@ public class ManagerTournamentController {
 			@PathVariable Long id,
 			@Valid @RequestBody PatchTournamentStatusRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, false)));
+				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, true)));
 	}
 
 	@Operation(summary = "Lịch sử đổi trạng thái giải", description = "Audit trail — cả thao tác thủ công và tự động")

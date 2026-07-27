@@ -111,4 +111,9 @@ public class Tournament extends BaseEntity {
 
 	@Column(name = "venue_address", length = 500)
 	private String venueAddress;
+
+	/** Optimistic lock — tránh Owner/Manager cùng sửa 1 giải đấu ghi đè âm thầm lên nhau. */
+	@Version
+	@Column(name = "version")
+	private Long version;
 }

@@ -6,6 +6,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.EmployeeAccountResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,6 +29,7 @@ public class ManagerController {
 
 	private final AccountService accountService;
 	private final SecurityUtil securityUtil;
+	private final BranchAccessService branchAccessService;
 
 	@Operation(summary = "Get all, search and filter staff accounts",
 			description = "Lấy danh sách các tài khoản có role là STAFF. Hỗ trợ tìm kiếm lọc theo tên, số điện thoại hoặc email.")
@@ -43,8 +45,8 @@ public class ManagerController {
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
 		User manager = securityUtil.resolveCurrentUser(authentication);
-		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
-		PageResponse<EmployeeAccountResponse> response = accountService.getStaffsByManager(ownerId, search, page, size);
+		PageResponse<EmployeeAccountResponse> response = accountService.getStaffsByManagerBranches(
+				branchAccessService.getAccessibleBranchIds(manager), search, page, size);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
@@ -61,7 +63,8 @@ public class ManagerController {
 			@Valid @RequestBody CreateStaffAccountRequest request) {
 		User manager = securityUtil.resolveCurrentUser(authentication);
 		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
-		EmployeeAccountResponse response = accountService.createStaffAccount(request, ownerId);
+		EmployeeAccountResponse response = accountService.createStaffAccount(
+				request, ownerId, branchAccessService.getAccessibleBranchIds(manager));
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success("Đã tạo tài khoản Staff", response));
 	}
@@ -77,8 +80,8 @@ public class ManagerController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		User manager = securityUtil.resolveCurrentUser(authentication);
-		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
-		EmployeeAccountResponse response = accountService.getEmployeeDetail(ownerId, id);
+		EmployeeAccountResponse response = accountService.getStaffDetailForManager(
+				branchAccessService.getAccessibleBranchIds(manager), id);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 
@@ -95,8 +98,25 @@ public class ManagerController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		User manager = securityUtil.resolveCurrentUser(authentication);
-		Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
-		EmployeeAccountResponse response = accountService.deactivateEmployee(ownerId, id);
+		EmployeeAccountResponse response = accountService.deactivateStaffForManager(
+				branchAccessService.getAccessibleBranchIds(manager), id);
 		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa tài khoản Staff", response));
+	}
+
+	@Operation(summary = "Manager can reactivate staff account",
+			description = "Mở khóa lại tài khoản của một nhân viên (chuyển trạng thái sang ACTIVE).")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Mở khóa thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Nhân viên không tồn tại")
+	})
+	@PutMapping("/accounts/staffs/{id}/reactivate")
+	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> reactivateEmployee(
+			Authentication authentication,
+			@PathVariable Long id) {
+		User manager = securityUtil.resolveCurrentUser(authentication);
+		EmployeeAccountResponse response = accountService.reactivateStaffForManager(
+				branchAccessService.getAccessibleBranchIds(manager), id);
+		return ResponseEntity.ok(ApiResponse.success("Đã mở khóa tài khoản Staff", response));
 	}
 }

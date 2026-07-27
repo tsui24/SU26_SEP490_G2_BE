@@ -37,7 +37,7 @@ public interface MatchService {
 
     Match incrementScore(Long matchId, int playerSlot, int delta, Long updatedByUserId);
 
-    Match completeMatch(Long matchId, Long winnerParticipantId, Long updatedByUserId);
+    Match completeMatch(Long matchId, Long winnerParticipantId, boolean confirmEarlyEnd, Long updatedByUserId);
 
     Match walkover(Long matchId, Long winnerParticipantId, Long updatedByUserId);
 

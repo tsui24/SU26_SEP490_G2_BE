@@ -100,7 +100,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public AnalyticsOverviewResponse buildOverview(Long ownerId, Instant fromParam, Instant toParam) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Tournament> allTournaments = ownerTournaments(ownerId);
@@ -180,7 +180,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public RevenueBreakdownResponse buildRevenueBreakdown(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Tournament> allTournaments = ownerTournaments(ownerId);
@@ -246,7 +246,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public List<TournamentPerformanceItem> buildTournamentPerformance(Long ownerId, Instant fromParam, Instant toParam) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		// Danh sách giải đấu KHÔNG lọc theo khoảng thời gian — "hiệu suất giải đấu" phải liệt kê đủ
@@ -308,7 +308,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public List<PlayerLeaderboardItem> buildPlayerLeaderboard(Long ownerId, Instant fromParam, Instant toParam) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
@@ -352,7 +352,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public SocialEngagementResponse buildSocialEngagement(Long ownerId, Instant fromParam, Instant toParam) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
@@ -383,7 +383,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public RegistrationStatsResponse buildRegistrationFunnel(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
@@ -419,7 +419,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public List<GameTypeBreakdownItem> buildGameTypeBreakdown(Long ownerId, Instant fromParam, Instant toParam) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Tournament> allTournaments = ownerTournaments(ownerId);
@@ -466,7 +466,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public PlayerGrowthResponse buildPlayerGrowth(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
@@ -623,7 +623,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	@Override
 	public TransactionStatsResponse buildTransactionStats(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
-		Instant from = defaultFrom(fromParam);
+		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
 		List<Payment> payments = scoped(tournamentIds, paymentRepository::findByRegistration_Tournament_IdIn);
@@ -782,7 +782,12 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	// ──────────────────────────── shared helpers ────────────────────────────
 
 	private List<Tournament> ownerTournaments(Long ownerId) {
-		return ownerId != null ? tournamentRepository.findByCreatedById(ownerId) : tournamentRepository.findAll();
+		// KHÔNG được coi ownerId == null là "không lọc" rồi trả toàn bộ dữ liệu của mọi chủ sân —
+		// mọi endpoint gọi tới đây đều bắt buộc phải có ownerId xác định (Owner/Manager tự xem của mình).
+		if (ownerId == null) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		return tournamentRepository.findByCreatedById(ownerId);
 	}
 
 	private List<Long> ids(List<Tournament> tournaments) {
@@ -799,6 +804,16 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	private Instant defaultTo(Instant to) {
 		return to != null ? to : Instant.now();
+	}
+
+	/** Chặn client truyền from/to cách nhau nhiều năm — tránh dựng trend map hàng chục nghìn điểm/query không giới hạn mỗi request. */
+	private static final long MAX_RANGE_DAYS = 366L * 3;
+
+	private Instant clampRangeStart(Instant from, Instant to) {
+		if (java.time.Duration.between(from, to).toDays() > MAX_RANGE_DAYS) {
+			return to.minus(MAX_RANGE_DAYS, java.time.temporal.ChronoUnit.DAYS);
+		}
+		return from;
 	}
 
 	private boolean inRange(Instant t, Instant from, Instant to) {

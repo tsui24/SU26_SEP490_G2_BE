@@ -2,6 +2,8 @@ package com.capstone.su26_sep490_g2_be.config;
 
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.UserStatus;
+import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -28,22 +30,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String BEARER_PREFIX = "Bearer ";
 
-	private static final String[] PUBLIC_URLS = {
-			"/api/v1/auth/login",
-			"/api/v1/auth/register",
-			"/api/v1/auth/forgot-password",
-			"/api/v1/auth/verify-otp",
-			"/api/v1/auth/reset-password",
-			"/api/v1/health"
-	};
-
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 	private final JwtUtil jwtUtil;
+	private final UserRepository userRepository;
 
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		return isPublicPath(request.getRequestURI());
+		return PublicEndpoints.isPublic(request.getRequestURI());
 	}
 
 	@Override
@@ -74,6 +68,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		String role = jwtUtil.extractRole(token);
 		Long userId = jwtUtil.extractUserId(token);
 
+		// Token còn hạn nhưng tài khoản có thể vừa bị khoá/xoá sau khi token được cấp — JWT tự thân
+		// không mang trạng thái mới nhất, nên phải xác nhận lại với DB trên MỌI request thay vì chỉ
+		// ở vài endpoint riêng lẻ (login/getMe), nếu không tài khoản LOCKED vẫn dùng token cũ được
+		// tới khi token hết hạn (mặc định 24h).
+		if (userId == null || userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE).isEmpty()) {
+			writeError(response, ErrorCode.AUTH_ACCOUNT_LOCKED);
+			return;
+		}
+
 		var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
 		var authentication = new UsernamePasswordAuthenticationToken(email, userId, authorities);
 		authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -87,21 +90,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		response.setCharacterEncoding(StandardCharsets.UTF_8.name());
 		OBJECT_MAPPER.writeValue(response.getWriter(), ApiResponse.error(errorCode));
-	}
-
-	private boolean isPublicPath(String path) {
-		if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs")) {
-			return true;
-		}
-		// WebSocket STOMP handshake — không gửi JWT trên HTTP upgrade
-		if (path.equals("/ws") || path.startsWith("/ws/")) {
-			return true;
-		}
-		for (String pattern : PUBLIC_URLS) {
-			if (path.equals(pattern)) {
-				return true;
-			}
-		}
-		return false;
 	}
 }

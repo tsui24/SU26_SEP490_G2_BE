@@ -12,6 +12,7 @@ import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
@@ -44,6 +45,19 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private final ApplicationEventPublisher eventPublisher;
     private final MailContextBuilder mailContextBuilder;
     private final MatchSchedulingService matchSchedulingService;
+    private final UserRepository userRepository;
+    private final BranchAccessService branchAccessService;
+
+    /** Owner thao tác được bracket của mọi giải (1 chuỗi); Manager chỉ giải thuộc chi nhánh được cấp quyền. */
+    private void assertActorCanAccessTournament(Long actorUserId, Tournament tournament) {
+        User actor = userRepository.findById(actorUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+        Branch branch = tournament.getBranch();
+        Long branchId = branch != null ? branch.getId() : null;
+        if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
 
     /* ═══════════════════════════════════════════════════════════
      *  ENTRY POINT
@@ -54,6 +68,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public DrawResultResponse generate(Long tournamentId, Long actorUserId) {
         Tournament tournament = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        assertActorCanAccessTournament(actorUserId, tournament);
 
         String currentStatus = tournament.getStatus();
         if (!TournamentStatus.REGISTRATION_CLOSED.getValue().equals(currentStatus)
@@ -963,6 +978,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public void confirmDraw(Long tournamentId, Long actorUserId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        assertActorCanAccessTournament(actorUserId, t);
         if (!TournamentStatus.DRAW_PREVIEW.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
         String previousStatus = t.getStatus();
         t.setStatus(TournamentStatus.DRAW_DONE.getValue());
@@ -1464,6 +1480,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     public void populateFinalBracket(Long tournamentId, Long actorUserId) {
         Tournament t = tournamentRepository.findById(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        assertActorCanAccessTournament(actorUserId, t);
         if (!TournamentStatus.DRAW_DONE.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
 
         List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);

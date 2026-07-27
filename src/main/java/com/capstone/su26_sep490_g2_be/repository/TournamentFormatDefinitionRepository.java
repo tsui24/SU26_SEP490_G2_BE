@@ -18,4 +18,6 @@ public interface TournamentFormatDefinitionRepository extends JpaRepository<Tour
 	Page<TournamentFormatDefinition> findByIsActive(Boolean isActive, Pageable pageable);
 
 	boolean existsByHandlerKey(String handlerKey);
+
+	boolean existsByHandlerKeyAndCodeNot(String handlerKey, String code);
 }

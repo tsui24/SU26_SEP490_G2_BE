@@ -14,6 +14,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.TransactionStatsResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TrendPointResponse;
 import com.capstone.su26_sep490_g2_be.service.AnalyticsExcelService;
 import com.capstone.su26_sep490_g2_be.service.AnalyticsService;
+import com.capstone.su26_sep490_g2_be.util.ExcelSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -132,7 +133,7 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 
 	private Cell header(Row row, int col, String value, CellStyle style) {
 		Cell cell = row.createCell(col);
-		cell.setCellValue(value);
+		cell.setCellValue(ExcelSanitizer.sanitize(value));
 		cell.setCellStyle(style);
 		return cell;
 	}
@@ -185,7 +186,7 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 		} else if (value instanceof Number n) {
 			valueCell.setCellValue(n.doubleValue());
 		} else {
-			valueCell.setCellValue(value.toString());
+			valueCell.setCellValue(ExcelSanitizer.sanitize(value.toString()));
 		}
 		return rowIdx + 1;
 	}
@@ -254,8 +255,8 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 		int r = 1;
 		for (TournamentPerformanceItem item : items) {
 			Row row = sheet.createRow(r++);
-			row.createCell(0).setCellValue(item.getName());
-			row.createCell(1).setCellValue(item.getBranchName());
+			row.createCell(0).setCellValue(ExcelSanitizer.sanitize(item.getName()));
+			row.createCell(1).setCellValue(ExcelSanitizer.sanitize(item.getBranchName()));
 			row.createCell(2).setCellValue(item.getParticipants());
 			row.createCell(3).setCellValue(item.getMaxParticipants() != null ? item.getMaxParticipants() : 0);
 			row.createCell(4).setCellValue(item.getFillRatePct() != null ? item.getFillRatePct() : 0);
@@ -389,7 +390,7 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 		for (PlayerLeaderboardItem item : items) {
 			Row row = sheet.createRow(r++);
 			row.createCell(0).setCellValue(rank++);
-			row.createCell(1).setCellValue(item.getPlayerName());
+			row.createCell(1).setCellValue(ExcelSanitizer.sanitize(item.getPlayerName()));
 			row.createCell(2).setCellValue(item.getTournamentsPlayed());
 			row.createCell(3).setCellValue(item.getChampionCount());
 			row.createCell(4).setCellValue(item.getTop3Count());

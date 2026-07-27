@@ -410,7 +410,12 @@ public class AnalyticsController {
 
     private Long resolveManagerOwnerId(Authentication authentication) {
         User manager = securityUtil.resolveCurrentUser(authentication);
-        return manager.getOwner() != null ? manager.getOwner().getId() : null;
+        if (manager.getOwner() == null) {
+            // Manager không gắn Owner (dữ liệu lỗi/orphan) — KHÔNG được coi là "không lọc" rồi trả
+            // về dữ liệu của mọi chủ sân khác, phải từ chối thẳng.
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+        return manager.getOwner().getId();
     }
 
     private Instant parseFrom(String from) {

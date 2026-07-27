@@ -22,6 +22,7 @@ import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldValueRepositor
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.PayOSService;
@@ -69,6 +70,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private final ParticipantMemberRepository participantMemberRepository;
 	private final ApplicationEventPublisher eventPublisher;
 	private final MailContextBuilder mailContextBuilder;
+	private final BranchAccessService branchAccessService;
 
 	@Override
 	@Transactional
@@ -156,10 +158,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 	public TournamentRegistrationResponse getRegistrationDetail(
 			Long registrationId, Long requestingUserId, boolean isStaff) {
 		Registration registration = getById(registrationId);
-		if (!isStaff) {
-			if (requestingUserId == null || !registration.getUser().getId().equals(requestingUserId)) {
-				throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
-			}
+		if (isStaff) {
+			assertStaffTournamentAccess(requestingUserId, registration.getTournament());
+		} else if (requestingUserId == null || !registration.getUser().getId().equals(requestingUserId)) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
 		return toResponse(registration);
 	}
@@ -174,9 +176,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<TournamentRegistrationResponse> getTournamentRegistrations(
-			Long tournamentId, String status, int page, int size) {
-		tournamentRepository.findById(tournamentId)
+			Long tournamentId, Long staffUserId, String status, int page, int size) {
+		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		assertStaffTournamentAccess(staffUserId, tournament);
 		Pageable pageable = PageableUtil.create(page, size, "createdAt");
 		Page<Registration> result = (status == null || status.isBlank())
 				? registrationRepository.findByTournamentId(tournamentId, pageable)
@@ -211,6 +214,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		Registration reg = getById(registrationId);
 		Tournament tournament = tournamentRepository.findByIdWithLock(reg.getTournament().getId())
 				.orElse(reg.getTournament());
+		assertStaffTournamentAccess(approvedByUserId, tournament);
 		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
 		}
@@ -232,8 +236,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 
 	@Override
 	@Transactional
-	public TournamentRegistrationResponse reject(Long registrationId, RejectRegistrationRequest request) {
+	public TournamentRegistrationResponse reject(
+			Long registrationId, Long rejectedByUserId, RejectRegistrationRequest request) {
 		Registration reg = getById(registrationId);
+		assertStaffTournamentAccess(rejectedByUserId, reg.getTournament());
 		reg.setStatus(RegistrationStatus.REJECTED.getValue());
 		reg.setRejectedReason(request.getReason());
 		reg.setRejectedAt(Instant.now());
@@ -249,9 +255,44 @@ public class RegistrationServiceImpl implements RegistrationService {
 		if (!reg.getUser().getId().equals(requestingUserId)) {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
+		if (RegistrationStatus.CANCELLED.getValue().equals(reg.getStatus())
+				|| RegistrationStatus.REJECTED.getValue().equals(reg.getStatus())) {
+			return;
+		}
+		Tournament tournament = reg.getTournament();
+		boolean wasApproved = RegistrationStatus.APPROVED.getValue().equals(reg.getStatus());
+		if (wasApproved && !TournamentStatus.isRosterEditable(tournament.getStatus())) {
+			// Đã lên bracket / giải đang diễn ra — không cho hủy để tránh Participant "mồ côi"
+			// còn trong bracket trong khi Registration đã CANCELLED. Phải liên hệ BTC để xử lý thủ công.
+			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+		}
 		reg.setStatus(RegistrationStatus.CANCELLED.getValue());
 		registrationRepository.save(reg);
+		if (wasApproved) {
+			participantRepository.findByRegistrationId(reg.getId())
+					.ifPresent(p -> {
+						p.setStatus(ParticipantStatus.WITHDRAWN.getValue());
+						participantRepository.save(p);
+					});
+		}
 		publishRegistrationEvent(EmailEventType.REGISTRATION_CANCELLED, reg);
+	}
+
+	/**
+	 * 1 chuỗi duy nhất (nhiều chi nhánh) nên Owner xem được đăng ký của cả chuỗi; chỉ Manager mới
+	 * bị giới hạn theo chi nhánh họ được cấp quyền qua {@link BranchAccessService}.
+	 */
+	private void assertStaffTournamentAccess(Long staffUserId, Tournament tournament) {
+		if (staffUserId == null) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		User staff = userRepository.findById(staffUserId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+		Branch branch = tournament.getBranch();
+		Long branchId = branch != null ? branch.getId() : null;
+		if (!branchAccessService.canActorAccessBranch(staff, branchId)) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
 	}
 
 	/** Publish sự kiện mail cho các thay đổi trạng thái đăng ký — bỏ qua nếu không có email nhận. */

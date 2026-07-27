@@ -123,15 +123,19 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	public void forgotPassword(ForgotPasswordRequest request) {
-		User user = userRepository.findByEmail(request.getEmail())
-				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
-
-		if (user.getStatus() != UserStatus.ACTIVE) {
-			throw new BusinessException(ErrorCode.AUTH_ACCOUNT_LOCKED);
-		}
-
-		String otp = otpService.generateOtp(request.getEmail());
-		emailService.sendOtpEmail(request.getEmail(), otp);
+		// KHÔNG được để lộ qua response việc email có tồn tại/active hay không (email enumeration) —
+		// luôn trả về thành công như nhau, chỉ thực sự gửi OTP khi tài khoản tồn tại và đang ACTIVE.
+		userRepository.findByEmail(request.getEmail())
+				.filter(user -> user.getStatus() == UserStatus.ACTIVE)
+				.ifPresent(user -> {
+					try {
+						String otp = otpService.generateOtp(request.getEmail());
+						emailService.sendOtpEmail(request.getEmail(), otp);
+					} catch (BusinessException ex) {
+						// vd. AUTH_OTP_RESEND_TOO_SOON — nuốt lỗi, vẫn trả về thành công chung
+						// chung để không lộ thêm tín hiệu phân biệt tài khoản tồn tại hay không.
+					}
+				});
 	}
 
 	@Override
@@ -142,15 +146,15 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public void resetPassword(ResetPasswordRequest request) {
-		otpService.verifyOtp(request.getEmail(), request.getOtp());
+		// verifyAndConsume: kiểm tra + xoá OTP trong 1 bước, tránh 2 request dùng cùng OTP
+		// đều pass kiểm tra trước khi cái nào xoá được entry (TOCTOU).
+		otpService.verifyAndConsume(request.getEmail(), request.getOtp());
 
 		User user = userRepository.findByEmail(request.getEmail())
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 
 		user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
 		userRepository.save(user);
-
-		otpService.invalidate(request.getEmail());
 	}
 
 	@Override

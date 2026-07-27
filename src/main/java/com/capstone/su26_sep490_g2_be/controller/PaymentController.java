@@ -4,10 +4,14 @@ import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.CheckoutResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PaymentHistoryResponse;
+import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.Payment;
+import com.capstone.su26_sep490_g2_be.entity.Registration;
+import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
-import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.PayOSService;
 import com.capstone.su26_sep490_g2_be.service.PaymentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationService;
@@ -34,6 +38,8 @@ public class PaymentController {
     private final RegistrationService registrationService;
     private final PaymentService paymentService;
     private final PayOSService payOSService;
+    private final BranchAccessService branchAccessService;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /* ── Player: tạo checkout session ── */
@@ -66,16 +72,28 @@ public class PaymentController {
     /**
      * Xử lý return URL từ PayOS — được gọi từ frontend sau khi user thanh toán thành công.
      * Đây là backup cho webhook (webhook không hoạt động khi dev trên localhost).
+     *
+     * KHÔNG được tin trạng thái do client gửi lên (query param {@code status} cũ) — client có thể
+     * tự gọi endpoint này với orderCode bất kỳ để tự đánh dấu đã thanh toán. Phải luôn hỏi lại PayOS
+     * xem đơn hàng thực sự đã PAID chưa, và chỉ cho phép chủ sở hữu payment xác nhận đơn của mình.
      */
     @Operation(summary = "Xác nhận thanh toán từ return URL (player)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/player/payments/confirm-return")
     public ResponseEntity<ApiResponse<Void>> confirmReturn(
-            @RequestParam long orderCode,
-            @RequestParam(defaultValue = "PAID") String status) {
-        if (RegistrationStatus.PAID.getValue().equals(status)) {
+            Authentication authentication,
+            @RequestParam long orderCode) {
+        Long userId = extractUserId(authentication);
+        Payment payment = paymentService.getById(orderCode);
+        if (payment.getUser() == null || !payment.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+        String remoteStatus = payOSService.getOrderStatus(orderCode);
+        if ("PAID".equalsIgnoreCase(remoteStatus)) {
             registrationService.markAsPaid(orderCode, null);
             log.info("Payment confirmed via return URL: orderCode={}", orderCode);
+        } else {
+            log.info("Payment confirm-return ignored, PayOS status={} for orderCode={}", remoteStatus, orderCode);
         }
         return ResponseEntity.ok(ApiResponse.success(null));
     }
@@ -108,20 +126,37 @@ public class PaymentController {
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/registrations/{id}/payments")
     public ResponseEntity<ApiResponse<java.util.List<PaymentHistoryResponse>>> getPaymentsByRegistration(
+            Authentication authentication,
             @PathVariable Long id) {
+        assertStaffCanAccessRegistration(extractUserId(authentication), id);
         var list = paymentService.getByRegistration(id).stream()
                 .map(this::toHistoryResponse)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(list));
     }
 
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/owner/registrations/{id}/payments")
     public ResponseEntity<ApiResponse<java.util.List<PaymentHistoryResponse>>> getPaymentsByRegistrationOwner(
+            Authentication authentication,
             @PathVariable Long id) {
+        assertStaffCanAccessRegistration(extractUserId(authentication), id);
         var list = paymentService.getByRegistration(id).stream()
                 .map(this::toHistoryResponse)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(list));
+    }
+
+    /** 1 chuỗi duy nhất nên Owner xem được thanh toán của cả chuỗi; Manager chỉ chi nhánh được cấp quyền. */
+    private void assertStaffCanAccessRegistration(Long staffUserId, Long registrationId) {
+        Registration registration = registrationService.getById(registrationId);
+        User staff = userRepository.findById(staffUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+        Branch branch = registration.getTournament().getBranch();
+        Long branchId = branch != null ? branch.getId() : null;
+        if (!branchAccessService.canActorAccessBranch(staff, branchId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
     }
 
     private PaymentHistoryResponse toHistoryResponse(Payment p) {

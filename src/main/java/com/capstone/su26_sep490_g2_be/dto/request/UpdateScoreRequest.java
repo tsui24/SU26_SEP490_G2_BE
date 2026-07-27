@@ -9,11 +9,11 @@ import lombok.Setter;
 @Setter
 public class UpdateScoreRequest {
 
-    @NotNull
-    @Min(0)
+    @NotNull(message = "Điểm cơ thủ 1 không được để trống")
+    @Min(value = 0, message = "Điểm cơ thủ 1 không được âm")
     private Integer player1Score;
 
-    @NotNull
-    @Min(0)
+    @NotNull(message = "Điểm cơ thủ 2 không được để trống")
+    @Min(value = 0, message = "Điểm cơ thủ 2 không được âm")
     private Integer player2Score;
 }

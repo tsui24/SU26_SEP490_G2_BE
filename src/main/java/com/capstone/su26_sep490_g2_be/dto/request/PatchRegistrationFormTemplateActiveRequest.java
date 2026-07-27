@@ -10,6 +10,6 @@ import lombok.Setter;
 @Schema(description = "Bật/tắt template form đăng ký")
 public class PatchRegistrationFormTemplateActiveRequest {
 
-	@NotNull
+	@NotNull(message = "Trạng thái kích hoạt không được để trống")
 	private Boolean isActive;
 }

@@ -14,11 +14,13 @@ import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Payment;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
+import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.PaymentStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
+import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.GameTypeDefinitionRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
@@ -71,9 +73,12 @@ public class DashboardServiceImpl implements DashboardService {
 
 	@Override
 	public DashboardStatsResponse buildStats(Long ownerUserId) {
-		List<Tournament> tournaments = ownerUserId != null
-				? tournamentRepository.findByCreatedById(ownerUserId)
-				: tournamentRepository.findAll();
+		if (ownerUserId == null) {
+			// ownerUserId == null KHÔNG được coi là "xem toàn hệ thống" — mọi caller (Owner/Manager)
+			// đều phải xác định rõ mình thuộc owner nào, tránh lộ số liệu của owner khác.
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		List<Tournament> tournaments = tournamentRepository.findByCreatedById(ownerUserId);
 
 		List<Long> tournamentIds = tournaments.stream().map(Tournament::getId).toList();
 

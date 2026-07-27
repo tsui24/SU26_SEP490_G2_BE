@@ -12,14 +12,14 @@ import lombok.Setter;
 @Schema(description = "Tạo template form đăng ký")
 public class CreateRegistrationFormTemplateRequest {
 
-	@NotBlank
-	@Size(max = 50)
-	@Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "code must be UPPER_SNAKE_CASE")
+	@NotBlank(message = "Mã template không được để trống")
+	@Size(max = 50, message = "Mã template tối đa 50 ký tự")
+	@Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "Mã template phải là chữ hoa dạng UPPER_SNAKE_CASE")
 	@Schema(example = "SINGLE_PLAYER")
 	private String code;
 
-	@NotBlank
-	@Size(max = 255)
+	@NotBlank(message = "Tên template không được để trống")
+	@Size(max = 255, message = "Tên template tối đa 255 ký tự")
 	private String name;
 
 	private String description;

@@ -11,18 +11,18 @@ import java.util.Set;
 @Setter
 public class NewsPostRequest {
 
-    @NotBlank
+    @NotBlank(message = "Tiêu đề không được để trống")
     private String title;
 
-    @NotBlank
+    @NotBlank(message = "Slug không được để trống")
     private String slug;
 
-    @NotNull
+    @NotNull(message = "Chuyên mục không được để trống")
     private Long categoryId;
 
     private String thumbnailUrl;
 
-    @NotBlank
+    @NotBlank(message = "Nội dung không được để trống")
     private String content;
 
     private Set<Long> tagIds;

@@ -10,6 +10,6 @@ import lombok.Setter;
 @Schema(description = "Bật/tắt field catalog")
 public class PatchRegistrationFieldActiveRequest {
 
-	@NotNull
+	@NotNull(message = "Trạng thái kích hoạt không được để trống")
 	private Boolean isActive;
 }

@@ -10,13 +10,13 @@ import lombok.Setter;
 @Setter
 public class ScoreIncrementRequest {
 
-    @NotNull
-    @Min(1)
-    @Max(2)
+    @NotNull(message = "Vị trí cơ thủ không được để trống")
+    @Min(value = 1, message = "Vị trí cơ thủ phải là 1 hoặc 2")
+    @Max(value = 2, message = "Vị trí cơ thủ phải là 1 hoặc 2")
     private Integer playerSlot;
 
-    @NotNull
-    @Min(-1)
-    @Max(1)
+    @NotNull(message = "Delta điểm không được để trống")
+    @Min(value = -1, message = "Delta điểm chỉ được -1, 0 hoặc 1")
+    @Max(value = 1, message = "Delta điểm chỉ được -1, 0 hoặc 1")
     private Integer delta;
 }

@@ -70,18 +70,19 @@ public class NewsController {
     @Operation(summary = "Danh sách tất cả bài viết (Owner CMS)")
     @GetMapping("/owner/news")
     public ResponseEntity<ApiResponse<PageResponse<NewsPostResponse>>> ownerList(
+            Authentication auth,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(ApiResponse.success(
-                PageResponse.of(postService.getAll(pageable), this::toResponse)));
+                PageResponse.of(postService.getAll(extractUserId(auth), pageable), this::toResponse)));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Chi tiết bài viết theo id (Owner CMS)")
     @GetMapping("/owner/news/{id}")
-    public ResponseEntity<ApiResponse<NewsPostResponse>> ownerGetById(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(toResponse(postService.getById(id))));
+    public ResponseEntity<ApiResponse<NewsPostResponse>> ownerGetById(Authentication auth, @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(toResponse(postService.getById(id, extractUserId(auth)))));
     }
 
     @SecurityRequirement(name = "bearerAuth")
@@ -101,34 +102,35 @@ public class NewsController {
     @Operation(summary = "Cập nhật bài viết (Owner)")
     @PutMapping("/owner/news/{id}")
     public ResponseEntity<ApiResponse<NewsPostResponse>> ownerUpdate(
+            Authentication auth,
             @PathVariable Long id,
             @Valid @RequestBody NewsPostRequest request) {
         return ResponseEntity.ok(ApiResponse.success(toResponse(
-                postService.update(id, buildPost(request), request.getCategoryId(),
+                postService.update(id, extractUserId(auth), buildPost(request), request.getCategoryId(),
                         request.getTagIds() != null ? request.getTagIds() : Set.of()))));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Xuất bản bài viết (Owner)")
     @PostMapping("/owner/news/{id}/publish")
-    public ResponseEntity<ApiResponse<Void>> ownerPublish(@PathVariable Long id) {
-        postService.publish(id);
+    public ResponseEntity<ApiResponse<Void>> ownerPublish(Authentication auth, @PathVariable Long id) {
+        postService.publish(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Ẩn bài viết (Owner)")
     @PostMapping("/owner/news/{id}/hide")
-    public ResponseEntity<ApiResponse<Void>> ownerHide(@PathVariable Long id) {
-        postService.hide(id);
+    public ResponseEntity<ApiResponse<Void>> ownerHide(Authentication auth, @PathVariable Long id) {
+        postService.hide(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Xoá bài viết (Owner)")
     @DeleteMapping("/owner/news/{id}")
-    public ResponseEntity<ApiResponse<Void>> ownerDelete(@PathVariable Long id) {
-        postService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> ownerDelete(Authentication auth, @PathVariable Long id) {
+        postService.delete(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -178,16 +180,17 @@ public class NewsController {
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/news")
     public ResponseEntity<ApiResponse<PageResponse<NewsPostResponse>>> managerList(
+            Authentication auth,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(ApiResponse.success(
-                PageResponse.of(postService.getAll(pageable), this::toResponse)));
+                PageResponse.of(postService.getAll(extractUserId(auth), pageable), this::toResponse)));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/news/{id}")
-    public ResponseEntity<ApiResponse<NewsPostResponse>> managerGetById(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(toResponse(postService.getById(id))));
+    public ResponseEntity<ApiResponse<NewsPostResponse>> managerGetById(Authentication auth, @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(toResponse(postService.getById(id, extractUserId(auth)))));
     }
 
     @SecurityRequirement(name = "bearerAuth")
@@ -204,30 +207,30 @@ public class NewsController {
     @SecurityRequirement(name = "bearerAuth")
     @PutMapping("/manager/news/{id}")
     public ResponseEntity<ApiResponse<NewsPostResponse>> managerUpdate(
-            @PathVariable Long id, @Valid @RequestBody NewsPostRequest request) {
+            Authentication auth, @PathVariable Long id, @Valid @RequestBody NewsPostRequest request) {
         return ResponseEntity.ok(ApiResponse.success(toResponse(
-                postService.update(id, buildPost(request), request.getCategoryId(),
+                postService.update(id, extractUserId(auth), buildPost(request), request.getCategoryId(),
                         request.getTagIds() != null ? request.getTagIds() : Set.of()))));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/news/{id}/publish")
-    public ResponseEntity<ApiResponse<Void>> managerPublish(@PathVariable Long id) {
-        postService.publish(id);
+    public ResponseEntity<ApiResponse<Void>> managerPublish(Authentication auth, @PathVariable Long id) {
+        postService.publish(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/news/{id}/hide")
-    public ResponseEntity<ApiResponse<Void>> managerHide(@PathVariable Long id) {
-        postService.hide(id);
+    public ResponseEntity<ApiResponse<Void>> managerHide(Authentication auth, @PathVariable Long id) {
+        postService.hide(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @SecurityRequirement(name = "bearerAuth")
     @DeleteMapping("/manager/news/{id}")
-    public ResponseEntity<ApiResponse<Void>> managerDelete(@PathVariable Long id) {
-        postService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> managerDelete(Authentication auth, @PathVariable Long id) {
+        postService.delete(id, extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

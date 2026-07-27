@@ -55,6 +55,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	                                 @Param("search") String search,
 	                                 Pageable pageable);
 
+	/** STAFF thuộc các chi nhánh Manager được cấp quyền — dùng thay searchStaffsByManager khi Manager chỉ quản lý 1 phần chi nhánh của Owner. */
+	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN FETCH u.profile p " +
+			"WHERE r.code = 'STAFF' " +
+			"AND u.status = 'ACTIVE' " +
+			"AND u.branch.id IN :branchIds " +
+			"AND (:search IS NULL OR " +
+			"     LOWER(p.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+			"     LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
+	Page<User> searchStaffsByManagerBranches(@Param("branchIds") List<Long> branchIds,
+	                                          @Param("search") String search,
+	                                          Pageable pageable);
+
 	/** STAFF đang hoạt động thuộc 1 chi nhánh — dùng để chọn trọng tài cho trận của giải ở chi nhánh đó. */
 	@Query("SELECT u FROM User u JOIN u.role r LEFT JOIN u.profile p " +
 			"WHERE r.code = 'STAFF' AND u.status = 'ACTIVE' AND u.branch.id = :branchId " +

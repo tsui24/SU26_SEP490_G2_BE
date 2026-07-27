@@ -20,29 +20,8 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 	private final CorsConfigurationSource corsConfigurationSource;
-
-	private static final String[] PUBLIC_URLS = {
-			"/swagger-ui.html",
-			"/swagger-ui/**",
-			"/v3/api-docs/**",
-			"/v3/api-docs.yaml",
-			"/api/v1/auth/login",
-			"/api/v1/auth/register",
-			"/api/v1/auth/forgot-password",
-			"/api/v1/auth/verify-otp",
-			"/api/v1/auth/reset-password",
-			"/api/v1/health",
-			"/api/v1/tournaments",
-			"/api/v1/tournaments/**",
-			"/api/v1/branches",
-			"/api/v1/branches/**",
-			"/api/v1/news",
-			"/api/v1/news/**",
-			"/api/v1/matches/**",
-			"/ws",
-			"/ws/**",
-			"/api/v1/payments/payos/webhook"
-	};
+	private final RestAccessDeniedHandler restAccessDeniedHandler;
+	private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -51,9 +30,12 @@ public class SecurityConfig {
 				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.exceptionHandling(handling -> handling
+						.accessDeniedHandler(restAccessDeniedHandler)
+						.authenticationEntryPoint(restAuthenticationEntryPoint))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers(PUBLIC_URLS).permitAll()
-						.requestMatchers("/api/vi/profile/**").authenticated()
+						.requestMatchers(PublicEndpoints.PATTERNS).permitAll()
+						.requestMatchers("/api/v1/profile/**").authenticated()
 
 						// Shared endpoints (Owner + Manager)
 						.requestMatchers("/api/v1/shared/facebook/**").hasAnyRole("OWNER", "MANAGER")

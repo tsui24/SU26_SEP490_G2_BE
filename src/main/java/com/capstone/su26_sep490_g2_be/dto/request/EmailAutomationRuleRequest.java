@@ -12,22 +12,22 @@ import lombok.Setter;
 @Schema(description = "Tạo/cập nhật quy tắc gửi email tự động")
 public class EmailAutomationRuleRequest {
 
-	@NotBlank
+	@NotBlank(message = "Mã quy tắc không được để trống")
 	private String code;
 
-	@NotBlank
+	@NotBlank(message = "Tên quy tắc không được để trống")
 	private String name;
 
 	private String description;
 
-	@NotBlank
+	@NotBlank(message = "Loại sự kiện không được để trống")
 	@Schema(description = "Giá trị trong EmailEventType, ví dụ REGISTRATION_APPROVED")
 	private String eventType;
 
-	@NotNull
+	@NotNull(message = "Mẫu email không được để trống")
 	private Long templateId;
 
-	@NotBlank
+	@NotBlank(message = "Đối tượng nhận không được để trống")
 	@Schema(description = "Giá trị trong EmailRecipientType")
 	private String recipientType;
 

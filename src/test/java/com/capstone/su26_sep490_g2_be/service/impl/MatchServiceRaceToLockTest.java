@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
+import com.capstone.su26_sep490_g2_be.entity.Role;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
@@ -12,6 +13,7 @@ import com.capstone.su26_sep490_g2_be.repository.MatchRepository;
 import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,7 @@ class MatchServiceRaceToLockTest {
 	@Mock MatchScoreEventRepository scoreEventRepository;
 	@Mock ParticipantRepository participantRepository;
 	@Mock UserRepository userRepository;
+	@Mock MatchSchedulingService matchSchedulingService;
 
 	@InjectMocks MatchServiceImpl matchService;
 
@@ -46,7 +49,7 @@ class MatchServiceRaceToLockTest {
 
 	@BeforeEach
 	void setUp() {
-		staff = User.builder().id(10L).build();
+		staff = User.builder().id(10L).role(Role.builder().code("STAFF").build()).build();
 		p1 = Participant.builder().id(1L).displayName("A").build();
 		p2 = Participant.builder().id(2L).displayName("B").build();
 		Tournament tournament = Tournament.builder()
@@ -156,9 +159,10 @@ class MatchServiceRaceToLockTest {
 		match.setPlayer2Score(2);
 		when(matchRepository.findById(42L)).thenReturn(Optional.of(match));
 		when(participantRepository.findById(2L)).thenReturn(Optional.of(p2));
+		when(userRepository.findById(10L)).thenReturn(Optional.of(staff));
 
 		BusinessException ex = assertThrows(BusinessException.class,
-				() -> matchService.completeMatch(42L, 2L, 10L));
+				() -> matchService.completeMatch(42L, 2L, false, 10L));
 		assertEquals(ErrorCode.MATCH_WINNER_MUST_BE_RACE_LEADER, ex.getErrorCode());
 	}
 
@@ -172,7 +176,7 @@ class MatchServiceRaceToLockTest {
 		when(matchRepository.save(any(Match.class))).thenAnswer(inv -> inv.getArgument(0));
 		when(scoreEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-		Match done = matchService.completeMatch(42L, 1L, 10L);
+		Match done = matchService.completeMatch(42L, 1L, false, 10L);
 		assertEquals(MatchStatus.COMPLETED.getValue(), done.getStatus());
 		assertEquals(p1, done.getWinner());
 	}

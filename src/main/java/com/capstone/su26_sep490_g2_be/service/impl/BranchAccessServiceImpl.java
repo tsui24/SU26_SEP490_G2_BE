@@ -56,6 +56,18 @@ public class BranchAccessServiceImpl implements BranchAccessService {
 	}
 
 	@Override
+	public boolean canActorAccessBranch(User actor, Long branchId) {
+		String roleCode = actor.getRole().getCode();
+		if ("OWNER".equals(roleCode)) {
+			return true;
+		}
+		if ("MANAGER".equals(roleCode)) {
+			return canManagerAccessBranch(actor, branchId);
+		}
+		return false;
+	}
+
+	@Override
 	public List<Branch> getAccessibleBranches(User manager) {
 		List<Long> accessibleIds = getAccessibleBranchIds(manager);
 		if (accessibleIds.isEmpty()) {
