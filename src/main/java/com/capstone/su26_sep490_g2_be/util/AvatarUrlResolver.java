@@ -43,6 +43,7 @@ public final class AvatarUrlResolver {
 
 	/**
 	 * Trả presigned URL mới cho client hiển thị ảnh.
+	 * Dùng cho detail — kiểm tra object tồn tại trước.
 	 */
 	public static String resolveForResponse(
 			String storedValue, MinioStorageService minioStorageService, String bucket) {
@@ -57,5 +58,28 @@ public final class AvatarUrlResolver {
 			return null;
 		}
 		return minioStorageService.getPresignedUrl(key);
+	}
+
+	/**
+	 * Presign nhanh cho list (bỏ StatObject) — tránh N lần gọi MinIO khi phân trang.
+	 * Object thiếu sẽ trả null; FE vẫn fallback ảnh mặc định như cũ.
+	 */
+	public static String resolveForList(
+			String storedValue, MinioStorageService minioStorageService, String bucket) {
+		if (!StringUtils.hasText(storedValue)) {
+			return null;
+		}
+		String key = storedValue.trim();
+		if (key.contains("://")) {
+			key = normalizeForStorage(key, bucket);
+		}
+		if (!StringUtils.hasText(key)) {
+			return null;
+		}
+		try {
+			return minioStorageService.getPresignedUrl(key);
+		} catch (Exception ex) {
+			return null;
+		}
 	}
 }

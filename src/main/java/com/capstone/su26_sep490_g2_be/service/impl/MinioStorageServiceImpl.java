@@ -115,9 +115,8 @@ public class MinioStorageServiceImpl implements MinioStorageService {
 
 	@Override
 	public String getPresignedUrl(String objectKey, int expirySeconds) {
-		if (!exists(objectKey)) {
-			throw new BusinessException(ErrorCode.STORAGE_OBJECT_NOT_FOUND);
-		}
+		// Không gọi exists() trước — caller (AvatarUrlResolver) đã kiểm tra khi cần.
+		// Tránh double StatObject làm chậm list giải đấu trên RDS nhỏ.
 		try {
 			return minioClient.getPresignedObjectUrl(
 					GetPresignedObjectUrlArgs.builder()

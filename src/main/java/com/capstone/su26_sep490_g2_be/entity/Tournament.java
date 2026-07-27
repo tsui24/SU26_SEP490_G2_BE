@@ -7,7 +7,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "tournaments")
+@Table(
+		name = "tournaments",
+		indexes = {
+				@Index(name = "idx_tournaments_public_list", columnList = "is_show_tournament, status, created_at"),
+				@Index(name = "idx_tournaments_owner_list", columnList = "created_by, created_at")
+		})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -105,6 +110,10 @@ public class Tournament extends BaseEntity {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "branch_id")
 	private Branch branch;
+
+	/** Chỉ dùng đọc FK khi list — tránh N+1 lazy load Branch. */
+	@Column(name = "branch_id", insertable = false, updatable = false)
+	private Long branchId;
 
 	@Column(name = "venue_name")
 	private String venueName;
