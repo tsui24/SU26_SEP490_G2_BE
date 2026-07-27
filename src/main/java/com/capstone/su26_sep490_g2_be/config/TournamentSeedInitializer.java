@@ -375,7 +375,7 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 				matchRepository.save(match);
 
 				Long winnerId = p1Wins ? p1Id : p2Id;
-				matchService.completeMatch(match.getId(), winnerId, owner.getId());
+				matchService.completeMatch(match.getId(), winnerId, false, owner.getId());
 				completed++;
 				progress = true;
 			}
@@ -402,7 +402,7 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 
 				matchService.updateScore(m.getId(), p1Wins ? raceTo : loserScore,
 						p1Wins ? loserScore : raceTo, actorUserId);
-				matchService.completeMatch(m.getId(), p1Wins ? p1Id : p2Id, actorUserId);
+				matchService.completeMatch(m.getId(), p1Wins ? p1Id : p2Id, false, actorUserId);
 			}
 		}
 	}
