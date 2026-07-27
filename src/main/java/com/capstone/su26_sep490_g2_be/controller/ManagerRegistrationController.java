@@ -48,25 +48,28 @@ public class ManagerRegistrationController {
 			Authentication authentication,
 			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getTournamentRegistrationForm(extractUserId(authentication), id, false)));
+				ownerTournamentService.getTournamentRegistrationForm(extractUserId(authentication), id, true)));
 	}
 
 	@Operation(summary = "Danh sách đăng ký theo giải")
 	@GetMapping("/tournaments/{id}/registrations")
 	public ResponseEntity<ApiResponse<PageResponse<TournamentRegistrationResponse>>> listTournamentRegistrations(
+			Authentication authentication,
 			@PathVariable Long id,
 			@RequestParam(required = false) String status,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
 		return ResponseEntity.ok(ApiResponse.success(
-				registrationService.getTournamentRegistrations(id, status, page, size)));
+				registrationService.getTournamentRegistrations(id, extractUserId(authentication), status, page, size)));
 	}
 
 	@Operation(summary = "Chi tiết đăng ký")
 	@GetMapping("/registrations/{id}")
-	public ResponseEntity<ApiResponse<TournamentRegistrationResponse>> getRegistrationDetail(@PathVariable Long id) {
+	public ResponseEntity<ApiResponse<TournamentRegistrationResponse>> getRegistrationDetail(
+			Authentication authentication,
+			@PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				registrationService.getRegistrationDetail(id, null, true)));
+				registrationService.getRegistrationDetail(id, extractUserId(authentication), true)));
 	}
 
 	@Operation(summary = "Duyệt đăng ký")
@@ -81,9 +84,11 @@ public class ManagerRegistrationController {
 	@Operation(summary = "Từ chối đăng ký")
 	@PostMapping("/registrations/{id}/reject")
 	public ResponseEntity<ApiResponse<TournamentRegistrationResponse>> rejectRegistration(
+			Authentication authentication,
 			@PathVariable Long id,
 			@Valid @RequestBody RejectRegistrationRequest request) {
-		return ResponseEntity.ok(ApiResponse.success(registrationService.reject(id, request)));
+		return ResponseEntity.ok(ApiResponse.success(
+				registrationService.reject(id, extractUserId(authentication), request)));
 	}
 
 	private Long extractUserId(Authentication authentication) {

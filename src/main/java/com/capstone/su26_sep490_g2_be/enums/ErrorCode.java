@@ -16,6 +16,10 @@ public enum ErrorCode {
 	RESOURCE_NOT_FOUND("COMMON_003", "Không tìm thấy tài nguyên", HttpStatus.NOT_FOUND),
 	DUPLICATE_RESOURCE("COMMON_004", "Tài nguyên đã tồn tại", HttpStatus.CONFLICT),
 	INVALID_OPERATION("COMMON_005", "Thao tác không được phép ở trạng thái hiện tại", HttpStatus.UNPROCESSABLE_ENTITY),
+	CONCURRENT_UPDATE_CONFLICT("COMMON_006",
+			"Dữ liệu vừa được người khác cập nhật — vui lòng tải lại và thử lại", HttpStatus.CONFLICT),
+	COMMON_METHOD_NOT_ALLOWED("COMMON_007", "Phương thức HTTP không được hỗ trợ cho endpoint này", HttpStatus.METHOD_NOT_ALLOWED),
+	COMMON_MALFORMED_BODY("COMMON_008", "Dữ liệu gửi lên không đúng định dạng", HttpStatus.BAD_REQUEST),
 
 	// Auth
 	AUTH_INVALID_CREDENTIALS("AUTH_001", "Email hoặc mật khẩu không đúng", HttpStatus.UNAUTHORIZED),
@@ -31,6 +35,8 @@ public enum ErrorCode {
 	AUTH_ROLE_NOT_FOUND("AUTH_010", "Không tìm thấy vai trò", HttpStatus.NOT_FOUND),
 	AUTH_USER_NOT_FOUND("AUTH_011", "Không tìm thấy người dùng", HttpStatus.NOT_FOUND),
 	AUTH_PHONE_ALREADY_EXISTS("AUTH_012", "Số điện thoại đã được đăng ký", HttpStatus.CONFLICT),
+	AUTH_OTP_TOO_MANY_ATTEMPTS("AUTH_014", "Nhập sai OTP quá nhiều lần — vui lòng yêu cầu mã mới", HttpStatus.TOO_MANY_REQUESTS),
+	AUTH_OTP_RESEND_TOO_SOON("AUTH_015", "Vui lòng đợi ít phút trước khi yêu cầu gửi lại OTP", HttpStatus.TOO_MANY_REQUESTS),
 
 	// Profile
 	PROFILE_ALREADY_EXISTS("PROFILE_001", "Hồ sơ đã tồn tại", HttpStatus.CONFLICT),
@@ -41,6 +47,9 @@ public enum ErrorCode {
 	FORMAT_CODE_EXISTS("FORMAT_001", "Mã thể thức đã tồn tại", HttpStatus.CONFLICT),
 	FORMAT_NOT_FOUND("FORMAT_002", "Không tìm thấy thể thức", HttpStatus.NOT_FOUND),
 	FORMAT_NOT_READY("FORMAT_003", "Cấu hình mặc định của thể thức chưa sẵn sàng", HttpStatus.UNPROCESSABLE_ENTITY),
+	FORMAT_IN_USE_CANNOT_EDIT("FORMAT_004",
+			"Thể thức đang được dùng bởi giải đấu chưa kết thúc/hủy — không thể sửa cấu hình mặc định để tránh thay đổi giữa chừng",
+			HttpStatus.CONFLICT),
 	INVALID_FIELD_KEY("FORMAT_004", "Field key không có trong catalog", HttpStatus.BAD_REQUEST),
 	INVALID_FIELD_FOR_FORMAT("FORMAT_005", "Field không thuộc thể thức này", HttpStatus.BAD_REQUEST),
 	SETUP_INCOMPLETE("FORMAT_006", "Thiết lập thể thức chưa hoàn tất", HttpStatus.UNPROCESSABLE_ENTITY),
@@ -81,6 +90,7 @@ public enum ErrorCode {
 	REFEREE_BUSY_ONGOING("MATCH_012", "Trọng tài đang điều hành một trận khác chưa kết thúc — không thể phân công thêm", HttpStatus.CONFLICT),
 	REFEREE_TIME_CONFLICT("MATCH_013", "Trọng tài đã được phân công một trận khác trùng khung giờ", HttpStatus.CONFLICT),
 	MATCH_TABLE_TIME_CONFLICT("MATCH_009", "Bàn này đã có trận khác thi đấu trong khung giờ đó — hãy chọn bàn/giờ khác", HttpStatus.CONFLICT),
+	MATCH_EARLY_END_NOT_CONFIRMED("MATCH_014", "Chưa ai đạt điểm race-to — cần xác nhận kết thúc sớm (bỏ cuộc/chấn thương)", HttpStatus.CONFLICT),
 
 	// Tournament participation
 	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),

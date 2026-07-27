@@ -10,19 +10,21 @@ public interface NewsPostService {
 
 	NewsPost create(NewsPost post, Long authorUserId, Long categoryId, Set<Long> tagIds);
 
-	NewsPost getById(Long id);
+	/** CMS (Owner/Manager) — chỉ xem được bài viết trong cùng chuỗi (Owner của mình / chuỗi mình thuộc về). */
+	NewsPost getById(Long id, Long actingUserId);
 
 	NewsPost getBySlug(String slug);
 
 	Page<NewsPost> getPublished(String search, Long categoryId, Pageable pageable);
 
-	Page<NewsPost> getAll(Pageable pageable);
+	/** CMS (Owner/Manager) — chỉ liệt kê bài viết trong cùng chuỗi. */
+	Page<NewsPost> getAll(Long actingUserId, Pageable pageable);
 
-	NewsPost update(Long id, NewsPost post, Long categoryId, Set<Long> tagIds);
+	NewsPost update(Long id, Long actingUserId, NewsPost post, Long categoryId, Set<Long> tagIds);
 
-	void publish(Long id);
+	void publish(Long id, Long actingUserId);
 
-	void hide(Long id);
+	void hide(Long id, Long actingUserId);
 
-	void delete(Long id);
+	void delete(Long id, Long actingUserId);
 }

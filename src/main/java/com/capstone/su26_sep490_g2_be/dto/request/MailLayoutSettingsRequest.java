@@ -10,11 +10,11 @@ import lombok.Setter;
 @Schema(description = "Cập nhật khung header/footer chung cho email")
 public class MailLayoutSettingsRequest {
 
-	@NotBlank
+	@NotBlank(message = "HTML phần đầu email không được để trống")
 	@Schema(description = "HTML phần đầu email (banner thương hiệu), có thể chứa placeholder {{system.*}}")
 	private String headerHtml;
 
-	@NotBlank
+	@NotBlank(message = "HTML phần chân email không được để trống")
 	@Schema(description = "HTML phần chân email (footer), có thể chứa placeholder {{system.*}}")
 	private String footerHtml;
 }

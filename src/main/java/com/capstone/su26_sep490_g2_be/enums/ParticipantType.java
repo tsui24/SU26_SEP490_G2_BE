@@ -8,8 +8,10 @@ import lombok.RequiredArgsConstructor;
 public enum ParticipantType {
 
 	SINGLE("Đơn"),
-	DOUBLE("Đôi"),
-	TEAM("Đội");
+	DOUBLE("Đôi");
+	// TEAM (thi đấu đội) tạm thời bỏ ở giai đoạn này — pipeline đăng ký/participant/Excel import
+	// chưa từng cài đặt xử lý cho loại này (chỉ rẽ nhánh SINGLE/DOUBLE), chọn TEAM sẽ âm thầm
+	// bị xử lý sai làm cá nhân thay vì báo lỗi.
 
 	private final String displayName;
 

@@ -110,4 +110,9 @@ public class Match extends BaseEntity {
 	@Column(name = "schedule_locked", nullable = false)
 	@Builder.Default
 	private Boolean scheduleLocked = false;
+
+	/** Optimistic lock — tránh 2 trọng tài/owner cùng sửa 1 trận (start/score/complete) ghi đè lẫn nhau. */
+	@Version
+	@Column(name = "version")
+	private Long version;
 }

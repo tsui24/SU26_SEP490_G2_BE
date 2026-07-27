@@ -38,3 +38,4 @@ build/
 .env.*.local
 application-local.yml
 application-local.properties
+app.log

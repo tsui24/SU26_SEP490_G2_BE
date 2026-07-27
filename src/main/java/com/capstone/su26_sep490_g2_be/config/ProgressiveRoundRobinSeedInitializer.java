@@ -183,7 +183,7 @@ public class ProgressiveRoundRobinSeedInitializer implements CommandLineRunner {
 				int p2Score = p1Wins ? loserScore : raceTo;
 
 				matchService.updateScore(m.getId(), p1Score, p2Score, actorUserId);
-				matchService.completeMatch(m.getId(), p1Wins ? p1Id : p2Id, actorUserId);
+				matchService.completeMatch(m.getId(), p1Wins ? p1Id : p2Id, true, actorUserId);
 			}
 		}
 	}

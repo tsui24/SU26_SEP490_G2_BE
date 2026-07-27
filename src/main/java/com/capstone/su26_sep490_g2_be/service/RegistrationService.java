@@ -24,7 +24,7 @@ public interface RegistrationService {
 	PageResponse<TournamentRegistrationResponse> getMyRegistrations(Long userId, int page, int size);
 
 	PageResponse<TournamentRegistrationResponse> getTournamentRegistrations(
-			Long tournamentId, String status, int page, int size);
+			Long tournamentId, Long staffUserId, String status, int page, int size);
 
 	Registration getById(Long id);
 
@@ -36,7 +36,7 @@ public interface RegistrationService {
 
 	TournamentRegistrationResponse approve(Long registrationId, Long approvedByUserId);
 
-	TournamentRegistrationResponse reject(Long registrationId, RejectRegistrationRequest request);
+	TournamentRegistrationResponse reject(Long registrationId, Long rejectedByUserId, RejectRegistrationRequest request);
 
 	void cancel(Long registrationId, Long requestingUserId);
 

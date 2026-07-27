@@ -40,4 +40,7 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long>,
     List<Tournament> findByStatusInAndStartAtBefore(List<String> statuses, Instant startAt);
 
     List<Tournament> findByStatusAndRegistrationDeadlineBetween(String status, Instant from, Instant to);
+
+    /** Có giải nào dùng format này mà không còn ở trạng thái có thể sửa tự do (DRAFT/CANCELLED) không? */
+    boolean existsByFormatAndStatusNotIn(String format, List<String> statuses);
 }

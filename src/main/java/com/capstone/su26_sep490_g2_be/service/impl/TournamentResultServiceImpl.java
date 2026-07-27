@@ -3,6 +3,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 import com.capstone.su26_sep490_g2_be.dto.response.PlayerPublicProfileResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.StandingsEntryResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRankingEntryResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.TournamentRankingEntryResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRankingResponse;
 import com.capstone.su26_sep490_g2_be.entity.Match;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
@@ -87,12 +88,47 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 		User recordedBy = userRepository.findById(recordedByUserId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		List<TournamentResult> results = resultRepository.findByTournamentIdOrderByFinalRankAsc(tournamentId);
+		if (results.isEmpty()) {
+			// Trước đây bảng tournament_results chỉ có dữ liệu qua seed demo — không có luồng thật
+			// nào gọi record()/finalizeTournamentResults() khi giải đấu thực sự hoàn tất. Tự dựng
+			// kết quả từ bảng xếp hạng hiện tại (getRankings) ngay khi BQT chốt COMPLETED.
+			results = buildResultsFromRankings(tournamentId);
+		}
 		Instant now = Instant.now();
 		results.forEach(r -> {
 			r.setRecordedBy(recordedBy);
 			r.setRecordedAt(now);
 		});
 		resultRepository.saveAll(results);
+	}
+
+	/**
+	 * Dựng TournamentResult từ getRankings() — finalRank lấy rankFrom (hạng tốt nhất trong nhóm đồng
+	 * hạng, VD nhóm "#5-8" → 5). prizeAmount/pointsEarned để 0: hệ thống chưa có công thức chia
+	 * thưởng theo hạng hay thang điểm — BTC/Admin cần nhập tay qua {@link #record(TournamentResult)}
+	 * hoặc bổ sung công thức sau này, không tự suy diễn ở đây để tránh số liệu sai lệch.
+	 */
+	private List<TournamentResult> buildResultsFromRankings(Long tournamentId) {
+		Tournament tournament = tournamentRepository.findById(tournamentId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		TournamentRankingResponse ranking = getRankings(tournamentId);
+		List<TournamentResult> built = new ArrayList<>();
+		for (TournamentRankingEntryResponse entry : ranking.getEntries()) {
+			if (entry.getParticipantId() == null) continue;
+			Participant participant = participantRepository.findById(entry.getParticipantId()).orElse(null);
+			if (participant == null) continue;
+			Integer finalRank = entry.getRankFrom() != null ? entry.getRankFrom() : entry.getSortOrder();
+			if (finalRank == null) continue;
+			built.add(TournamentResult.builder()
+					.tournament(tournament)
+					.participant(participant)
+					.finalRank(finalRank)
+					.prizeAmount(java.math.BigDecimal.ZERO)
+					.pointsEarned(0)
+					.note(entry.getNote())
+					.build());
+		}
+		return built;
 	}
 
 	/* ═══════════════════════════════════════════════════════════

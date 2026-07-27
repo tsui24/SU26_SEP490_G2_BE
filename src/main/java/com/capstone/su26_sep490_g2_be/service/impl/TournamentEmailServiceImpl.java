@@ -7,11 +7,13 @@ import com.capstone.su26_sep490_g2_be.dto.response.EmailSendLogResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ManualSendResultResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.RenderedEmailResponse;
+import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.EmailAutomationRule;
 import com.capstone.su26_sep490_g2_be.entity.EmailSendLog;
 import com.capstone.su26_sep490_g2_be.entity.EmailTemplate;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
+import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.EmailRecipientType;
 import com.capstone.su26_sep490_g2_be.enums.EmailSendStatus;
 import com.capstone.su26_sep490_g2_be.enums.EmailTriggerType;
@@ -24,6 +26,8 @@ import com.capstone.su26_sep490_g2_be.repository.EmailTemplateRepository;
 import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MailAutomationService;
 import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.MailRecipientResolver;
@@ -55,6 +59,8 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 	private final MailSendService mailSendService;
 	private final MailAutomationService mailAutomationService;
 	private final MailContextBuilder mailContextBuilder;
+	private final UserRepository userRepository;
+	private final BranchAccessService branchAccessService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -176,10 +182,24 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 	private Tournament loadTournament(Long userId, Long tournamentId, boolean enforceOwnership) {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-		if (enforceOwnership && !tournament.getCreatedBy().getId().equals(userId)) {
-			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		if (enforceOwnership) {
+			assertBranchAccess(userId, tournament);
 		}
 		return tournament;
+	}
+
+	/** 1 chuỗi duy nhất nên Owner thao tác được email của cả chuỗi; Manager chỉ chi nhánh được cấp quyền. */
+	private void assertBranchAccess(Long userId, Tournament tournament) {
+		if (userId == null) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		User actor = userRepository.findById(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+		Branch branch = tournament.getBranch();
+		Long branchId = branch != null ? branch.getId() : null;
+		if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
 	}
 
 	private EmailSendLogResponse toResponse(EmailSendLog log) {

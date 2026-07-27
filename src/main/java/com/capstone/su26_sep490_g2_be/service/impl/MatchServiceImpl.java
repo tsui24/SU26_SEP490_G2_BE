@@ -21,6 +21,7 @@ import com.capstone.su26_sep490_g2_be.repository.MatchScoreEventRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
 import com.capstone.su26_sep490_g2_be.service.MailRecipient;
 import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
@@ -53,6 +54,28 @@ public class MatchServiceImpl implements MatchService {
     private final ApplicationEventPublisher eventPublisher;
     private final MailContextBuilder mailContextBuilder;
     private final MatchSchedulingService matchSchedulingService;
+    private final BranchAccessService branchAccessService;
+
+    /**
+     * Owner thao tác được mọi trận (hệ thống 1 chuỗi); Manager chỉ trận thuộc chi nhánh được cấp
+     * quyền; Staff chỉ trận mình được phân công làm trọng tài (chặt hơn cấp chi nhánh, giữ nguyên
+     * logic cũ qua {@link #assertStaffAssignedOnMatch}).
+     */
+    private void assertActorCanOperateOnMatch(Long userId, Match match) {
+        User actor = getUser(userId);
+        String roleCode = actor.getRole().getCode();
+        if ("STAFF".equals(roleCode)) {
+            assertStaffAssignedOnMatch(match, userId);
+            return;
+        }
+        // branch có thể null (giải chưa/không gán chi nhánh) — vẫn phải hỏi canActorAccessBranch
+        // thay vì chặn thẳng ở đây, vì Owner được phép trên toàn chuỗi bất kể chi nhánh (xem javadoc).
+        Branch branch = match.getTournament().getBranch();
+        Long branchId = branch != null ? branch.getId() : null;
+        if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
 
     @Override
     public Match getById(Long id) {
@@ -110,7 +133,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match assignMatch(Long matchId, AssignMatchRequest request, Long updatedByUserId) {
         Match match = getById(matchId);
-        getUser(updatedByUserId);
+        assertActorCanOperateOnMatch(updatedByUserId, match);
         Long oldStaffId = match.getAssignedStaff() != null ? match.getAssignedStaff().getId() : null;
         applyAssignment(match, request);
         // Chỉ validate khi gán giờ thủ công (không phải reset/clear)
@@ -269,11 +292,11 @@ public class MatchServiceImpl implements MatchService {
     @Override
     @Transactional
     public List<Match> bulkAssignMatches(List<Long> matchIds, AssignMatchRequest request, Long updatedByUserId) {
-        getUser(updatedByUserId);
         List<Match> matches = matchRepository.findAllById(matchIds);
         List<Match> updated = new ArrayList<>();
         Long tournamentId = null;
         for (Match match : matches) {
+            assertActorCanOperateOnMatch(updatedByUserId, match);
             try {
                 applyAssignment(match, request);
             } catch (BusinessException ex) {
@@ -368,6 +391,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match startMatch(Long matchId, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertActorCanOperateOnMatch(updatedByUserId, match);
         assertMatchPlayable(match);
         if (!MatchStatus.PENDING.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
@@ -393,6 +417,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match updateScore(Long matchId, Integer player1Score, Integer player2Score, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertActorCanOperateOnMatch(updatedByUserId, match);
         assertMatchPlayable(match);
         if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())
                 || MatchStatus.BYE.getValue().equals(match.getStatus())
@@ -467,15 +492,16 @@ public class MatchServiceImpl implements MatchService {
 
     @Override
     @Transactional
-    public Match completeMatch(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
+    public Match completeMatch(Long matchId, Long winnerParticipantId, boolean confirmEarlyEnd, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertActorCanOperateOnMatch(updatedByUserId, match);
         assertMatchPlayable(match);
         if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
         Participant winner = getParticipant(winnerParticipantId);
         assertWinnerBelongsToMatch(match, winner);
-        assertWinnerWhenRaceReached(match, winner);
+        assertWinnerWhenRaceReached(match, winner, confirmEarlyEnd);
         Participant loser = determineLoser(match, winner);
         User updatedBy = getUser(updatedByUserId);
 
@@ -530,6 +556,7 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public Match walkover(Long matchId, Long winnerParticipantId, Long updatedByUserId) {
         Match match = getById(matchId);
+        assertActorCanOperateOnMatch(updatedByUserId, match);
         assertMatchPlayable(match);
         if (MatchStatus.COMPLETED.getValue().equals(match.getStatus())
                 || MatchStatus.WALKOVER.getValue().equals(match.getStatus())
@@ -537,6 +564,7 @@ public class MatchServiceImpl implements MatchService {
             throw new BusinessException(ErrorCode.INVALID_OPERATION);
         }
         Participant winner = getParticipant(winnerParticipantId);
+        assertWinnerBelongsToMatch(match, winner);
         Participant loser = determineLoser(match, winner);
         User updatedBy = getUser(updatedByUserId);
 
@@ -609,15 +637,22 @@ public class MatchServiceImpl implements MatchService {
     /**
      * Khi đã có người đạt raceTo, chỉ cho chốt thắng đúng người đó
      * (nếu cả hai đạt thì cho người điểm cao hơn; hòa bỏ qua check này).
+     * Khi CHƯA ai đạt raceTo (kết thúc sớm do bỏ cuộc/chấn thương…), bắt buộc phải xác nhận
+     * qua {@code confirmEarlyEnd} — tránh trọng tài lỡ tay chốt trận 0-0 hoặc dở dang.
      */
-    private void assertWinnerWhenRaceReached(Match match, Participant winner) {
+    private void assertWinnerWhenRaceReached(Match match, Participant winner, boolean confirmEarlyEnd) {
         Integer raceTo = match.getRaceTo();
         if (raceTo == null) return;
         int p1 = match.getPlayer1Score() != null ? match.getPlayer1Score() : 0;
         int p2 = match.getPlayer2Score() != null ? match.getPlayer2Score() : 0;
         boolean p1Reached = p1 >= raceTo;
         boolean p2Reached = p2 >= raceTo;
-        if (!p1Reached && !p2Reached) return;
+        if (!p1Reached && !p2Reached) {
+            if (!confirmEarlyEnd) {
+                throw new BusinessException(ErrorCode.MATCH_EARLY_END_NOT_CONFIRMED);
+            }
+            return;
+        }
 
         Long requiredId;
         if (p1Reached && !p2Reached) {

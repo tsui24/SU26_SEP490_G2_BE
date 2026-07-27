@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,6 +14,7 @@ import java.util.List;
 @Schema(description = "Cập nhật thông tin nhân viên (Manager/Staff). Với Manager, có thể đổi luôn phạm vi quản lý chi nhánh.")
 public class UpdateEmployeeAccountRequest {
 
+	@Pattern(regexp = "^(0[3|5|7|8|9])[0-9]{8}$", message = "Số điện thoại không hợp lệ")
 	@Schema(example = "0912345678")
 	private String phone;
 

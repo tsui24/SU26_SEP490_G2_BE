@@ -9,6 +9,7 @@ import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.FieldSource;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
@@ -26,6 +27,7 @@ import com.capstone.su26_sep490_g2_be.service.OwnerTournamentService;
 import com.capstone.su26_sep490_g2_be.service.RegistrationFormService;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentPublishedEvent;
+import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
@@ -99,6 +101,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private final BranchRepository branchRepository;
 	private final BranchAccessService branchAccessService;
 	private final TournamentAuditService tournamentAuditService;
+	private final TournamentResultService tournamentResultService;
 	private final ApplicationEventPublisher eventPublisher;
 	private final MailContextBuilder mailContextBuilder;
 
@@ -113,7 +116,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			int size) {
 		String statusParam = (status == null || status.isBlank()) ? null : status.trim();
 		String searchParam = (search == null || search.isBlank()) ? null : search.trim();
-		Long createdById = filterByOwner ? userId : null;
+		List<Long> branchIds = filterByOwner ? resolveAccessibleBranchIds(userId) : null;
 
 		if (size < 1)
 			size = 10;
@@ -121,7 +124,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			page = 0;
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-		Specification<Tournament> spec = buildSpec(createdById, statusParam, searchParam, null);
+		Specification<Tournament> spec = buildSpec(branchIds, statusParam, searchParam, null);
 		Page<Tournament> tournamentPage = tournamentRepository.findAll(spec, pageable);
 		return toListResponse(tournamentPage, true);
 	}
@@ -174,6 +177,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		validateGameType(request.getGameType());
 		validateFormatReady(request.getFormat());
+		validateParticipantType(request.getParticipantType());
 
 		boolean isRegister = Boolean.TRUE.equals(request.getIsRegister());
 		registrationFormService.validateRegistrationSettings(isRegister, request.getRegistrationFormTemplateId());
@@ -317,7 +321,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		validateTournamentDates(
 				tournament.getRegistrationDeadline(),
 				tournament.getStartAt(),
-				tournament.getEndAt());
+				tournament.getEndAt(),
+				request.getRegistrationDeadline() != null,
+				request.getStartAt() != null,
+				request.getEndAt() != null);
 
 		tournamentRepository.save(tournament);
 		if (formatChanged || request.getMaxParticipants() != null) {
@@ -723,6 +730,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		tournamentAuditService.recordChange(tournament, previousStatus, newStatus, userId,
 				"Cập nhật trạng thái thủ công");
 
+		if (TournamentStatus.COMPLETED.getValue().equals(newStatus)) {
+			// Chốt kết quả chính thức (finalRank) ngay khi giải hoàn tất — trước đây bảng
+			// tournament_results không bao giờ được ghi ngoài data seed demo.
+			tournamentResultService.finalizeTournamentResults(tournamentId, userId);
+		}
+
 		Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
 		mailContextBuilder.putTournament(variables, tournament);
 		eventPublisher.publishEvent(MailDomainEvent.builder()
@@ -875,6 +888,15 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		return configCount > 0 && raceCount > 0;
 	}
 
+	/** Chỉ SINGLE/DOUBLE được cài đặt xử lý đầy đủ trong pipeline đăng ký — TEAM tạm thời chưa hỗ trợ. */
+	private void validateParticipantType(String participantType) {
+		if (!ParticipantType.SINGLE.name().equals(participantType)
+				&& !ParticipantType.DOUBLE.name().equals(participantType)) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"Hình thức thi đấu chỉ hỗ trợ Đơn (SINGLE) hoặc Đôi (DOUBLE)");
+		}
+	}
+
 	private void validateGameType(String code) {
 		GameTypeDefinition gameType = gameTypeRepository.findById(code)
 				.orElseThrow(() -> new BusinessException(ErrorCode.GAME_TYPE_NOT_FOUND));
@@ -902,10 +924,43 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private Tournament loadTournament(Long userId, Long tournamentId, boolean enforceOwnership) {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-		if (enforceOwnership && !tournament.getCreatedBy().getId().equals(userId)) {
-			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		if (enforceOwnership) {
+			assertBranchAccess(userId, tournament);
 		}
 		return tournament;
+	}
+
+	/**
+	 * Hệ thống chỉ có 1 chuỗi (nhiều chi nhánh, không phải nhiều chuỗi độc lập) nên Owner được xem
+	 * toàn bộ tournament của cả chuỗi — không isolate Owner với nhau. Chỉ Manager mới bị giới hạn
+	 * theo chi nhánh họ được cấp quyền qua {@link BranchAccessService} (đây mới là phân quyền thật
+	 * cần enforce: "chi nhánh nào được gán thì chỉ nhìn thấy chi nhánh đó").
+	 */
+	private void assertBranchAccess(Long userId, Tournament tournament) {
+		if (userId == null) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		User actor = userRepository.findById(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+		Branch branch = tournament.getBranch();
+		Long branchId = branch != null ? branch.getId() : null;
+		if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+	}
+
+	/** Danh sách branchId giới hạn tầm nhìn — null nghĩa là "không lọc" (Owner xem cả chuỗi). */
+	private List<Long> resolveAccessibleBranchIds(Long userId) {
+		User actor = userRepository.findById(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+		String roleCode = actor.getRole().getCode();
+		if ("OWNER".equals(roleCode)) {
+			return null;
+		}
+		if ("MANAGER".equals(roleCode)) {
+			return branchAccessService.getAccessibleBranchIds(actor);
+		}
+		throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 	}
 
 	private TournamentConfig getConfig(Long tournamentId) {
@@ -1011,6 +1066,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			errors.addAll(validateProgressiveConfig(tournamentId, formatFields));
 		}
 
+		if (TournamentFormat.GROUP_PLAYOFF.getValue().equals(formatCode)) {
+			errors.addAll(validateGroupPlayoffConfig(tournamentId, formatFields));
+		}
+
 		return errors;
 	}
 
@@ -1019,6 +1078,43 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	 * phải giảm dần nghiêm ngặt, mọi phần tử chẵn ≥ 4, phần tử cuối == {@code final_playoff_size},
 	 * và {@code maxParticipants} lớn hơn phần tử đầu.
 	 */
+	/**
+	 * GROUP_PLAYOFF: số slot chia bảng (group_count × players_per_group) phải khớp maxParticipants,
+	 * nếu không việc chia bảng sẽ thiếu/thừa người ngay sau khi đóng đăng ký.
+	 */
+	private List<ConfigValidationDetailResponse> validateGroupPlayoffConfig(
+			Long tournamentId, List<FormatConfigField> formatFields) {
+		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
+
+		String groupCountStr = resolveFieldValueByKey(tournamentId, formatFields, "group_count");
+		String playersPerGroupStr = resolveFieldValueByKey(tournamentId, formatFields, "players_per_group");
+		if (groupCountStr == null || groupCountStr.isBlank()
+				|| playersPerGroupStr == null || playersPerGroupStr.isBlank()) {
+			return errors; // thiếu field đã được báo ở vòng lặp trước
+		}
+
+		Integer maxParticipants = tournamentRepository.findById(tournamentId)
+				.map(Tournament::getMaxParticipants).orElse(null);
+		if (maxParticipants == null) {
+			return errors;
+		}
+
+		try {
+			int groupCount = Integer.parseInt(groupCountStr.trim());
+			int playersPerGroup = Integer.parseInt(playersPerGroupStr.trim());
+			int totalSlots = groupCount * playersPerGroup;
+			if (totalSlots != maxParticipants) {
+				errors.add(detail("group_count",
+						"Số bảng x số người/bảng (" + totalSlots
+								+ ") phải bằng đúng số người tối đa của giải (" + maxParticipants + ")"));
+			}
+		} catch (NumberFormatException e) {
+			// group_count/players_per_group không phải số nguyên hợp lệ — đã báo ở validateFieldValue
+		}
+
+		return errors;
+	}
+
 	private List<ConfigValidationDetailResponse> validateProgressiveConfig(
 			Long tournamentId, List<FormatConfigField> formatFields) {
 		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
@@ -1202,21 +1298,33 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	/**
-	 * Validate 3 trường ngày của giải đấu:
-	 * 1. Không được là thời điểm trong quá khứ.
-	 * 2. startAt và endAt phải sau registrationDeadline.
-	 * 3. endAt >= startAt (cho phép cùng ngày).
+	 * Validate 3 trường ngày của giải đấu khi tạo mới — cả 3 đều là input mới nên luôn check
+	 * "không ở quá khứ".
 	 */
 	private void validateTournamentDates(Instant registrationDeadline, Instant startAt, Instant endAt) {
+		validateTournamentDates(registrationDeadline, startAt, endAt, true, true, true);
+	}
+
+	/**
+	 * Validate 3 trường ngày của giải đấu:
+	 * 1. Field nào thực sự được sửa trong request thì mới check "không ở quá khứ" — nếu không, sửa
+	 *    một field không liên quan (VD: tên giải) trên 1 tournament DRAFT tạo từ trước sẽ luôn bị
+	 *    chặn nhầm vì hạn đăng ký cũ đã trôi qua "now" hiện tại.
+	 * 2. startAt và endAt phải sau registrationDeadline — luôn kiểm tra (tính nhất quán nội tại,
+	 *    không phụ thuộc field nào vừa đổi).
+	 * 3. endAt >= startAt (cho phép cùng ngày) — luôn kiểm tra.
+	 */
+	private void validateTournamentDates(Instant registrationDeadline, Instant startAt, Instant endAt,
+			boolean checkRegistrationDeadlinePast, boolean checkStartAtPast, boolean checkEndAtPast) {
 		Instant now = Instant.now();
 		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
 
-		if (registrationDeadline != null && !registrationDeadline.isAfter(now)) {
+		if (registrationDeadline != null && checkRegistrationDeadlinePast && !registrationDeadline.isAfter(now)) {
 			errors.add(detail("registrationDeadline", "Hạn đăng ký không được là thời điểm trong quá khứ"));
 		}
 
 		if (startAt != null) {
-			if (!startAt.isAfter(now)) {
+			if (checkStartAtPast && !startAt.isAfter(now)) {
 				errors.add(detail("startAt", "Ngày bắt đầu thi đấu không được là thời điểm trong quá khứ"));
 			} else if (registrationDeadline != null && !startAt.isAfter(registrationDeadline)) {
 				errors.add(detail("startAt", "Ngày bắt đầu thi đấu phải sau hạn đăng ký"));
@@ -1224,7 +1332,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 
 		if (endAt != null) {
-			if (!endAt.isAfter(now)) {
+			if (checkEndAtPast && !endAt.isAfter(now)) {
 				errors.add(detail("endAt", "Ngày kết thúc không được là thời điểm trong quá khứ"));
 			} else if (registrationDeadline != null && !endAt.isAfter(registrationDeadline)) {
 				errors.add(detail("endAt", "Ngày kết thúc phải sau hạn đăng ký"));
@@ -1247,11 +1355,13 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	private Specification<Tournament> buildSpec(
-			Long createdById, String status, String search, List<String> excludeStatuses) {
+			List<Long> branchIds, String status, String search, List<String> excludeStatuses) {
 		return (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
-			if (createdById != null) {
-				predicates.add(cb.equal(root.get("createdBy").get("id"), createdById));
+			if (branchIds != null) {
+				predicates.add(branchIds.isEmpty()
+						? cb.disjunction()
+						: root.get("branch").get("id").in(branchIds));
 			}
 			if (excludeStatuses != null && !excludeStatuses.isEmpty()) {
 				predicates.add(root.get("status").in(excludeStatuses).not());

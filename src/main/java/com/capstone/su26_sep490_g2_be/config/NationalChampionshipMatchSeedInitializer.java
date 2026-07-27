@@ -188,7 +188,7 @@ public class NationalChampionshipMatchSeedInitializer implements CommandLineRunn
 				}
 
 				matchRepository.save(match);
-				matchService.completeMatch(match.getId(), winner.getId(), owner.getId());
+				matchService.completeMatch(match.getId(), winner.getId(), true, owner.getId());
 				completed++;
 				progress = true;
 			}

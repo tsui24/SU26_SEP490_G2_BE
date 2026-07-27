@@ -10,6 +10,7 @@ import com.capstone.su26_sep490_g2_be.entity.GameTypeDefinition;
 import com.capstone.su26_sep490_g2_be.entity.TournamentFormatDefinition;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.FormatSetupStatus;
+import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.AdminTournamentConfigService;
@@ -35,6 +36,22 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	private final FormatConfigFieldRepository formatConfigFieldRepository;
 	private final FormatRaceToRuleRepository formatRaceToRuleRepository;
 	private final GameTypeDefinitionRepository gameTypeRepository;
+	private final TournamentRepository tournamentRepository;
+
+	private static final List<String> FORMAT_EDIT_ALLOWED_STATUSES = List.of(
+			TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue());
+
+	/**
+	 * Chặn sửa default config-field/race-to của 1 format nếu đang có giải đấu dùng format đó mà
+	 * chưa DRAFT/CANCELLED — nếu không, giải đang chạy dở sẽ âm thầm đổi cấu hình giữa chừng vì mọi
+	 * field/race-to không có override riêng đều resolve về default hiện tại của format (xem
+	 * {@code OwnerTournamentServiceImpl#resolveFieldValue}, {@code TournamentRaceToRuleServiceImpl#resolveRaceTo}).
+	 */
+	private void assertFormatNotInUse(String formatCode) {
+		if (tournamentRepository.existsByFormatAndStatusNotIn(formatCode, FORMAT_EDIT_ALLOWED_STATUSES)) {
+			throw new BusinessException(ErrorCode.FORMAT_IN_USE_CANNOT_EDIT);
+		}
+	}
 
 	@Override
 	public PageResponse<ConfigFieldCatalogItemResponse> getConfigFieldCatalog(
@@ -162,6 +179,9 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	@Transactional
 	public FormatDetailResponse updateFormat(String code, UpdateFormatRequest request) {
 		TournamentFormatDefinition format = getFormatDefinition(code);
+		if (formatRepository.existsByHandlerKeyAndCodeNot(request.getHandlerKey(), code)) {
+			throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE);
+		}
 		format.setName(request.getName());
 		format.setDescription(request.getDescription());
 		format.setHandlerKey(request.getHandlerKey());
@@ -228,6 +248,7 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	@Transactional
 	public FormatConfigFieldsSaveResponse saveConfigFields(String code, UpsertFormatConfigFieldsRequest request) {
 		getFormatDefinition(code);
+		assertFormatNotInUse(code);
 		int saved = 0;
 		for (UpsertFormatConfigFieldsRequest.FormatConfigFieldItemRequest item : request.getFields()) {
 			ConfigFieldDefinition fieldDef = configFieldRepository.findById(item.getFieldKey())
@@ -274,6 +295,7 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	@Transactional
 	public FormatRaceToRulesSaveResponse saveRaceToRules(String code, UpsertFormatRaceToRulesRequest request) {
 		getFormatDefinition(code);
+		assertFormatNotInUse(code);
 		int saved = 0;
 		for (UpsertFormatRaceToRulesRequest.FormatRaceToRuleItemRequest item : request.getRules()) {
 			FormatRaceToRule rule = formatRaceToRuleRepository

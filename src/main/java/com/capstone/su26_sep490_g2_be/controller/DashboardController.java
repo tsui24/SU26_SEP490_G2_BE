@@ -38,8 +38,10 @@ public class DashboardController {
     @GetMapping("/manager/dashboard/stats")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> managerStats(Authentication authentication) {
         User manager = securityUtil.resolveCurrentUser(authentication);
-        Long ownerId = manager.getOwner() != null ? manager.getOwner().getId() : null;
-        return ResponseEntity.ok(ApiResponse.success(dashboardService.buildStats(ownerId)));
+        if (manager.getOwner() == null) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+        return ResponseEntity.ok(ApiResponse.success(dashboardService.buildStats(manager.getOwner().getId())));
     }
 
     private Long extractUserId(Authentication auth) {

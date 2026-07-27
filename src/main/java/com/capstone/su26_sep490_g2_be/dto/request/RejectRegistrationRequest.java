@@ -10,6 +10,6 @@ import lombok.Setter;
 @Schema(description = "Từ chối đăng ký")
 public class RejectRegistrationRequest {
 
-	@NotBlank
+	@NotBlank(message = "Lý do từ chối không được để trống")
 	private String reason;
 }

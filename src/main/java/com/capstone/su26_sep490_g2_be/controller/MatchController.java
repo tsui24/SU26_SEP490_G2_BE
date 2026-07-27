@@ -381,7 +381,7 @@ public class MatchController {
     public ResponseEntity<ApiResponse<MatchResponse>> completeOwner(
             Authentication auth, @PathVariable Long matchId,
             @Valid @RequestBody CompleteMatchRequest req) {
-        matchService.completeMatch(matchId, req.getWinnerParticipantId(), extractUserId(auth));
+        matchService.completeMatch(matchId, req.getWinnerParticipantId(), Boolean.TRUE.equals(req.getConfirmEarlyEnd()), extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(fetchBroadcastAndSyncBracket(matchId)));
     }
 
@@ -390,7 +390,7 @@ public class MatchController {
     public ResponseEntity<ApiResponse<MatchResponse>> completeManager(
             Authentication auth, @PathVariable Long matchId,
             @Valid @RequestBody CompleteMatchRequest req) {
-        matchService.completeMatch(matchId, req.getWinnerParticipantId(), extractUserId(auth));
+        matchService.completeMatch(matchId, req.getWinnerParticipantId(), Boolean.TRUE.equals(req.getConfirmEarlyEnd()), extractUserId(auth));
         return ResponseEntity.ok(ApiResponse.success(fetchBroadcastAndSyncBracket(matchId)));
     }
 
@@ -401,7 +401,7 @@ public class MatchController {
             @Valid @RequestBody CompleteMatchRequest req) {
         Long staffId = extractUserId(auth);
         matchService.assertStaffAssigned(matchId, staffId);
-        matchService.completeMatch(matchId, req.getWinnerParticipantId(), staffId);
+        matchService.completeMatch(matchId, req.getWinnerParticipantId(), Boolean.TRUE.equals(req.getConfirmEarlyEnd()), staffId);
         return ResponseEntity.ok(ApiResponse.success(fetchBroadcastAndSyncBracket(matchId)));
     }
 

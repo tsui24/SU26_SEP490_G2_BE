@@ -85,6 +85,11 @@ public class AccountServiceImpl implements AccountService {
 		User owner = userRepository.findById(ownerId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		boolean manageAllBranches = Boolean.TRUE.equals(request.getManageAllBranches());
+		if (!manageAllBranches && (request.getBranchIds() == null || request.getBranchIds().isEmpty())) {
+			// Không cho tạo Manager "mồ côi" — không quản lý chi nhánh nào thì không thể thao tác gì.
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+					"Phải chọn ít nhất 1 chi nhánh khi không cấp quyền toàn chuỗi");
+		}
 
 		User manager = createEmployeeWithProfile(
 				request.getEmail(), request.getPhone(), request.getPassword(),
@@ -101,6 +106,17 @@ public class AccountServiceImpl implements AccountService {
 	@Override
 	@Transactional
 	public EmployeeAccountResponse createStaffAccount(CreateStaffAccountRequest request, Long ownerId) {
+		return createStaffAccount(request, ownerId, null);
+	}
+
+	@Override
+	@Transactional
+	public EmployeeAccountResponse createStaffAccount(
+			CreateStaffAccountRequest request, Long ownerId, List<Long> managerAllowedBranchIds) {
+		if (managerAllowedBranchIds != null
+				&& (request.getBranchId() == null || !managerAllowedBranchIds.contains(request.getBranchId()))) {
+			throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+		}
 		User owner = ownerId != null ? userRepository.findById(ownerId).orElse(null) : null;
 		User staff = createEmployeeWithProfile(
 				request.getEmail(), request.getPhone(), request.getPassword(),
@@ -120,6 +136,9 @@ public class AccountServiceImpl implements AccountService {
 
 		if (userRepository.existsByEmail(email)) {
 			throw new BusinessException(ErrorCode.AUTH_EMAIL_ALREADY_EXISTS);
+		}
+		if (phone != null && !phone.isBlank() && userRepository.existsByPhone(phone)) {
+			throw new BusinessException(ErrorCode.AUTH_PHONE_ALREADY_EXISTS);
 		}
 
 		Role role = roleRepository.findByCode(targetRole.getCode())
@@ -193,6 +212,9 @@ public class AccountServiceImpl implements AccountService {
 		}
 
 		if (request.getPhone() != null) {
+			if (!request.getPhone().equals(employee.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
+				throw new BusinessException(ErrorCode.AUTH_PHONE_ALREADY_EXISTS);
+			}
 			employee.setPhone(request.getPhone());
 		}
 
@@ -223,9 +245,15 @@ public class AccountServiceImpl implements AccountService {
 		boolean isManager = "MANAGER".equals(employee.getRole().getCode());
 		if (isManager && request.getManageAllBranches() != null) {
 			boolean manageAllBranches = request.getManageAllBranches();
+			if (!manageAllBranches && (request.getBranchIds() == null || request.getBranchIds().isEmpty())) {
+				// Không cho gỡ hết quyền chi nhánh của Manager mà không gán chi nhánh thay thế —
+				// tránh Manager bị "mồ côi" (không quản lý gì) do gửi thiếu branchIds.
+				throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST,
+						"Phải chọn ít nhất 1 chi nhánh khi bỏ quyền quản lý toàn chuỗi");
+			}
 			employee.setManageAllBranches(manageAllBranches);
 			branchManagerRepository.deleteByManagerId(employeeId);
-			if (!manageAllBranches && request.getBranchIds() != null) {
+			if (!manageAllBranches) {
 				assignBranches(owner, employee, request.getBranchIds());
 			}
 		}
@@ -290,6 +318,65 @@ public class AccountServiceImpl implements AccountService {
 
 	@Override
 	@Transactional(readOnly = true)
+	public PageResponse<EmployeeAccountResponse> getStaffsByManagerBranches(
+			List<Long> branchIds, String search, int page, int size) {
+		String searchParam = (search == null || search.trim().isEmpty()) ? null : search.trim();
+		Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+		if (branchIds == null || branchIds.isEmpty()) {
+			return PageResponse.of(Page.empty(pageable), u -> null);
+		}
+		Page<User> userPage = userRepository.searchStaffsByManagerBranches(branchIds, searchParam, pageable);
+		return toEmployeeResponsePage(userPage);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public EmployeeAccountResponse getStaffDetailForManager(List<Long> branchIds, Long id) {
+		User user = userRepository.findByIdAndStatus(id, UserStatus.ACTIVE)
+				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
+		if (!"STAFF".equals(user.getRole().getCode())) {
+			throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
+		}
+		if (user.getBranch() == null || branchIds == null || !branchIds.contains(user.getBranch().getId())) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		return toEmployeeResponse(user, user.getProfile());
+	}
+
+	@Override
+	@Transactional
+	public EmployeeAccountResponse deactivateStaffForManager(List<Long> branchIds, Long id) {
+		User user = userRepository.findById(id)
+				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
+		if (!"STAFF".equals(user.getRole().getCode())) {
+			throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
+		}
+		if (user.getBranch() == null || branchIds == null || !branchIds.contains(user.getBranch().getId())) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		user.setStatus(UserStatus.LOCKED);
+		user = userRepository.save(user);
+		return toEmployeeResponse(user, user.getProfile());
+	}
+
+	@Override
+	@Transactional
+	public EmployeeAccountResponse reactivateStaffForManager(List<Long> branchIds, Long id) {
+		User user = userRepository.findById(id)
+				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
+		if (!"STAFF".equals(user.getRole().getCode())) {
+			throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
+		}
+		if (user.getBranch() == null || branchIds == null || !branchIds.contains(user.getBranch().getId())) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		user.setStatus(UserStatus.ACTIVE);
+		user = userRepository.save(user);
+		return toEmployeeResponse(user, user.getProfile());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
 	public EmployeeAccountResponse getEmployeeDetail(Long ownerId, Long id) {
 		User user = userRepository.findByIdAndStatus(id, UserStatus.ACTIVE)
 				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
@@ -310,6 +397,20 @@ public class AccountServiceImpl implements AccountService {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
 		user.setStatus(UserStatus.LOCKED);
+		user = userRepository.save(user);
+		return toEmployeeResponse(user, user.getProfile());
+	}
+
+	@Override
+	@Transactional
+	public EmployeeAccountResponse reactivateEmployee(Long ownerId, Long id) {
+		User user = userRepository.findById(id)
+				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
+		validateEmployeeRole(user);
+		if (ownerId != null && (user.getOwner() == null || !ownerId.equals(user.getOwner().getId()))) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		user.setStatus(UserStatus.ACTIVE);
 		user = userRepository.save(user);
 		return toEmployeeResponse(user, user.getProfile());
 	}

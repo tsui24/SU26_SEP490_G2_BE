@@ -12,24 +12,24 @@ import java.util.List;
 @Schema(description = "Tạo/cập nhật mẫu email")
 public class EmailTemplateRequest {
 
-	@NotBlank
+	@NotBlank(message = "Mã mẫu email không được để trống")
 	@Schema(description = "Mã mẫu email, duy nhất, ví dụ REGISTRATION_APPROVED")
 	private String code;
 
-	@NotBlank
+	@NotBlank(message = "Tên mẫu email không được để trống")
 	private String name;
 
 	private String description;
 
-	@NotBlank
+	@NotBlank(message = "Danh mục không được để trống")
 	@Schema(description = "SYSTEM | TOURNAMENT | MARKETING | TRANSACTIONAL")
 	private String category;
 
-	@NotBlank
+	@NotBlank(message = "Tiêu đề email không được để trống")
 	@Schema(description = "Tiêu đề email, có thể chứa placeholder {{...}}")
 	private String subjectTemplate;
 
-	@NotBlank
+	@NotBlank(message = "Nội dung email không được để trống")
 	@Schema(description = "Nội dung HTML, có thể chứa placeholder {{...}}")
 	private String bodyHtmlTemplate;
 

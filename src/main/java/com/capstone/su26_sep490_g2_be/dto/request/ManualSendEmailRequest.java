@@ -15,7 +15,7 @@ import java.util.Map;
 @Schema(description = "Gửi email thủ công tới người tham gia một giải đấu")
 public class ManualSendEmailRequest {
 
-	@NotNull
+	@NotNull(message = "Mẫu email không được để trống")
 	private Long templateId;
 
 	@Schema(description = "Nếu có — override tiêu đề mẫu cho lần gửi này")
@@ -24,7 +24,7 @@ public class ManualSendEmailRequest {
 	@Schema(description = "Nếu có — override nội dung HTML mẫu cho lần gửi này (sẽ được sanitize)")
 	private String bodyOverride;
 
-	@NotBlank
+	@NotBlank(message = "Đối tượng nhận không được để trống")
 	@Schema(description = "ALL_PARTICIPANTS | REGISTRATION_USER | CUSTOM_LIST")
 	private String recipientType;
 

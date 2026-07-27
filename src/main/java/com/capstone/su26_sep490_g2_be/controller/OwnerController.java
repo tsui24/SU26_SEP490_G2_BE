@@ -131,4 +131,20 @@ public class OwnerController {
 				SecurityUtil.extractUserId(authentication), id);
 		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa nhân viên", response));
 	}
+
+	@Operation(summary = "Reactivate employee account",
+			description = "Mở khóa lại tài khoản của một staff hoặc một manager (chuyển trạng thái sang ACTIVE).")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Mở khóa thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Nhân viên không tồn tại")
+	})
+	@PutMapping("/employees/{id}/reactivate")
+	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> reactivateEmployee(
+			Authentication authentication,
+			@PathVariable Long id) {
+		EmployeeAccountResponse response = accountService.reactivateEmployee(
+				SecurityUtil.extractUserId(authentication), id);
+		return ResponseEntity.ok(ApiResponse.success("Đã mở khóa nhân viên", response));
+	}
 }

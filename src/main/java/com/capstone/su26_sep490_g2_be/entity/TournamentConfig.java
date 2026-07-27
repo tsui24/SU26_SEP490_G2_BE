@@ -42,6 +42,11 @@ public class TournamentConfig {
 	@Column(name = "config_snapshot_json", columnDefinition = "JSON")
 	private String configSnapshotJson;
 
+	/** Optimistic lock — tránh 2 request PUT /config cùng lúc ghi đè âm thầm lên nhau. */
+	@Version
+	@Column(name = "version")
+	private Long version;
+
 	@UpdateTimestamp
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;

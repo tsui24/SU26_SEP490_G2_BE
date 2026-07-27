@@ -43,7 +43,7 @@ public class ManagerEmailController {
 			@PathVariable Long id,
 			@RequestBody EmailTemplatePreviewRequest request) {
 		return ResponseEntity.ok(ApiResponse.success(
-				tournamentEmailService.preview(extractUserId(authentication), id, false, request)));
+				tournamentEmailService.preview(extractUserId(authentication), id, true, request)));
 	}
 
 	@Operation(summary = "Gửi email thủ công cho người tham gia giải đấu")
@@ -53,7 +53,7 @@ public class ManagerEmailController {
 			@PathVariable Long id,
 			@Valid @RequestBody ManualSendEmailRequest request) {
 		ManualSendResultResponse result = tournamentEmailService
-				.sendManual(extractUserId(authentication), id, false, request);
+				.sendManual(extractUserId(authentication), id, true, request);
 		return ResponseEntity.ok(ApiResponse.success(
 				"Đã xếp hàng gửi " + result.getQueuedCount() + " email", result));
 	}
@@ -63,7 +63,7 @@ public class ManagerEmailController {
 	public ResponseEntity<ApiResponse<List<EmailAutomationRuleResponse>>> listAutomationRules(
 			Authentication authentication, @PathVariable Long id) {
 		return ResponseEntity.ok(ApiResponse.success(
-				tournamentEmailService.listAutomationRules(extractUserId(authentication), id, false)));
+				tournamentEmailService.listAutomationRules(extractUserId(authentication), id, true)));
 	}
 
 	@Operation(summary = "Bật/tắt quy tắc tự động cho giải đấu")
@@ -72,7 +72,7 @@ public class ManagerEmailController {
 			Authentication authentication,
 			@PathVariable Long id, @PathVariable Long ruleId, @RequestParam boolean enabled) {
 		return ResponseEntity.ok(ApiResponse.success(
-				tournamentEmailService.setRuleEnabled(extractUserId(authentication), id, false, ruleId, enabled)));
+				tournamentEmailService.setRuleEnabled(extractUserId(authentication), id, true, ruleId, enabled)));
 	}
 
 	@Operation(summary = "Lịch sử gửi email của giải đấu")
@@ -84,7 +84,7 @@ public class ManagerEmailController {
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
 		return ResponseEntity.ok(ApiResponse.success(
-				tournamentEmailService.listLogs(extractUserId(authentication), id, false, status, page, size)));
+				tournamentEmailService.listLogs(extractUserId(authentication), id, true, status, page, size)));
 	}
 
 	private Long extractUserId(Authentication authentication) {

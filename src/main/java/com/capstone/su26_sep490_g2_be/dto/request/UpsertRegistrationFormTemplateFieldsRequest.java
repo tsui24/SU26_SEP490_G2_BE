@@ -14,7 +14,7 @@ import java.util.List;
 @Schema(description = "Lưu danh sách field cho template form đăng ký")
 public class UpsertRegistrationFormTemplateFieldsRequest {
 
-	@NotEmpty
+	@NotEmpty(message = "Danh sách field không được để trống")
 	@Valid
 	private List<TemplateFieldItemRequest> fields;
 
@@ -22,7 +22,7 @@ public class UpsertRegistrationFormTemplateFieldsRequest {
 	@Setter
 	public static class TemplateFieldItemRequest {
 
-		@NotBlank
+		@NotBlank(message = "Field key không được để trống")
 		private String fieldKey;
 
 		private String labelOverride;

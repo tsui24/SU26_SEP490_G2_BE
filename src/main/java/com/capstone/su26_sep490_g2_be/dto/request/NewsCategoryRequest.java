@@ -9,11 +9,11 @@ import lombok.Setter;
 @Setter
 public class NewsCategoryRequest {
 
-    @NotBlank
-    @Size(max = 120)
+    @NotBlank(message = "Tên chuyên mục không được để trống")
+    @Size(max = 120, message = "Tên chuyên mục tối đa 120 ký tự")
     private String name;
 
-    @NotBlank
-    @Size(max = 120)
+    @NotBlank(message = "Slug không được để trống")
+    @Size(max = 120, message = "Slug tối đa 120 ký tự")
     private String slug;
 }

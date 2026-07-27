@@ -84,4 +84,18 @@ public class AdminController {
 		EmployeeAccountResponse response = accountService.deactivateEmployee(null, id);
 		return ResponseEntity.ok(ApiResponse.success("Đã vô hiệu hóa tài khoản", response));
 	}
+
+	@Operation(summary = "Admin can reactivate users",
+			description = "Mở khóa lại tài khoản đã bị vô hiệu hóa (chuyển trạng thái sang ACTIVE).")
+	@ApiResponses({
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Mở khóa thành công"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
+			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User không tồn tại")
+	})
+	@PutMapping("/accounts/{id}/reactivate")
+	public ResponseEntity<ApiResponse<EmployeeAccountResponse>> reactivateUser(
+			@PathVariable Long id) {
+		EmployeeAccountResponse response = accountService.reactivateEmployee(null, id);
+		return ResponseEntity.ok(ApiResponse.success("Đã mở khóa tài khoản", response));
+	}
 }

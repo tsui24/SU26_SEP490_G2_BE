@@ -13,8 +13,10 @@ public interface EmailAutomationRuleRepository extends JpaRepository<EmailAutoma
 
 	boolean existsByCode(String code);
 
+	@EntityGraph(attributePaths = { "template", "tournament" })
 	List<EmailAutomationRule> findByEventTypeAndIsEnabledTrueAndTournamentIsNull(String eventType);
 
+	@EntityGraph(attributePaths = { "template", "tournament" })
 	List<EmailAutomationRule> findByEventTypeAndIsEnabledTrueAndTournamentId(String eventType, Long tournamentId);
 
 	@EntityGraph(attributePaths = { "template", "tournament" })

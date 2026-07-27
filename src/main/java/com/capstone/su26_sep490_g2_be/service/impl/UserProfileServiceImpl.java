@@ -70,6 +70,10 @@ public class UserProfileServiceImpl implements UserProfileService {
 			profile.setBilliardRank(request.getBilliardRank());
 		}
 		user.setEmail(user.getEmail());
+		if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())
+				&& userRepository.existsByPhone(request.getPhone())) {
+			throw new BusinessException(ErrorCode.AUTH_PHONE_ALREADY_EXISTS);
+		}
 		user.setPhone(request.getPhone());
 		User savedUser = userRepository.save(user);
 
