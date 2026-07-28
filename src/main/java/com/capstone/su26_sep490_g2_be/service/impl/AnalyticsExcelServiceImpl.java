@@ -43,13 +43,13 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 	private final AnalyticsService analyticsService;
 
 	@Override
-	public byte[] buildReport(Long ownerId, Instant from, Instant to) throws IOException {
-		AnalyticsOverviewResponse overview = analyticsService.buildOverview(ownerId, from, to);
-		RevenueBreakdownResponse revenue = analyticsService.buildRevenueBreakdown(ownerId, from, to, "month");
-		List<TournamentPerformanceItem> tournaments = analyticsService.buildTournamentPerformance(ownerId, from, to);
-		List<PlayerLeaderboardItem> players = analyticsService.buildPlayerLeaderboard(ownerId, from, to);
-		SocialEngagementResponse social = analyticsService.buildSocialEngagement(ownerId, from, to);
-		TransactionStatsResponse transactions = analyticsService.buildTransactionStats(ownerId, from, to, "month");
+	public byte[] buildReport(Long ownerId, Instant from, Instant to, List<Long> branchIds) throws IOException {
+		AnalyticsOverviewResponse overview = analyticsService.buildOverview(ownerId, from, to, branchIds);
+		RevenueBreakdownResponse revenue = analyticsService.buildRevenueBreakdown(ownerId, from, to, "month", branchIds);
+		List<TournamentPerformanceItem> tournaments = analyticsService.buildTournamentPerformance(ownerId, from, to, branchIds);
+		List<PlayerLeaderboardItem> players = analyticsService.buildPlayerLeaderboard(ownerId, from, to, branchIds);
+		SocialEngagementResponse social = analyticsService.buildSocialEngagement(ownerId, from, to, branchIds);
+		TransactionStatsResponse transactions = analyticsService.buildTransactionStats(ownerId, from, to, "month", branchIds);
 
 		try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 			CellStyle headerStyle = headerStyle(workbook);
@@ -66,8 +66,8 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 	}
 
 	@Override
-	public byte[] buildTournamentReport(Long ownerId, Long tournamentId) throws IOException {
-		TournamentAnalyticsDetailResponse d = analyticsService.buildTournamentDetail(ownerId, tournamentId);
+	public byte[] buildTournamentReport(Long ownerId, Long tournamentId, List<Long> branchIds) throws IOException {
+		TournamentAnalyticsDetailResponse d = analyticsService.buildTournamentDetail(ownerId, tournamentId, branchIds);
 
 		try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 			CellStyle headerStyle = headerStyle(workbook);
@@ -84,8 +84,8 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 	}
 
 	@Override
-	public byte[] buildMonthlyReport(Long ownerId, YearMonth from, YearMonth to) throws IOException {
-		MonthlyReportResponse report = analyticsService.buildMonthlyReport(ownerId, from, to);
+	public byte[] buildMonthlyReport(Long ownerId, YearMonth from, YearMonth to, List<Long> branchIds) throws IOException {
+		MonthlyReportResponse report = analyticsService.buildMonthlyReport(ownerId, from, to, branchIds);
 		String rangeLabel = (from != null ? from : "?") + " - " + (to != null ? to : "?");
 
 		try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {

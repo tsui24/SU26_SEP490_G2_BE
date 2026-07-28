@@ -3,6 +3,8 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.BranchStatus;
+import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.BranchManagerRepository;
 import com.capstone.su26_sep490_g2_be.repository.BranchRepository;
 import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
@@ -74,5 +76,30 @@ public class BranchAccessServiceImpl implements BranchAccessService {
 			return List.of();
 		}
 		return branchRepository.findByIdInAndStatus(accessibleIds, BranchStatus.ACTIVE);
+	}
+
+	@Override
+	public List<Long> resolveOwnerBranchFilter(Long ownerId, Long branchId) {
+		if (branchId == null) {
+			return null;
+		}
+		Branch branch = branchRepository.findById(branchId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.BRANCH_NOT_FOUND));
+		if (branch.getOwner() == null || !branch.getOwner().getId().equals(ownerId)) {
+			throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+		}
+		return List.of(branchId);
+	}
+
+	@Override
+	public List<Long> resolveManagerBranchFilter(User manager, Long branchId) {
+		List<Long> accessible = getAccessibleBranchIds(manager);
+		if (branchId == null) {
+			return accessible;
+		}
+		if (!accessible.contains(branchId)) {
+			throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+		}
+		return List.of(branchId);
 	}
 }

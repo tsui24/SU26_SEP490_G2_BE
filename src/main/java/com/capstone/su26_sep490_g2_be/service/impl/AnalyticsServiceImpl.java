@@ -99,11 +99,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	private final TournamentFormatDefinitionRepository tournamentFormatDefinitionRepository;
 
 	@Override
-	public AnalyticsOverviewResponse buildOverview(Long ownerId, Instant fromParam, Instant toParam) {
+	public AnalyticsOverviewResponse buildOverview(Long ownerId, Instant fromParam, Instant toParam, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Tournament> allTournaments = ownerTournaments(ownerId);
+		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds);
 		List<Long> tournamentIds = ids(allTournaments);
 		Map<Long, Tournament> tournamentsById = allTournaments.stream()
 				.collect(Collectors.toMap(Tournament::getId, Function.identity()));
@@ -179,11 +179,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public RevenueBreakdownResponse buildRevenueBreakdown(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
+	public RevenueBreakdownResponse buildRevenueBreakdown(Long ownerId, Instant fromParam, Instant toParam, String granularity, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Tournament> allTournaments = ownerTournaments(ownerId);
+		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds);
 		List<Long> tournamentIds = ids(allTournaments);
 		Map<Long, Tournament> tournamentsById = allTournaments.stream()
 				.collect(Collectors.toMap(Tournament::getId, Function.identity()));
@@ -245,14 +245,14 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public List<TournamentPerformanceItem> buildTournamentPerformance(Long ownerId, Instant fromParam, Instant toParam) {
+	public List<TournamentPerformanceItem> buildTournamentPerformance(Long ownerId, Instant fromParam, Instant toParam, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
 		// Danh sách giải đấu KHÔNG lọc theo khoảng thời gian — "hiệu suất giải đấu" phải liệt kê đủ
 		// mọi giải của owner; chỉ riêng doanh thu mới scope theo [from,to] để khớp với phần còn lại
 		// của trang (KPI, xu hướng doanh thu...).
-		List<Tournament> allTournaments = ownerTournaments(ownerId);
+		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds);
 		List<Tournament> tournaments = allTournaments;
 		List<Long> tournamentIds = ids(allTournaments);
 
@@ -307,11 +307,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public List<PlayerLeaderboardItem> buildPlayerLeaderboard(Long ownerId, Instant fromParam, Instant toParam) {
+	public List<PlayerLeaderboardItem> buildPlayerLeaderboard(Long ownerId, Instant fromParam, Instant toParam, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
+		List<Long> tournamentIds = ids(ownerTournaments(ownerId, branchIds));
 		List<TournamentResult> results = scoped(tournamentIds, tournamentResultRepository::findByTournamentIdIn);
 
 		record Agg(String playerName, long tournamentsPlayed, long championCount, long top3Count,
@@ -351,11 +351,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public SocialEngagementResponse buildSocialEngagement(Long ownerId, Instant fromParam, Instant toParam) {
+	public SocialEngagementResponse buildSocialEngagement(Long ownerId, Instant fromParam, Instant toParam, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
+		List<Long> tournamentIds = ids(ownerTournaments(ownerId, branchIds));
 		List<FacebookPost> posts = scoped(tournamentIds, facebookPostRepository::findByTournamentIdIn).stream()
 				.filter(p -> inRange(p.getPostedAt(), from, to))
 				.toList();
@@ -382,11 +382,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public RegistrationStatsResponse buildRegistrationFunnel(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
+	public RegistrationStatsResponse buildRegistrationFunnel(Long ownerId, Instant fromParam, Instant toParam, String granularity, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
+		List<Long> tournamentIds = ids(ownerTournaments(ownerId, branchIds));
 		List<Registration> registrations = scoped(tournamentIds, registrationRepository::findByTournamentIdIn).stream()
 				.filter(r -> inRange(r.getCreatedAt(), from, to))
 				.toList();
@@ -418,11 +418,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public List<GameTypeBreakdownItem> buildGameTypeBreakdown(Long ownerId, Instant fromParam, Instant toParam) {
+	public List<GameTypeBreakdownItem> buildGameTypeBreakdown(Long ownerId, Instant fromParam, Instant toParam, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Tournament> allTournaments = ownerTournaments(ownerId);
+		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds);
 		List<Tournament> tournaments = tournamentsInRange(allTournaments, from, to);
 		List<Long> tournamentIds = ids(allTournaments);
 
@@ -465,11 +465,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public PlayerGrowthResponse buildPlayerGrowth(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
+	public PlayerGrowthResponse buildPlayerGrowth(Long ownerId, Instant fromParam, Instant toParam, String granularity, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
 
-		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
+		List<Long> tournamentIds = ids(ownerTournaments(ownerId, branchIds));
 		List<Registration> allRegistrations = scoped(tournamentIds, registrationRepository::findByTournamentIdIn);
 
 		Map<Long, Instant> firstRegistrationByUser = new LinkedHashMap<>();
@@ -510,11 +510,17 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public TournamentAnalyticsDetailResponse buildTournamentDetail(Long ownerId, Long tournamentId) {
+	public TournamentAnalyticsDetailResponse buildTournamentDetail(Long ownerId, Long tournamentId, List<Long> branchIds) {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 		if (ownerId != null && (tournament.getCreatedBy() == null || !tournament.getCreatedBy().getId().equals(ownerId))) {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		if (branchIds != null) {
+			Long tournamentBranchId = tournament.getBranch() != null ? tournament.getBranch().getId() : null;
+			if (tournamentBranchId == null || !branchIds.contains(tournamentBranchId)) {
+				throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+			}
 		}
 
 		List<Registration> registrations = registrationRepository.findByTournamentIdIn(List.of(tournamentId));
@@ -622,18 +628,18 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	@Override
-	public TransactionStatsResponse buildTransactionStats(Long ownerId, Instant fromParam, Instant toParam, String granularity) {
+	public TransactionStatsResponse buildTransactionStats(Long ownerId, Instant fromParam, Instant toParam, String granularity, List<Long> branchIds) {
 		Instant from = clampRangeStart(defaultFrom(fromParam), defaultTo(toParam));
 		Instant to = defaultTo(toParam);
-		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
+		List<Long> tournamentIds = ids(ownerTournaments(ownerId, branchIds));
 		List<Payment> payments = scoped(tournamentIds, paymentRepository::findByRegistration_Tournament_IdIn);
 		return buildTransactionStats(payments, from, to, granularity);
 	}
 
 	@Override
 	public PageResponse<PaymentHistoryResponse> listTransactions(
-			Long ownerId, Long tournamentId, String status, Instant fromParam, Instant toParam, int page, int size) {
-		List<Long> tournamentIds = ids(ownerTournaments(ownerId));
+			Long ownerId, Long tournamentId, String status, Instant fromParam, Instant toParam, int page, int size, List<Long> branchIds) {
+		List<Long> tournamentIds = ids(ownerTournaments(ownerId, branchIds));
 		if (tournamentId != null && ownerId != null && !tournamentIds.contains(tournamentId)) {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
@@ -648,7 +654,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	private static final int MAX_MONTHLY_REPORT_SPAN = 60;
 
 	@Override
-	public MonthlyReportResponse buildMonthlyReport(Long ownerId, YearMonth fromParam, YearMonth toParam) {
+	public MonthlyReportResponse buildMonthlyReport(Long ownerId, YearMonth fromParam, YearMonth toParam, List<Long> branchIds) {
 		YearMonth to = toParam != null ? toParam : YearMonth.now(ZONE);
 		YearMonth from = fromParam != null ? fromParam : to.minusMonths(11);
 		if (from.isAfter(to)) {
@@ -659,7 +665,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 			from = to.minusMonths(MAX_MONTHLY_REPORT_SPAN);
 		}
 
-		List<Tournament> allTournaments = ownerTournaments(ownerId);
+		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds);
 		List<Long> tournamentIds = ids(allTournaments);
 
 		List<Payment> success = scoped(tournamentIds, paymentRepository::findByRegistration_Tournament_IdIn).stream()
@@ -781,13 +787,24 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
 	// ──────────────────────────── shared helpers ────────────────────────────
 
-	private List<Tournament> ownerTournaments(Long ownerId) {
+	/**
+	 * branchIds null = không lọc theo chi nhánh (Owner mặc định xem toàn chuỗi); khác null = chỉ giữ
+	 * lại các giải đấu thuộc 1 trong các chi nhánh đó (dùng để Owner lọc theo 1 chi nhánh cụ thể, hoặc
+	 * để giới hạn Manager về đúng (các) chi nhánh họ được cấp quyền).
+	 */
+	private List<Tournament> ownerTournaments(Long ownerId, List<Long> branchIds) {
 		// KHÔNG được coi ownerId == null là "không lọc" rồi trả toàn bộ dữ liệu của mọi chủ sân —
 		// mọi endpoint gọi tới đây đều bắt buộc phải có ownerId xác định (Owner/Manager tự xem của mình).
 		if (ownerId == null) {
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
-		return tournamentRepository.findByCreatedById(ownerId);
+		List<Tournament> tournaments = tournamentRepository.findByCreatedById(ownerId);
+		if (branchIds == null) {
+			return tournaments;
+		}
+		return tournaments.stream()
+				.filter(t -> t.getBranch() != null && branchIds.contains(t.getBranch().getId()))
+				.toList();
 	}
 
 	private List<Long> ids(List<Tournament> tournaments) {
