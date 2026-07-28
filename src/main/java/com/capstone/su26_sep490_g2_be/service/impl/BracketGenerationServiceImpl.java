@@ -267,7 +267,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .tournament(t).stage(wStage).bracketType("WINNERS")
                         .roundNo(wr).positionNo(pos)
                         .matchCode("W-R%d-M%d".formatted(wr, pos))
-                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "winners_r" + wr))
+                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), resolveWinnersRoundKey(wr, wTotalRounds)))
                         .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
@@ -295,7 +295,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         for (int lr = 1; lr <= lTotalRounds; lr++) {
             int mc = losersMatchCount(bracketSize, lr);
-            String rk = (lr == lTotalRounds) ? "losers_final" : "losers_r" + lr;
+            String rk = resolveLosersRoundKey(lr, lTotalRounds);
             for (int pos = 1; pos <= mc; pos++) {
                 lGrid[lr][pos] = matchRepository.save(Match.builder()
                         .tournament(t).stage(lStage).bracketType("LOSERS")
@@ -640,8 +640,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
     private BracketResult generateProgressiveRoundRobin(Tournament t, List<Participant> participants) {
         int n = participants.size();
-        List<Integer> survivors = ProgressiveSurvivorsUtil.parse(
-                readStringConfig(t.getId(), "pe_survivors_per_stage", "10,6,4"));
+        List<Integer> survivors = parseProgressiveSurvivors(readStringConfig(t.getId(), "pe_survivors_per_stage", "10,6,4"));
         int numLeague = survivors.size();
 
         // Cấu hình pe_survivors_per_stage được validate lúc LƯU CONFIG dựa trên maxParticipants
@@ -658,6 +657,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                             + String.join("; ", turnoutErrors));
         }
 
+        validateProgressiveSurvivorsAgainstHeadcount(survivors, n);
         int raceToLeague = safeResolveRaceTo(t.getId(), t.getFormat(), "league_stage");
 
         List<TournamentStage> stages = new ArrayList<>();
@@ -806,7 +806,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         boolean allDone = !curMatches.isEmpty() && curMatches.stream().allMatch(this::isFinishedMatch);
         if (!allDone) throw new BusinessException(ErrorCode.PROGRESSIVE_STAGE_NOT_FINISHED);
 
-        List<Integer> survivors = ProgressiveSurvivorsUtil.parse(
+        List<Integer> survivors = parseProgressiveSurvivors(
                 readStringConfig(tournamentId, "pe_survivors_per_stage", "10,6,4"));
         int numLeague = survivors.size();
         int stageIndex = current.getPeRoundNo() != null ? current.getPeRoundNo() : 1; // 1-based
@@ -1288,6 +1288,32 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         };
     }
 
+    /**
+     * Round-key cho nhánh thắng DOUBLE_ELIMINATION — tính theo khoảng cách tới vòng cuối (giống
+     * {@link #resolveRoundKey}) thay vì đánh số cứng "winners_r{n}". Seed data chỉ có
+     * winners_r1/winners_qf/winners_sf/winners_final nên trước đây mọi vòng ngoài winners_r1 đều
+     * tra không ra và âm thầm rơi về race-to=7 hardcode — xem {@code safeResolveRaceTo}.
+     */
+    private String resolveWinnersRoundKey(int wr, int wTotalRounds) {
+        return switch (wTotalRounds - wr) {
+            case 0 -> "winners_final";
+            case 1 -> "winners_sf";
+            case 2 -> "winners_qf";
+            default -> "winners_r1";
+        };
+    }
+
+    /**
+     * Round-key cho nhánh thua DOUBLE_ELIMINATION — seed data chỉ có losers_r1/r2/r3/losers_final
+     * (đủ cho bracket ≤ 8 người); với bracket lớn hơn (lTotalRounds > 4), các vòng giữa dư ra được
+     * gộp về losers_r3 thay vì đánh số losers_r4/r5... (không tồn tại trong seed data → trước đây
+     * âm thầm rơi về race-to=7 hardcode).
+     */
+    private String resolveLosersRoundKey(int lr, int lTotalRounds) {
+        if (lr == lTotalRounds) return "losers_final";
+        return "losers_r" + Math.min(lr, 3);
+    }
+
     private int safeResolveRaceTo(Long tid, String format, String roundKey) {
         try { return raceToRuleService.resolveRaceTo(tid, format, roundKey); }
         catch (Exception e) {
@@ -1305,6 +1331,33 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         return configValueRepository.findByIdTournamentIdAndIdFieldKey(tournamentId, key)
                 .map(cv -> { try { return Integer.parseInt(cv.getValue()); } catch (Exception e) { return defaultVal; } })
                 .orElse(defaultVal);
+    }
+
+    /**
+     * Parse cấu hình {@code pe_survivors_per_stage} — bọc lỗi định dạng CSV thành BusinessException
+     * thay vì để {@link IllegalArgumentException} thô rơi xuống handler chung (500 không rõ nghĩa).
+     */
+    private List<Integer> parseProgressiveSurvivors(String csv) {
+        try {
+            return ProgressiveSurvivorsUtil.parse(csv);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.PROGRESSIVE_CONFIG_INVALID, e.getMessage());
+        }
+    }
+
+    /**
+     * Đối chiếu {@code pe_survivors_per_stage} với SỐ NGƯỜI THỰC TẾ đăng ký — chặn ngay lúc bốc
+     * thăm nếu cấu hình (vd mặc định "10,6,4", thiết kế cho giải ~16 người) không khớp headcount
+     * thật (vd chỉ 5 người đăng ký). Không chặn ở đây thì lỗi chỉ lộ ra giữa giải, khi
+     * advanceProgressiveStage/fillRoundRobinPlayers cố điền người thật vào nhiều ô placeholder hơn
+     * số người thật đang có → IndexOutOfBoundsException.
+     */
+    private void validateProgressiveSurvivorsAgainstHeadcount(List<Integer> survivors, int actualHeadcount) {
+        int playoffSize = survivors.get(survivors.size() - 1);
+        List<String> errors = ProgressiveSurvivorsUtil.validate(survivors, actualHeadcount, playoffSize);
+        if (!errors.isEmpty()) {
+            throw new BusinessException(ErrorCode.PROGRESSIVE_CONFIG_INVALID, String.join("; ", errors));
+        }
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1371,7 +1424,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .tournament(t).stage(wStage).bracketType("WINNERS")
                         .roundNo(wr).positionNo(pos)
                         .matchCode("W-R%d-M%d".formatted(wr, pos))
-                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "de_winners_r" + wr))
+                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), resolveWinnersRoundKey(wr, cutoffRound)))
                         .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
@@ -1393,7 +1446,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         for (int lr = 1; lr <= lCutoffRounds; lr++) {
             int mc  = losersMatchCount(bracketSize, lr);
-            String rk = (lr == lCutoffRounds) ? "de_losers_final" : "de_losers_r" + lr;
+            String rk = resolveLosersRoundKey(lr, lCutoffRounds);
             for (int pos = 1; pos <= mc; pos++) {
                 lGrid[lr][pos] = matchRepository.save(Match.builder()
                         .tournament(t).stage(lStage).bracketType("LOSERS")
@@ -1430,7 +1483,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         for (int sr = 1; sr <= seTotalRounds; sr++) {
             int mc  = seSize >> sr;
-            String rk = resolveSeRoundKey(sr, seTotalRounds, seSize);
+            String rk = resolveSeRoundKey(sr, seTotalRounds);
             for (int pos = 1; pos <= mc; pos++) {
                 seGrid[sr][pos] = matchRepository.save(Match.builder()
                         .tournament(t).stage(seStage).bracketType("KNOCKOUT")
@@ -1625,15 +1678,19 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
      * ═══════════════════════════════════════════════════════════ */
 
     /** SE round key dùng để lookup race-to rule. */
-    private String resolveSeRoundKey(int round, int totalRounds, int seSize) {
-        int fromEnd = totalRounds - round;
-        return switch (fromEnd) {
+    /**
+     * Round-key cho bracket SE (CUT_TO_SE) — trước đây vòng "default" sinh key phụ thuộc kích
+     * thước ("se_last_64", "se_last_32"...) nên KHÔNG BAO GIỜ khớp seed data (mỗi size lại ra 1
+     * key khác nhau, không thể seed hết) → luôn fallback race-to=7. Đổi về key ổn định, hữu hạn
+     * giống {@link #resolveRoundKey}/{@link #resolveWinnersRoundKey} để seed data thực sự áp dụng
+     * được cho mọi kích thước bracket.
+     */
+    private String resolveSeRoundKey(int round, int totalRounds) {
+        return switch (totalRounds - round) {
             case 0 -> "se_final";
             case 1 -> "se_semi_final";
             case 2 -> "se_quarter_final";
-            default -> "se_last_" + (seSize >> (round - 1));
-            // round=1, seSize=64 → se_last_64
-            // round=2, seSize=64 → se_last_32
+            default -> "se_round_1";
         };
     }
 
