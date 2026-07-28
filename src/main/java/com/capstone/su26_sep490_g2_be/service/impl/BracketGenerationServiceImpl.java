@@ -642,6 +642,21 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         int n = participants.size();
         List<Integer> survivors = parseProgressiveSurvivors(readStringConfig(t.getId(), "pe_survivors_per_stage", "10,6,4"));
         int numLeague = survivors.size();
+
+        // Cấu hình pe_survivors_per_stage được validate lúc LƯU CONFIG dựa trên maxParticipants
+        // (số slot tối đa của giải, VD 16) — không phải số người ĐĂNG KÝ THẬT lúc bốc thăm.
+        // Nếu số người tham gia thực tế ít hơn giả định của config (VD chỉ 8 người đăng ký
+        // nhưng config "10,6,4" được thiết kế cho 16), phải chặn lại ở đây thay vì sinh ra
+        // các giai đoạn sau với số lượng ảo lớn hơn số người thật.
+        List<String> turnoutErrors = ProgressiveSurvivorsUtil.validate(survivors, n, survivors.get(numLeague - 1));
+        if (!turnoutErrors.isEmpty()) {
+            throw new BusinessException(ErrorCode.PROGRESSIVE_CONFIG_INVALID,
+                    "Cấu hình \"Số người đi tiếp mỗi giai đoạn\" (" + survivors
+                            + ") không phù hợp với số người tham gia thực tế (" + n
+                            + " người). Vui lòng chỉnh lại cấu hình cho khớp số người đã đăng ký trước khi bốc thăm: "
+                            + String.join("; ", turnoutErrors));
+        }
+
         validateProgressiveSurvivorsAgainstHeadcount(survivors, n);
         int raceToLeague = safeResolveRaceTo(t.getId(), t.getFormat(), "league_stage");
 
