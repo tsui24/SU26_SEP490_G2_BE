@@ -505,7 +505,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			SaveTournamentConfigRequest request,
 			boolean enforceOwnership) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
-		assertEditableStatus(tournament);
+		assertConfigEditableStatus(tournament);
 
 		if (!SeedingMethod.isValid(request.getSeedingMethod())) {
 			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, List.of(
@@ -715,6 +715,11 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				registrationFormService.validateRegistrationSettings(
 						true, tournament.getRegistrationFormTemplateId());
 			}
+		}
+
+		if (TournamentStatus.REGISTRATION_CLOSED.getValue().equals(newStatus)
+				&& TournamentFormat.PROGRESSIVE_ROUND_ROBIN.getValue().equals(tournament.getFormat())) {
+			validateProgressiveTurnoutOrThrow(tournament);
 		}
 
 		if (TournamentStatus.COMPLETED.getValue().equals(newStatus)) {
@@ -1003,6 +1008,22 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	/**
+	 * Cấu hình thể thức (saveConfig) được nới rộng hơn assertEditableStatus: roster chỉ thực sự bị
+	 * khóa từ REGISTRATION_CLOSED trở đi (xem "rosterLocked" ở TournamentDetailPage.jsx — đăng ký
+	 * chỉ mở ở DRAFT/OPEN_FOR_REGISTRATION), nên owner vẫn cần sửa được config (VD
+	 * pe_survivors_per_stage khi số người đăng ký thực tế ít hơn giả định) miễn đăng ký còn mở.
+	 * Không dùng chung với assertEditableStatus vì updateTournament (đổi format, tên, chi nhánh...)
+	 * vẫn cần khóa cứng ở DRAFT như cũ.
+	 */
+	private void assertConfigEditableStatus(Tournament tournament) {
+		String status = tournament.getStatus();
+		if (!TournamentStatus.DRAFT.getValue().equals(status)
+				&& !TournamentStatus.OPEN_FOR_REGISTRATION.getValue().equals(status)) {
+			throw new BusinessException(ErrorCode.INVALID_OPERATION);
+		}
+	}
+
+	/**
 	 * Kiểm tra quyền của người tạo/sửa đối với chi nhánh, rồi chụp snapshot tên/địa chỉ
 	 * vào tournament (branch có thể đổi thông tin sau này mà không ảnh hưởng giải đã tạo).
 	 */
@@ -1177,6 +1198,44 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			errors.add(detail("pe_survivors_per_stage", msg));
 		}
 		return errors;
+	}
+
+	/**
+	 * Chốt đăng ký (đóng vòng đăng ký) cho PROGRESSIVE_ROUND_ROBIN: cấu hình pe_survivors_per_stage
+	 * được validate lúc LƯU CONFIG dựa trên maxParticipants (số slot tối đa của giải), không phải
+	 * số người ĐĂNG KÝ THẬT. Nếu tới lúc đóng đăng ký mà số người active vẫn ít hơn giả định của
+	 * config (VD chỉ 8 người trong khi config "10,6,4" thiết kế cho 16), việc chốt roster ở đây sẽ
+	 * khiến các giai đoạn sau sinh sai số lượng trận đấu. Chặn ngay tại bước "Đóng đăng ký" — sớm
+	 * hơn nhiều so với lúc bốc thăm — để owner còn cơ hội sửa lại config cho khớp số người thực tế.
+	 */
+	private void validateProgressiveTurnoutOrThrow(Tournament tournament) {
+		List<FormatConfigField> formatFields =
+				formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(tournament.getFormat());
+		String survivorsCsv = resolveFieldValueByKey(tournament.getId(), formatFields, "pe_survivors_per_stage");
+		if (survivorsCsv == null || survivorsCsv.isBlank()) {
+			return; // thiếu field bắt buộc đã được báo khi mở đăng ký (collectConfigErrors)
+		}
+
+		List<Integer> survivors;
+		try {
+			survivors = ProgressiveSurvivorsUtil.parse(survivorsCsv);
+		} catch (IllegalArgumentException e) {
+			return; // cấu hình sai định dạng đã được báo khi mở đăng ký
+		}
+
+		long activeCount = participantRepository.countByTournamentIdAndStatus(
+				tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+
+		List<String> turnoutErrors = ProgressiveSurvivorsUtil.validate(
+				survivors, (int) activeCount, survivors.get(survivors.size() - 1));
+		if (!turnoutErrors.isEmpty()) {
+			throw new BusinessException(ErrorCode.PROGRESSIVE_CONFIG_INVALID,
+					"Số người tham gia thực tế (" + activeCount
+							+ " người) chưa đủ so với cấu hình \"Số người đi tiếp mỗi giai đoạn\" (" + survivorsCsv
+							+ "). Điều này sẽ ảnh hưởng tới việc tạo các cặp trận ở những giai đoạn sau."
+							+ " Vui lòng sửa lại cấu hình cho khớp số người tham gia thực tế trước khi đóng đăng ký: "
+							+ String.join("; ", turnoutErrors));
+		}
 	}
 
 	private String resolveFieldValueByKey(Long tournamentId, List<FormatConfigField> formatFields, String fieldKey) {
