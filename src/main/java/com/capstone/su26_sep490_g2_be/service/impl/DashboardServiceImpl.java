@@ -72,13 +72,18 @@ public class DashboardServiceImpl implements DashboardService {
 	private final GameTypeDefinitionRepository gameTypeDefinitionRepository;
 
 	@Override
-	public DashboardStatsResponse buildStats(Long ownerUserId) {
+	public DashboardStatsResponse buildStats(Long ownerUserId, List<Long> branchIds) {
 		if (ownerUserId == null) {
 			// ownerUserId == null KHÔNG được coi là "xem toàn hệ thống" — mọi caller (Owner/Manager)
 			// đều phải xác định rõ mình thuộc owner nào, tránh lộ số liệu của owner khác.
 			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
 		}
 		List<Tournament> tournaments = tournamentRepository.findByCreatedById(ownerUserId);
+		if (branchIds != null) {
+			tournaments = tournaments.stream()
+					.filter(t -> t.getBranch() != null && branchIds.contains(t.getBranch().getId()))
+					.toList();
+		}
 
 		List<Long> tournamentIds = tournaments.stream().map(Tournament::getId).toList();
 

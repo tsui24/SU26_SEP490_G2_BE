@@ -33,4 +33,18 @@ public interface BranchAccessService {
 	 * toàn chuỗi; chỉ Manager mới bị giới hạn theo {@link #canManagerAccessBranch}.
 	 */
 	boolean canActorAccessBranch(User actor, Long branchId);
+
+	/**
+	 * Bộ lọc chi nhánh cho các trang thống kê/phân tích của Owner — không truyền branchId trả về
+	 * null (không lọc, xem toàn chuỗi); truyền branchId thì branch đó phải thuộc sở hữu của ownerId,
+	 * nếu không ném {@link com.capstone.su26_sep490_g2_be.enums.ErrorCode#BRANCH_ACCESS_DENIED}.
+	 */
+	List<Long> resolveOwnerBranchFilter(Long ownerId, Long branchId);
+
+	/**
+	 * Bộ lọc chi nhánh cho các trang thống kê/phân tích của Manager — luôn giới hạn về đúng (các)
+	 * chi nhánh manager được cấp quyền, không truyền branchId thì lấy toàn bộ danh sách đó; truyền
+	 * branchId thì chi nhánh đó phải nằm trong danh sách được cấp quyền.
+	 */
+	List<Long> resolveManagerBranchFilter(User manager, Long branchId);
 }
