@@ -112,10 +112,16 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			boolean filterByOwner,
 			String status,
 			String search,
+			String gameType,
+			String participantType,
+			Boolean isRegister,
+			Long branchId,
 			int page,
 			int size) {
 		String statusParam = (status == null || status.isBlank()) ? null : status.trim();
 		String searchParam = (search == null || search.isBlank()) ? null : search.trim();
+		String gameTypeParam = (gameType == null || gameType.isBlank()) ? null : gameType.trim();
+		String participantTypeParam = (participantType == null || participantType.isBlank()) ? null : participantType.trim();
 		List<Long> branchIds = filterByOwner ? resolveAccessibleBranchIds(userId) : null;
 
 		if (size < 1)
@@ -124,7 +130,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			page = 0;
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-		Specification<Tournament> spec = buildSpec(branchIds, statusParam, searchParam, null);
+		Specification<Tournament> spec = buildSpec(branchIds, statusParam, searchParam, null)
+				.and(buildExtraFiltersSpec(gameTypeParam, participantTypeParam, isRegister, branchId));
 		Page<Tournament> tournamentPage = tournamentRepository.findAll(spec, pageable);
 		return toListResponse(tournamentPage, true);
 	}
@@ -1460,6 +1467,28 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				predicates.add(cb.like(
 						cb.lower(root.get("name")),
 						"%" + search.toLowerCase() + "%"));
+			}
+			return cb.and(predicates.toArray(new Predicate[0]));
+		};
+	}
+
+	/** Filter bổ sung cho trang danh sách giải đấu của Owner/Manager — tách riêng để không đụng
+	 * tới {@link #buildSpec} vốn cũng được dùng cho danh sách công khai (player-facing). */
+	private Specification<Tournament> buildExtraFiltersSpec(
+			String gameType, String participantType, Boolean isRegister, Long branchId) {
+		return (root, query, cb) -> {
+			List<Predicate> predicates = new ArrayList<>();
+			if (gameType != null) {
+				predicates.add(cb.equal(root.get("gameType"), gameType));
+			}
+			if (participantType != null) {
+				predicates.add(cb.equal(root.get("participantType"), participantType));
+			}
+			if (isRegister != null) {
+				predicates.add(cb.equal(root.get("isRegister"), isRegister));
+			}
+			if (branchId != null) {
+				predicates.add(cb.equal(root.get("branch").get("id"), branchId));
 			}
 			return cb.and(predicates.toArray(new Predicate[0]));
 		};

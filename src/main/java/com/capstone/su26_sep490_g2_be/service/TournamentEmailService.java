@@ -28,5 +28,6 @@ public interface TournamentEmailService {
 			Long ruleId, boolean enabled);
 
 	PageResponse<EmailSendLogResponse> listLogs(Long userId, Long tournamentId, boolean enforceOwnership,
-			String status, int page, int size);
+			String status, String triggerType, String templateCode, String recipientEmail,
+			String fromDate, String toDate, int page, int size);
 }

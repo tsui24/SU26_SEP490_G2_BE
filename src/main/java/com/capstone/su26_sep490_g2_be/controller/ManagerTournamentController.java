@@ -33,11 +33,16 @@ public class ManagerTournamentController {
 			Authentication authentication,
 			@RequestParam(required = false) String status,
 			@RequestParam(required = false) String search,
+			@RequestParam(required = false) String gameType,
+			@RequestParam(required = false) String participantType,
+			@RequestParam(required = false) Boolean isRegister,
+			@RequestParam(required = false) Long branchId,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
 		return ResponseEntity.ok(ApiResponse.success(
 				ownerTournamentService.listTournaments(
-						extractUserId(authentication), true, status, search, page, size)));
+						extractUserId(authentication), true, status, search,
+						gameType, participantType, isRegister, branchId, page, size)));
 	}
 
 	@Operation(summary = "Danh sách thể thức")
