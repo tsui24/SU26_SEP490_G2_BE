@@ -86,6 +86,13 @@ public class MailRenderServiceImpl implements MailRenderService {
 			</html>
 			""";
 
+	private static final String LAYOUT_TEST_SUBJECT = "[Thử nghiệm] Kiểm tra khung email — {{system.appName}}";
+	private static final String LAYOUT_TEST_BODY = """
+			<p>Xin chào {{user.fullName}},</p>
+			<p>Đây là email <b>thử nghiệm</b> để kiểm tra khung header/footer trước khi áp dụng cho toàn hệ thống.</p>
+			<p>Nội dung thật của từng loại email (đăng ký, thanh toán, nhắc lịch thi đấu...) sẽ hiển thị ở vị trí này.</p>
+			""";
+
 	private final EmailTemplateRepository templateRepository;
 	private final MailLayoutSettingsRepository mailLayoutSettingsRepository;
 
@@ -114,15 +121,24 @@ public class MailRenderServiceImpl implements MailRenderService {
 
 	/** Bọc nội dung template đã render vào khung HTML thương hiệu chung (header/footer từ DB). */
 	private String wrapLayout(String innerBodyHtml, StringSubstitutor htmlSubstitutor) {
-		MailLayoutSettings layout = mailLayoutSettingsRepository.findFirstByOrderByIdAsc()
+		MailLayoutSettings layout = currentLayout();
+		return buildLayout(innerBodyHtml, htmlSubstitutor, layout.getHeaderHtml(), layout.getFooterHtml());
+	}
+
+	private String buildLayout(String innerBodyHtml, StringSubstitutor htmlSubstitutor,
+			String headerHtmlTemplate, String footerHtmlTemplate) {
+		String headerHtml = htmlSubstitutor.replace(headerHtmlTemplate);
+		String footerHtml = htmlSubstitutor.replace(footerHtmlTemplate);
+		return LAYOUT_HEAD + headerHtml + LAYOUT_AFTER_HEADER + innerBodyHtml
+				+ LAYOUT_AFTER_BODY + footerHtml + LAYOUT_TAIL;
+	}
+
+	private MailLayoutSettings currentLayout() {
+		return mailLayoutSettingsRepository.findFirstByOrderByIdAsc()
 				.orElseGet(() -> MailLayoutSettings.builder()
 						.headerHtml(MailLayoutSettings.DEFAULT_HEADER_HTML)
 						.footerHtml(MailLayoutSettings.DEFAULT_FOOTER_HTML)
 						.build());
-		String headerHtml = htmlSubstitutor.replace(layout.getHeaderHtml());
-		String footerHtml = htmlSubstitutor.replace(layout.getFooterHtml());
-		return LAYOUT_HEAD + headerHtml + LAYOUT_AFTER_HEADER + innerBodyHtml
-				+ LAYOUT_AFTER_BODY + footerHtml + LAYOUT_TAIL;
 	}
 
 	@Override
@@ -130,6 +146,37 @@ public class MailRenderServiceImpl implements MailRenderService {
 		EmailTemplate template = templateRepository.findByCode(templateCode)
 				.orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_TEMPLATE_NOT_FOUND));
 		return render(template, variables);
+	}
+
+	@Override
+	public RenderedEmailResponse renderLayoutTest(String headerHtmlOverride, String footerHtmlOverride,
+			Map<String, Object> variables) {
+		try {
+			Map<String, String> flatPlain = new LinkedHashMap<>();
+			Map<String, String> flatHtml = new LinkedHashMap<>();
+			flatten("", variables, flatPlain, flatHtml);
+
+			StringSubstitutor htmlSubstitutor = new StringSubstitutor(flatHtml, PREFIX, SUFFIX);
+			String subject = new StringSubstitutor(flatPlain, PREFIX, SUFFIX).replace(LAYOUT_TEST_SUBJECT);
+			String innerBodyHtml = htmlSubstitutor.replace(LAYOUT_TEST_BODY);
+
+			MailLayoutSettings layout = currentLayout();
+			String headerHtmlTemplate = (headerHtmlOverride != null && !headerHtmlOverride.isBlank())
+					? headerHtmlOverride
+					: layout.getHeaderHtml();
+			String footerHtmlTemplate = (footerHtmlOverride != null && !footerHtmlOverride.isBlank())
+					? footerHtmlOverride
+					: layout.getFooterHtml();
+			String bodyHtml = buildLayout(innerBodyHtml, htmlSubstitutor, headerHtmlTemplate, footerHtmlTemplate);
+
+			return RenderedEmailResponse.builder()
+					.subject(subject)
+					.bodyHtml(bodyHtml)
+					.build();
+		} catch (Exception e) {
+			log.error("Render layout test failed", e);
+			throw new BusinessException(ErrorCode.EMAIL_RENDER_FAILED);
+		}
 	}
 
 	/**

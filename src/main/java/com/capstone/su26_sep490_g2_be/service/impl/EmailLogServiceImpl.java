@@ -11,8 +11,11 @@ import com.capstone.su26_sep490_g2_be.repository.EmailSendLogRepository;
 import com.capstone.su26_sep490_g2_be.service.EmailLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -22,12 +25,22 @@ public class EmailLogServiceImpl implements EmailLogService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public PageResponse<EmailSendLogResponse> search(String status, Long tournamentId, int page, int size) {
+	public PageResponse<EmailSendLogResponse> search(String status, Long tournamentId, String triggerType,
+			String templateCode, String recipientEmail, Instant fromDate, Instant toDate, int page, int size) {
 		var result = emailSendLogRepository.search(
-				(status == null || status.isBlank()) ? null : status,
+				blankToNull(status),
 				tournamentId,
-				PageRequest.of(page, size));
+				blankToNull(triggerType),
+				blankToNull(templateCode),
+				blankToNull(recipientEmail),
+				fromDate,
+				toDate,
+				PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
 		return PageResponse.of(result, this::toResponse);
+	}
+
+	private String blankToNull(String value) {
+		return (value == null || value.isBlank()) ? null : value;
 	}
 
 	@Override

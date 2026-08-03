@@ -26,6 +26,19 @@ public interface EmailSendLogRepository extends JpaRepository<EmailSendLog, Long
 		SELECT l FROM EmailSendLog l
 		WHERE (:status IS NULL OR l.status = :status)
 		AND (:tournamentId IS NULL OR l.tournament.id = :tournamentId)
+		AND (:triggerType IS NULL OR l.triggerType = :triggerType)
+		AND (:templateCode IS NULL OR l.template.code = :templateCode)
+		AND (:recipientEmail IS NULL OR LOWER(l.recipientEmail) LIKE LOWER(CONCAT('%', :recipientEmail, '%')))
+		AND (:fromDate IS NULL OR l.createdAt >= :fromDate)
+		AND (:toDate IS NULL OR l.createdAt <= :toDate)
 		""")
-	Page<EmailSendLog> search(@Param("status") String status, @Param("tournamentId") Long tournamentId, Pageable pageable);
+	Page<EmailSendLog> search(
+			@Param("status") String status,
+			@Param("tournamentId") Long tournamentId,
+			@Param("triggerType") String triggerType,
+			@Param("templateCode") String templateCode,
+			@Param("recipientEmail") String recipientEmail,
+			@Param("fromDate") Instant fromDate,
+			@Param("toDate") Instant toDate,
+			Pageable pageable);
 }
