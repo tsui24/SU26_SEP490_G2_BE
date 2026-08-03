@@ -1,15 +1,22 @@
 package com.capstone.su26_sep490_g2_be.controller;
 
+import com.capstone.su26_sep490_g2_be.dto.request.AnalyticsQueryRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.SavedViewRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.AnalyticsOverviewResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.AnalyticsQueryResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.GameTypeBreakdownItem;
+import com.capstone.su26_sep490_g2_be.dto.response.InsightItem;
 import com.capstone.su26_sep490_g2_be.dto.response.MonthlyReportResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PaymentHistoryResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.PlayerAnalyticsDetailResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PlayerGrowthResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PlayerLeaderboardItem;
+import com.capstone.su26_sep490_g2_be.dto.response.PlayerRetentionResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.RegistrationStatsResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.RevenueBreakdownResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.SavedViewResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.SocialEngagementResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentAnalyticsDetailResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentPerformanceItem;
@@ -25,14 +32,18 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,6 +70,8 @@ public class AnalyticsController {
     private static final String BRANCH_ID_DESC =
             "Lọc theo 1 chi nhánh cụ thể — Owner có thể chọn bất kỳ chi nhánh nào của mình (bỏ trống = toàn chuỗi); " +
             "Manager luôn bị giới hạn về (các) chi nhánh mình được cấp quyền dù có truyền hay không.";
+    private static final String GAME_TYPES_DESC = "Lọc theo 1 hoặc nhiều loại bi (mã game type) — bỏ trống = không lọc.";
+    private static final String STATUSES_DESC = "Lọc theo 1 hoặc nhiều trạng thái giải đấu — bỏ trống = không lọc.";
 
     private final AnalyticsService analyticsService;
     private final AnalyticsExcelService analyticsExcelService;
@@ -72,11 +85,13 @@ public class AnalyticsController {
     public ResponseEntity<ApiResponse<AnalyticsOverviewResponse>> ownerOverview(
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildOverview(ownerId, parseFrom(from), parseTo(to), branchIds)));
+                analyticsService.buildOverview(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Phân tích doanh thu — Owner")
@@ -85,11 +100,13 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildRevenueBreakdown(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildRevenueBreakdown(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Hiệu suất giải đấu — Owner")
@@ -97,23 +114,58 @@ public class AnalyticsController {
     public ResponseEntity<ApiResponse<List<TournamentPerformanceItem>>> ownerTournaments(
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildTournamentPerformance(ownerId, parseFrom(from), parseTo(to), branchIds)));
+                analyticsService.buildTournamentPerformance(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses)));
     }
 
-    @Operation(summary = "Bảng xếp hạng cơ thủ — Owner")
+    @Operation(summary = "Bảng xếp hạng cơ thủ — Owner",
+            description = "sortBy: PRIZE|POINTS|TOURNAMENTS|SPEND|WINS|MATCHES|RECENCY (mặc định PRIZE). " +
+                    "segment: ALL|NEW|RETURNING|CHAMPION|AT_RISK (mặc định ALL).")
     @GetMapping("/owner/analytics/players")
     public ResponseEntity<ApiResponse<List<PlayerLeaderboardItem>>> ownerPlayers(
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String segment,
+            @RequestParam(required = false) String search) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildPlayerLeaderboard(ownerId, parseFrom(from), parseTo(to), branchIds)));
+                analyticsService.buildPlayerLeaderboard(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses,
+                        sortBy, limit, segment, search)));
+    }
+
+    @Operation(summary = "Retention & lòng trung thành cơ thủ — Owner")
+    @GetMapping("/owner/analytics/players/retention")
+    public ResponseEntity<ApiResponse<PlayerRetentionResponse>> ownerPlayerRetention(
+            Authentication authentication,
+            @RequestParam(required = false) String from, @RequestParam(required = false) String to,
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
+        Long ownerId = extractUserId(authentication);
+        List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
+        return ResponseEntity.ok(ApiResponse.success(
+                analyticsService.buildPlayerRetention(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses)));
+    }
+
+    @Operation(summary = "Drill-down lịch sử 1 người chơi — Owner")
+    @GetMapping("/owner/analytics/players/{userId}")
+    public ResponseEntity<ApiResponse<PlayerAnalyticsDetailResponse>> ownerPlayerDetail(
+            Authentication authentication, @PathVariable Long userId,
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+        Long ownerId = extractUserId(authentication);
+        List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.buildPlayerDetail(ownerId, userId, branchIds)));
     }
 
     @Operation(summary = "Hiệu quả truyền thông Facebook — Owner")
@@ -134,11 +186,13 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildRegistrationFunnel(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildRegistrationFunnel(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Phân bố theo loại bi — Owner")
@@ -159,11 +213,56 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildPlayerGrowth(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildPlayerGrowth(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
+    }
+
+    @Operation(summary = "Chip insight tự động — Owner")
+    @GetMapping("/owner/analytics/insights")
+    public ResponseEntity<ApiResponse<List<InsightItem>>> ownerInsights(
+            Authentication authentication,
+            @RequestParam(required = false) String from, @RequestParam(required = false) String to,
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+        Long ownerId = extractUserId(authentication);
+        List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.buildInsights(ownerId, parseFrom(from), parseTo(to), branchIds)));
+    }
+
+    @Operation(summary = "Truy vấn phân tích linh hoạt (dimension/metric tùy chọn) — Owner")
+    @PostMapping("/owner/analytics/query")
+    public ResponseEntity<ApiResponse<AnalyticsQueryResponse>> ownerQuery(
+            Authentication authentication, @Valid @RequestBody AnalyticsQueryRequest request) {
+        Long ownerId = extractUserId(authentication);
+        // Owner không bị giới hạn chi nhánh (null = toàn chuỗi) — service tự validate request.branchIds() thuộc owner.
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.runQuery(ownerId, null, request)));
+    }
+
+    @Operation(summary = "Danh sách báo cáo đã lưu — Owner")
+    @GetMapping("/owner/analytics/views")
+    public ResponseEntity<ApiResponse<List<SavedViewResponse>>> ownerListViews(Authentication authentication) {
+        Long ownerId = extractUserId(authentication);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.listSavedViews(ownerId)));
+    }
+
+    @Operation(summary = "Lưu 1 báo cáo tùy chỉnh — Owner")
+    @PostMapping("/owner/analytics/views")
+    public ResponseEntity<ApiResponse<SavedViewResponse>> ownerCreateView(
+            Authentication authentication, @Valid @RequestBody SavedViewRequest request) {
+        Long ownerId = extractUserId(authentication);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.createSavedView(ownerId, request)));
+    }
+
+    @Operation(summary = "Xóa 1 báo cáo đã lưu — Owner")
+    @DeleteMapping("/owner/analytics/views/{viewId}")
+    public ResponseEntity<ApiResponse<Void>> ownerDeleteView(Authentication authentication, @PathVariable Long viewId) {
+        Long ownerId = extractUserId(authentication);
+        analyticsService.deleteSavedView(ownerId, viewId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @Operation(summary = "Chi tiết 1 giải đấu — Owner")
@@ -180,11 +279,13 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildTransactionStats(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildTransactionStats(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Danh sách giao dịch (phân trang, lọc) — Owner", description = "tournamentId bỏ trống = xem tất cả giao dịch của mọi giải")
@@ -195,11 +296,13 @@ public class AnalyticsController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         Long ownerId = extractUserId(authentication);
         List<Long> branchIds = branchAccessService.resolveOwnerBranchFilter(ownerId, branchId);
         return ResponseEntity.ok(ApiResponse.success(analyticsService.listTransactions(
-                ownerId, tournamentId, status, parseFrom(from), parseTo(to), page, size, branchIds)));
+                ownerId, tournamentId, status, parseFrom(from), parseTo(to), page, size, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Xuất báo cáo Excel — Owner")
@@ -251,12 +354,14 @@ public class AnalyticsController {
     public ResponseEntity<ApiResponse<AnalyticsOverviewResponse>> managerOverview(
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildOverview(ownerId, parseFrom(from), parseTo(to), branchIds)));
+                analyticsService.buildOverview(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Phân tích doanh thu — Manager")
@@ -265,12 +370,14 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildRevenueBreakdown(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildRevenueBreakdown(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Hiệu suất giải đấu — Manager")
@@ -278,12 +385,14 @@ public class AnalyticsController {
     public ResponseEntity<ApiResponse<List<TournamentPerformanceItem>>> managerTournaments(
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildTournamentPerformance(ownerId, parseFrom(from), parseTo(to), branchIds)));
+                analyticsService.buildTournamentPerformance(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Bảng xếp hạng cơ thủ — Manager")
@@ -291,12 +400,45 @@ public class AnalyticsController {
     public ResponseEntity<ApiResponse<List<PlayerLeaderboardItem>>> managerPlayers(
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String segment,
+            @RequestParam(required = false) String search) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildPlayerLeaderboard(ownerId, parseFrom(from), parseTo(to), branchIds)));
+                analyticsService.buildPlayerLeaderboard(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses,
+                        sortBy, limit, segment, search)));
+    }
+
+    @Operation(summary = "Retention & lòng trung thành cơ thủ — Manager")
+    @GetMapping("/manager/analytics/players/retention")
+    public ResponseEntity<ApiResponse<PlayerRetentionResponse>> managerPlayerRetention(
+            Authentication authentication,
+            @RequestParam(required = false) String from, @RequestParam(required = false) String to,
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
+        User manager = securityUtil.resolveCurrentUser(authentication);
+        Long ownerId = resolveManagerOwnerId(manager);
+        List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
+        return ResponseEntity.ok(ApiResponse.success(
+                analyticsService.buildPlayerRetention(ownerId, parseFrom(from), parseTo(to), branchIds, gameTypes, statuses)));
+    }
+
+    @Operation(summary = "Drill-down lịch sử 1 người chơi — Manager")
+    @GetMapping("/manager/analytics/players/{userId}")
+    public ResponseEntity<ApiResponse<PlayerAnalyticsDetailResponse>> managerPlayerDetail(
+            Authentication authentication, @PathVariable Long userId,
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+        User manager = securityUtil.resolveCurrentUser(authentication);
+        Long ownerId = resolveManagerOwnerId(manager);
+        List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.buildPlayerDetail(ownerId, userId, branchIds)));
     }
 
     @Operation(summary = "Hiệu quả truyền thông Facebook — Manager")
@@ -318,12 +460,14 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildRegistrationFunnel(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildRegistrationFunnel(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Phân bố theo loại bi — Manager")
@@ -345,12 +489,59 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildPlayerGrowth(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildPlayerGrowth(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
+    }
+
+    @Operation(summary = "Chip insight tự động — Manager")
+    @GetMapping("/manager/analytics/insights")
+    public ResponseEntity<ApiResponse<List<InsightItem>>> managerInsights(
+            Authentication authentication,
+            @RequestParam(required = false) String from, @RequestParam(required = false) String to,
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+        User manager = securityUtil.resolveCurrentUser(authentication);
+        Long ownerId = resolveManagerOwnerId(manager);
+        List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.buildInsights(ownerId, parseFrom(from), parseTo(to), branchIds)));
+    }
+
+    @Operation(summary = "Truy vấn phân tích linh hoạt (dimension/metric tùy chọn) — Manager")
+    @PostMapping("/manager/analytics/query")
+    public ResponseEntity<ApiResponse<AnalyticsQueryResponse>> managerQuery(
+            Authentication authentication, @Valid @RequestBody AnalyticsQueryRequest request) {
+        User manager = securityUtil.resolveCurrentUser(authentication);
+        Long ownerId = resolveManagerOwnerId(manager);
+        List<Long> accessibleBranchIds = branchAccessService.getAccessibleBranchIds(manager);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.runQuery(ownerId, accessibleBranchIds, request)));
+    }
+
+    @Operation(summary = "Danh sách báo cáo đã lưu — Manager")
+    @GetMapping("/manager/analytics/views")
+    public ResponseEntity<ApiResponse<List<SavedViewResponse>>> managerListViews(Authentication authentication) {
+        Long managerId = extractUserId(authentication);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.listSavedViews(managerId)));
+    }
+
+    @Operation(summary = "Lưu 1 báo cáo tùy chỉnh — Manager")
+    @PostMapping("/manager/analytics/views")
+    public ResponseEntity<ApiResponse<SavedViewResponse>> managerCreateView(
+            Authentication authentication, @Valid @RequestBody SavedViewRequest request) {
+        Long managerId = extractUserId(authentication);
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.createSavedView(managerId, request)));
+    }
+
+    @Operation(summary = "Xóa 1 báo cáo đã lưu — Manager")
+    @DeleteMapping("/manager/analytics/views/{viewId}")
+    public ResponseEntity<ApiResponse<Void>> managerDeleteView(Authentication authentication, @PathVariable Long viewId) {
+        Long managerId = extractUserId(authentication);
+        analyticsService.deleteSavedView(managerId, viewId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @Operation(summary = "Chi tiết 1 giải đấu — Manager")
@@ -369,12 +560,14 @@ public class AnalyticsController {
             Authentication authentication,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(
-                analyticsService.buildTransactionStats(ownerId, parseFrom(from), parseTo(to), granularity, branchIds)));
+                analyticsService.buildTransactionStats(ownerId, parseFrom(from), parseTo(to), granularity, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Danh sách giao dịch (phân trang, lọc) — Manager", description = "tournamentId bỏ trống = xem tất cả giao dịch của mọi giải")
@@ -385,12 +578,14 @@ public class AnalyticsController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId) {
+            @Parameter(description = BRANCH_ID_DESC) @RequestParam(required = false) Long branchId,
+            @Parameter(description = GAME_TYPES_DESC) @RequestParam(required = false) List<String> gameTypes,
+            @Parameter(description = STATUSES_DESC) @RequestParam(required = false) List<String> statuses) {
         User manager = securityUtil.resolveCurrentUser(authentication);
         Long ownerId = resolveManagerOwnerId(manager);
         List<Long> branchIds = branchAccessService.resolveManagerBranchFilter(manager, branchId);
         return ResponseEntity.ok(ApiResponse.success(analyticsService.listTransactions(
-                ownerId, tournamentId, status, parseFrom(from), parseTo(to), page, size, branchIds)));
+                ownerId, tournamentId, status, parseFrom(from), parseTo(to), page, size, branchIds, gameTypes, statuses)));
     }
 
     @Operation(summary = "Xuất báo cáo Excel — Manager")
