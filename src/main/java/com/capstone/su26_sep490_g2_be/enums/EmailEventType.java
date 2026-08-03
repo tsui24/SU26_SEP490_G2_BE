@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum EmailEventType {
 
+	USER_REGISTERED("Người dùng đăng ký tài khoản mới"),
 	REGISTRATION_SUBMITTED("Đăng ký mới được gửi"),
 	REGISTRATION_APPROVED("Đăng ký được duyệt"),
 	REGISTRATION_REJECTED("Đăng ký bị từ chối"),
