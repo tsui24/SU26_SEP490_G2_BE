@@ -37,9 +37,14 @@ import com.capstone.su26_sep490_g2_be.service.MailSendService;
 import com.capstone.su26_sep490_g2_be.service.TournamentEmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -171,12 +176,28 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<EmailSendLogResponse> listLogs(Long userId, Long tournamentId, boolean enforceOwnership,
-			String status, int page, int size) {
+			String status, String triggerType, String templateCode, String recipientEmail,
+			String fromDate, String toDate, int page, int size) {
 		loadTournament(userId, tournamentId, enforceOwnership);
-		var result = (status == null || status.isBlank())
-				? emailSendLogRepository.findByTournamentId(tournamentId, PageRequest.of(page, size))
-				: emailSendLogRepository.findByTournamentIdAndStatus(tournamentId, status, PageRequest.of(page, size));
+		var result = emailSendLogRepository.search(
+				blankToNull(status), tournamentId, blankToNull(triggerType), blankToNull(templateCode),
+				blankToNull(recipientEmail), parseFrom(fromDate), parseTo(toDate),
+				PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
 		return PageResponse.of(result, this::toResponse);
+	}
+
+	private String blankToNull(String value) {
+		return (value == null || value.isBlank()) ? null : value;
+	}
+
+	private Instant parseFrom(String from) {
+		if (from == null || from.isBlank()) return null;
+		return LocalDate.parse(from.trim()).atStartOfDay(ZoneId.systemDefault()).toInstant();
+	}
+
+	private Instant parseTo(String to) {
+		if (to == null || to.isBlank()) return null;
+		return LocalDate.parse(to.trim()).atTime(LocalTime.MAX).atZone(ZoneId.systemDefault()).toInstant();
 	}
 
 	private Tournament loadTournament(Long userId, Long tournamentId, boolean enforceOwnership) {

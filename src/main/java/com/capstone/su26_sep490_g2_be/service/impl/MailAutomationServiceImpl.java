@@ -46,7 +46,10 @@ public class MailAutomationServiceImpl implements MailAutomationService {
 		List<EmailAutomationRule> rules = ruleRepository.findByTournamentId(tournamentId);
 		List<EmailAutomationRuleResponse> result = new java.util.ArrayList<>(
 				rules.stream().map(this::toResponse).toList());
+		// Rule GLOBAL nhưng gắn sự kiện tài khoản (USER_REGISTERED, STAFF/MANAGER_ACCOUNT_CREATED)
+		// không liên quan tới 1 giải đấu cụ thể — chỉ Admin thấy ở trang quản trị toàn hệ thống.
 		result.addAll(ruleRepository.findByScope(EmailScope.GLOBAL.getValue()).stream()
+				.filter(r -> EmailEventType.valueOf(r.getEventType()).isTournamentScoped())
 				.map(this::toResponse)
 				.toList());
 		return result;
