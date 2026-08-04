@@ -28,6 +28,7 @@ final class PublicEndpoints {
 			"/api/v1/tournaments/**",
 			"/api/v1/branches",
 			"/api/v1/branches/**",
+			"/api/v1/participants/**",
 			"/api/v1/news",
 			"/api/v1/news/**",
 			"/api/v1/matches/**",
