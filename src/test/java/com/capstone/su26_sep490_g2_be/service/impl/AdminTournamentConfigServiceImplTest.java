@@ -1,18 +1,34 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.request.BootstrapDefaultsRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.CreateConfigFieldCatalogRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.CreateFormatRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.CreateGameTypeRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.PatchFormatActiveRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.UpdateConfigFieldCatalogRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.UpdateFormatRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.UpdateGameTypeRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.UpsertFormatConfigFieldsRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.UpsertFormatRaceToRulesRequest;
+import com.capstone.su26_sep490_g2_be.dto.response.ConfigFieldCatalogItemResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.FormatActivateResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.FormatBootstrapResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.FormatConfigFieldsFormResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.FormatConfigFieldsSaveResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.FormatCreateResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.FormatListItemResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.FormatRaceToRulesFormResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.FormatRaceToRulesSaveResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.FormatSetupSummaryResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.GameTypeDetailResponse;
+import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.entity.ConfigFieldDefinition;
 import com.capstone.su26_sep490_g2_be.entity.FormatConfigField;
 import com.capstone.su26_sep490_g2_be.entity.FormatRaceToRule;
+import com.capstone.su26_sep490_g2_be.entity.GameTypeDefinition;
 import com.capstone.su26_sep490_g2_be.entity.TournamentFormatDefinition;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.enums.FormatSetupStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ConfigFieldDefinitionRepository;
 import com.capstone.su26_sep490_g2_be.repository.FormatConfigFieldRepository;
@@ -20,6 +36,12 @@ import com.capstone.su26_sep490_g2_be.repository.FormatRaceToRuleRepository;
 import com.capstone.su26_sep490_g2_be.repository.GameTypeDefinitionRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentFormatDefinitionRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,17 +49,25 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -116,6 +146,75 @@ class AdminTournamentConfigServiceImplTest {
 		UpsertFormatConfigFieldsRequest r = new UpsertFormatConfigFieldsRequest();
 		r.setFields(List.of(items));
 		return r;
+	}
+
+	private static UpsertFormatRaceToRulesRequest.FormatRaceToRuleItemRequest ruleItem(
+			String roundKey, String label, String phase, Integer raceTo) {
+		UpsertFormatRaceToRulesRequest.FormatRaceToRuleItemRequest i =
+				new UpsertFormatRaceToRulesRequest.FormatRaceToRuleItemRequest();
+		i.setRoundKey(roundKey);
+		i.setLabel(label);
+		i.setBracketPhase(phase);
+		i.setRaceTo(raceTo);
+		return i;
+	}
+
+	private static UpsertFormatRaceToRulesRequest rulesRequest(
+			UpsertFormatRaceToRulesRequest.FormatRaceToRuleItemRequest... items) {
+		UpsertFormatRaceToRulesRequest r = new UpsertFormatRaceToRulesRequest();
+		r.setRules(List.of(items));
+		return r;
+	}
+
+	private static ConfigFieldDefinition catalogField(String key, String dataType, String uiComponent) {
+		return ConfigFieldDefinition.builder()
+				.fieldKey(key).label("Kích thước nhánh").description("Số tay cơ vào nhánh")
+				.dataType(dataType).fieldScope("KNOCKOUT").uiComponent(uiComponent)
+				.minValue(4).maxValue(128).isActive(true)
+				.build();
+	}
+
+	private static CreateConfigFieldCatalogRequest catalogCreateRequest(
+			String dataType, String scope, String uiComponent) {
+		CreateConfigFieldCatalogRequest r = new CreateConfigFieldCatalogRequest();
+		r.setFieldKey("bracket_size");
+		r.setLabel("Kích thước nhánh");
+		r.setDataType(dataType);
+		r.setFieldScope(scope);
+		r.setUiComponent(uiComponent);
+		return r;
+	}
+
+	private static GameTypeDefinition gameType(String code) {
+		return GameTypeDefinition.builder()
+				.code(code).name("9-Ball").description("Race-to, alternate break")
+				.defaultRaceTo(7).compatibleTableTypes("[\"POOL\"]").isActive(true)
+				.build();
+	}
+
+	/**
+	 * Runs a captured {@link Specification} against a mocked Criteria API so the lambda body — the
+	 * part a plain repository mock never reaches — actually executes and can be asserted on.
+	 */
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	private static <T> CriteriaBuilder runSpecification(Specification<T> spec, Root<T> root) {
+		CriteriaBuilder cb = mock(CriteriaBuilder.class, RETURNS_DEEP_STUBS);
+		spec.toPredicate(root, mock(CriteriaQuery.class), cb);
+		return cb;
+	}
+
+	@SuppressWarnings("unchecked")
+	private Specification<ConfigFieldDefinition> captureCatalogSpecification() {
+		ArgumentCaptor<Specification> captor = ArgumentCaptor.forClass(Specification.class);
+		verify(configFieldRepository).findAll(captor.capture(), any(Pageable.class));
+		return captor.getValue();
+	}
+
+	@SuppressWarnings("unchecked")
+	private Specification<GameTypeDefinition> captureGameTypeSpecification() {
+		ArgumentCaptor<Specification> captor = ArgumentCaptor.forClass(Specification.class);
+		verify(gameTypeRepository).findAll(captor.capture(), any(Pageable.class));
+		return captor.getValue();
 	}
 
 	// ══════════════════════════ createFormat — UC-12.1 ══════════════════════════
@@ -483,5 +582,735 @@ class AdminTournamentConfigServiceImplTest {
 		assertFalse(status.getMissingSteps().isEmpty());
 		assertEquals(0L, status.getConfigFieldCount());
 		assertEquals(0L, status.getRaceToRuleCount());
+	}
+
+	// ══════════════ config field catalog — UC-10.2 (read) ══════════════
+
+	@Test
+	@DisplayName("TC-024 · Listing the catalog returns the stored enum options as a list")
+	void TC024_getConfigFieldCatalog_mapsEntities() {
+		ConfigFieldDefinition def = catalogField("break_rule", "ENUM", "SELECT");
+		def.setEnumOptions("[\"ALTERNATE_BREAK\",\"WINNER_BREAK\"]");
+		when(configFieldRepository.findAll(any(Specification.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of(def)));
+
+		PageResponse<ConfigFieldCatalogItemResponse> response =
+				service.getConfigFieldCatalog(null, null, 0, 20);
+
+		assertEquals(1, response.getContent().size());
+		ConfigFieldCatalogItemResponse item = response.getContent().get(0);
+		assertEquals("break_rule", item.getFieldKey());
+		// The column stores JSON; the catalog screen needs the options back as a real list
+		assertEquals(List.of("ALTERNATE_BREAK", "WINNER_BREAK"), item.getEnumOptions());
+	}
+
+	@Test
+	@DisplayName("TC-025 · Scope filter accepts both a comma-separated value and repeated parameters")
+	void TC025_getConfigFieldCatalog_scopeFilterNormalised() {
+		when(configFieldRepository.findAll(any(Specification.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of()));
+
+		service.getConfigFieldCatalog(List.of("common,knockout", " group ", "COMMON"), null, 0, 20);
+
+		Root<ConfigFieldDefinition> root = mock(Root.class, RETURNS_DEEP_STUBS);
+		Path<Object> scopePath = root.get("fieldScope");
+		runSpecification(captureCatalogSpecification(), root);
+
+		ArgumentCaptor<Collection> scopes = ArgumentCaptor.forClass(Collection.class);
+		verify(scopePath).in(scopes.capture());
+		// Trimmed, upper-cased and de-duplicated, so scope=COMMON,KNOCKOUT and
+		// scope=COMMON&scope=KNOCKOUT (what axios sends) behave the same way
+		assertEquals(List.of("COMMON", "KNOCKOUT", "GROUP"), List.copyOf(scopes.getValue()));
+	}
+
+	@Test
+	@DisplayName("TC-026 · No filter builds a specification that matches everything")
+	void TC026_getConfigFieldCatalog_noFilter() {
+		when(configFieldRepository.findAll(any(Specification.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of()));
+
+		service.getConfigFieldCatalog(List.of(), null, 0, 20);
+
+		CriteriaBuilder cb = runSpecification(captureCatalogSpecification(),
+				mock(Root.class, RETURNS_DEEP_STUBS));
+		verify(cb).conjunction();
+		verify(cb, never()).equal(any(Expression.class), any(Object.class));
+	}
+
+	@Test
+	@DisplayName("TC-027 · Opening a catalog field that does not exist")
+	void TC027_getConfigFieldCatalogItem_notFound() {
+		when(configFieldRepository.findById("no_such")).thenReturn(Optional.empty());
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.getConfigFieldCatalogItem("no_such"));
+
+		assertEquals(ErrorCode.INVALID_FIELD_KEY, ex.getErrorCode());
+	}
+
+	// ══════════════ createConfigFieldCatalogItem — UC-10.1 ══════════════
+
+	@Test
+	@DisplayName("TC-028 · Creating a catalog field normalises its three type columns")
+	void TC028_createConfigField_normalisesAndDefaultsActive() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+		when(configFieldRepository.save(any(ConfigFieldDefinition.class)))
+				.thenAnswer(inv -> inv.getArgument(0));
+
+		CreateConfigFieldCatalogRequest request = catalogCreateRequest(" int ", " knockout ", " number ");
+		ConfigFieldCatalogItemResponse response = service.createConfigFieldCatalogItem(request);
+
+		// Everything downstream compares these three columns as upper-case constants
+		assertEquals("INT", response.getDataType());
+		assertEquals("KNOCKOUT", response.getFieldScope());
+		assertEquals("NUMBER", response.getUiComponent());
+		// UC-10.1 Request Fields: isActive defaults to true when omitted
+		assertTrue(response.getIsActive());
+		assertNull(response.getEnumOptions());
+	}
+
+	@Test
+	@DisplayName("TC-029 · A field key already in the catalog is rejected")
+	void TC029_createConfigField_duplicateKey() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(true);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(catalogCreateRequest("INT", "KNOCKOUT", "NUMBER")));
+
+		assertEquals(ErrorCode.DUPLICATE_RESOURCE, ex.getErrorCode());
+		verify(configFieldRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-030 · An unsupported data type is rejected")
+	void TC030_createConfigField_invalidDataType() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(catalogCreateRequest("DECIMAL", "KNOCKOUT", "NUMBER")));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+		verify(configFieldRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-031 · An unsupported field scope is rejected")
+	void TC031_createConfigField_invalidScope() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(catalogCreateRequest("INT", "LEAGUE", "NUMBER")));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+	}
+
+	@Test
+	@DisplayName("TC-032 · A UI component that contradicts the data type is rejected")
+	void TC032_createConfigField_uiComponentMismatch() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(catalogCreateRequest("INT", "KNOCKOUT", "SELECT")));
+
+		// An INT rendered as a dropdown would give the Owner no valid way to enter a value
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+		verify(configFieldRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-033 · An ENUM field with no options is rejected")
+	void TC033_createConfigField_enumWithoutOptions() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(catalogCreateRequest("ENUM", "COMMON", "SELECT")));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+	}
+
+	@Test
+	@DisplayName("TC-034 · An INT field whose minimum exceeds its maximum is rejected")
+	void TC034_createConfigField_minAboveMax() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+
+		CreateConfigFieldCatalogRequest request = catalogCreateRequest("INT", "KNOCKOUT", "NUMBER");
+		request.setMinValue(64);
+		request.setMaxValue(16);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(request));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+	}
+
+	@Test
+	@DisplayName("TC-035 · An ENUM field with options is stored as JSON")
+	void TC035_createConfigField_enumOptionsStoredAsJson() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+		when(configFieldRepository.save(any(ConfigFieldDefinition.class)))
+				.thenAnswer(inv -> inv.getArgument(0));
+
+		CreateConfigFieldCatalogRequest request = catalogCreateRequest("ENUM", "COMMON", "SELECT");
+		request.setEnumOptions(List.of("ALTERNATE_BREAK", "WINNER_BREAK"));
+		request.setIsActive(false);
+
+		ConfigFieldCatalogItemResponse response = service.createConfigFieldCatalogItem(request);
+
+		ArgumentCaptor<ConfigFieldDefinition> saved = ArgumentCaptor.forClass(ConfigFieldDefinition.class);
+		verify(configFieldRepository).save(saved.capture());
+		assertEquals("[\"ALTERNATE_BREAK\",\"WINNER_BREAK\"]", saved.getValue().getEnumOptions());
+		// An explicit false is honoured, so a field can be seeded before it is offered to Admins
+		assertFalse(response.getIsActive());
+	}
+
+	// ══════════════ updateConfigFieldCatalogItem — UC-10.3 / UC-10.4 ══════════════
+
+	@Test
+	@DisplayName("TC-036 · Updating a catalog field leaves its data type and scope untouched")
+	void TC036_updateConfigField_happyPath() {
+		ConfigFieldDefinition existing = catalogField("bracket_size", "INT", "NUMBER");
+		when(configFieldRepository.findById("bracket_size")).thenReturn(Optional.of(existing));
+		when(configFieldRepository.save(existing)).thenReturn(existing);
+
+		UpdateConfigFieldCatalogRequest request = new UpdateConfigFieldCatalogRequest();
+		request.setLabel("Số tay cơ");
+		request.setDescription("Số tay cơ vào nhánh loại trực tiếp");
+		request.setUiComponent(" number ");
+		request.setMinValue(8);
+		request.setMaxValue(64);
+
+		ConfigFieldCatalogItemResponse response = service.updateConfigFieldCatalogItem("bracket_size", request);
+
+		assertEquals("Số tay cơ", response.getLabel());
+		assertEquals("NUMBER", response.getUiComponent());
+		assertEquals(8, response.getMinValue());
+		assertEquals(64, response.getMaxValue());
+		// UC-10.3 forbids changing these two once definitions are in use by a format
+		assertEquals("INT", response.getDataType());
+		assertEquals("KNOCKOUT", response.getFieldScope());
+	}
+
+	@Test
+	@DisplayName("TC-037 · Clearing the options of an ENUM field is rejected")
+	void TC037_updateConfigField_enumOptionsCleared() {
+		when(configFieldRepository.findById("break_rule"))
+				.thenReturn(Optional.of(catalogField("break_rule", "ENUM", "SELECT")));
+
+		UpdateConfigFieldCatalogRequest request = new UpdateConfigFieldCatalogRequest();
+		request.setLabel("Luật phá");
+		request.setUiComponent("SELECT");
+		request.setEnumOptions(List.of());
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.updateConfigFieldCatalogItem("break_rule", request));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+		verify(configFieldRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-038 · A UI component that no longer matches the stored data type is rejected")
+	void TC038_updateConfigField_uiComponentMismatch() {
+		when(configFieldRepository.findById("bracket_size"))
+				.thenReturn(Optional.of(catalogField("bracket_size", "INT", "NUMBER")));
+
+		UpdateConfigFieldCatalogRequest request = new UpdateConfigFieldCatalogRequest();
+		request.setLabel("Kích thước nhánh");
+		request.setUiComponent("CHECKBOX");
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.updateConfigFieldCatalogItem("bracket_size", request));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+	}
+
+	@Test
+	@DisplayName("TC-039 · Updating an INT field with a minimum above its maximum is rejected")
+	void TC039_updateConfigField_minAboveMax() {
+		when(configFieldRepository.findById("bracket_size"))
+				.thenReturn(Optional.of(catalogField("bracket_size", "INT", "NUMBER")));
+
+		UpdateConfigFieldCatalogRequest request = new UpdateConfigFieldCatalogRequest();
+		request.setLabel("Kích thước nhánh");
+		request.setUiComponent("NUMBER");
+		request.setMinValue(64);
+		request.setMaxValue(16);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.updateConfigFieldCatalogItem("bracket_size", request));
+
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+	}
+
+	@Test
+	@DisplayName("TC-040 · Disabling a catalog field keeps the row")
+	void TC040_patchConfigFieldCatalogActive_disables() {
+		ConfigFieldDefinition existing = catalogField("bracket_size", "INT", "NUMBER");
+		when(configFieldRepository.findById("bracket_size")).thenReturn(Optional.of(existing));
+		when(configFieldRepository.save(existing)).thenReturn(existing);
+
+		PatchFormatActiveRequest request = new PatchFormatActiveRequest();
+		request.setIsActive(false);
+
+		assertFalse(service.patchConfigFieldCatalogActive("bracket_size", request).getIsActive());
+		// UC-10.4 is a soft disable — formats already referencing the field keep working
+		verify(configFieldRepository, never()).delete(any(ConfigFieldDefinition.class));
+	}
+
+	// ══════════════ listFormats — UC-12.2 ══════════════
+
+	@Test
+	@DisplayName("TC-041 · Listing every format, unfiltered")
+	void TC041_listFormats_unfiltered() {
+		when(formatRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(format())));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(7L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(5L);
+
+		PageResponse<FormatListItemResponse> response = service.listFormats(null, null, 0, 20);
+
+		FormatListItemResponse item = response.getContent().get(0);
+		assertEquals(7L, item.getConfigFieldCount());
+		assertEquals(5L, item.getRaceToRuleCount());
+		// Fully configured but still inactive — the wizard's last step is outstanding
+		assertEquals(FormatSetupStatus.READY_TO_ACTIVATE, item.getSetupStatus());
+	}
+
+	@Test
+	@DisplayName("TC-042 · Filtering by the active flag alone stays a database query")
+	void TC042_listFormats_activeFilterOnly() {
+		when(formatRepository.findByIsActive(any(Boolean.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of(format())));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(0L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(0L);
+
+		PageResponse<FormatListItemResponse> response = service.listFormats(false, null, 0, 20);
+
+		assertEquals(1, response.getContent().size());
+		assertEquals(FormatSetupStatus.INFO_DONE, response.getContent().get(0).getSetupStatus());
+		verify(formatRepository, never()).findAll(any(Pageable.class));
+	}
+
+	@Test
+	@DisplayName("TC-043 · Filtering by setup status falls back to in-memory paging")
+	void TC043_listFormats_setupStatusFilter() {
+		TournamentFormatDefinition ready = format();
+		TournamentFormatDefinition untouched = TournamentFormatDefinition.builder()
+				.code("GROUP_PLAYOFF").name("Group + Playoff").handlerKey("group-playoff").isActive(false)
+				.build();
+		when(formatRepository.findAllByOrderByCreatedAtAsc()).thenReturn(List.of(ready, untouched));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(7L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(5L);
+		when(formatConfigFieldRepository.countByFormatCode("GROUP_PLAYOFF")).thenReturn(0L);
+		when(formatRaceToRuleRepository.countByFormatCode("GROUP_PLAYOFF")).thenReturn(0L);
+
+		PageResponse<FormatListItemResponse> response =
+				service.listFormats(null, FormatSetupStatus.READY_TO_ACTIVATE, 0, 20);
+
+		// setupStatus is derived, not stored, so it cannot be pushed down into the query
+		assertEquals(1, response.getContent().size());
+		assertEquals(CODE, response.getContent().get(0).getCode());
+		assertEquals(1L, response.getTotalElements());
+	}
+
+	@Test
+	@DisplayName("TC-044 · Setup status combined with the active flag narrows the source list first")
+	void TC044_listFormats_setupStatusAndActiveFilter() {
+		when(formatRepository.findByIsActiveOrderByCreatedAtAsc(false)).thenReturn(List.of(format()));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(0L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(0L);
+
+		PageResponse<FormatListItemResponse> response =
+				service.listFormats(false, FormatSetupStatus.READY_TO_ACTIVATE, 0, 20);
+
+		// The only inactive format is still empty, so nothing matches READY_TO_ACTIVATE
+		assertTrue(response.getContent().isEmpty());
+		verify(formatRepository, never()).findAllByOrderByCreatedAtAsc();
+	}
+
+	// ══════════════ the wizard forms — UC-13 ══════════════
+
+	@Test
+	@DisplayName("TC-045 · An unconfigured format offers the whole active catalog")
+	void TC045_getConfigFieldsForm_offersCatalog() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE)).thenReturn(List.of());
+		when(configFieldRepository.findByIsActiveTrueOrderByFieldScopeAsc())
+				.thenReturn(List.of(catalogField("bracket_size", "INT", "NUMBER"),
+						catalogField("allow_bye", "BOOLEAN", "CHECKBOX")));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(0L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(0L);
+
+		FormatConfigFieldsFormResponse response = service.getConfigFieldsForm(CODE);
+
+		assertTrue(response.getFields().isEmpty());
+		assertEquals(2, response.getAvailableFields().size());
+		assertEquals(FormatSetupStatus.INFO_DONE, response.getSetupStatus());
+	}
+
+	@Test
+	@DisplayName("TC-046 · A configured format returns its fields with the catalog metadata attached")
+	void TC046_getConfigFieldsForm_returnsAssignedFields() {
+		FormatConfigField assigned = configField("bracket_size", "32");
+		assigned.setFieldDefinition(catalogField("bracket_size", "INT", "NUMBER"));
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE)).thenReturn(List.of(assigned));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(1L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(1L);
+
+		FormatConfigFieldsFormResponse response = service.getConfigFieldsForm(CODE);
+
+		assertEquals(1, response.getFields().size());
+		assertEquals("Kích thước nhánh", response.getFields().get(0).getLabel());
+		assertEquals("INT", response.getFields().get(0).getDataType());
+		assertEquals("32", response.getFields().get(0).getDefaultValue());
+		// The picker is only shown while the format is still empty
+		assertTrue(response.getAvailableFields().isEmpty());
+		verify(configFieldRepository, never()).findByIsActiveTrueOrderByFieldScopeAsc();
+	}
+
+	@Test
+	@DisplayName("TC-047 · Reading the race-to form of a configured format")
+	void TC047_getRaceToRulesForm_returnsRules() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 9)));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(1L);
+
+		FormatRaceToRulesFormResponse response = service.getRaceToRulesForm(CODE);
+
+		assertEquals(1, response.getRules().size());
+		assertEquals("final", response.getRules().get(0).getRoundKey());
+		assertEquals(9, response.getRules().get(0).getRaceTo());
+		assertEquals(FormatSetupStatus.READY_TO_ACTIVATE, response.getSetupStatus());
+	}
+
+	@Test
+	@DisplayName("TC-048 · Saving race-to rules moves the wizard to its review step")
+	void TC048_saveRaceToRules_happyPath() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(tournamentRepository.existsByFormatAndStatusNotIn(anyString(), any())).thenReturn(false);
+		when(formatRaceToRuleRepository.findByFormatCodeAndRoundKey(CODE, "final")).thenReturn(Optional.empty());
+		when(formatRaceToRuleRepository.findByFormatCodeAndRoundKey(CODE, "semi_final")).thenReturn(Optional.empty());
+
+		FormatRaceToRulesSaveResponse response = service.saveRaceToRules(CODE, rulesRequest(
+				ruleItem("semi_final", "Bán kết", "KNOCKOUT", 7),
+				ruleItem("final", "Chung kết", "KNOCKOUT", 9)));
+
+		assertEquals(2, response.getRulesSaved());
+		assertEquals(FormatSetupStatus.RACE_TO_DONE, response.getSetupStatus());
+		assertEquals("review", response.getNextStep());
+		verify(formatRaceToRuleRepository, times(2)).save(any(FormatRaceToRule.class));
+	}
+
+	@Test
+	@DisplayName("TC-049 · Editing race-to rules of a format used by a live tournament is blocked")
+	void TC049_saveRaceToRules_formatInUse() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(tournamentRepository.existsByFormatAndStatusNotIn(anyString(), any())).thenReturn(true);
+
+		BusinessException ex = assertThrows(BusinessException.class, () -> service.saveRaceToRules(
+				CODE, rulesRequest(ruleItem("final", "Chung kết", "KNOCKOUT", 9))));
+
+		// A running tournament resolves its race-to from the format default, so changing it
+		// mid-flight would alter matches that have already been played
+		assertEquals(ErrorCode.FORMAT_IN_USE_CANNOT_EDIT, ex.getErrorCode());
+		verify(formatRaceToRuleRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-050 · Resubmitting a round key updates the rule in place")
+	void TC050_saveRaceToRules_upsertsExisting() {
+		FormatRaceToRule existing = raceToRule("final", 7);
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(tournamentRepository.existsByFormatAndStatusNotIn(anyString(), any())).thenReturn(false);
+		when(formatRaceToRuleRepository.findByFormatCodeAndRoundKey(CODE, "final"))
+				.thenReturn(Optional.of(existing));
+
+		service.saveRaceToRules(CODE, rulesRequest(ruleItem("final", "Chung kết", "KNOCKOUT", 11)));
+
+		// UC-13 BR-05 makes the format-plus-round pair unique
+		assertEquals(11, existing.getRaceTo());
+		assertEquals("Chung kết", existing.getLabel());
+		verify(formatRaceToRuleRepository).save(existing);
+	}
+
+	// ══════════════ getSetupSummary / getSetupStatus — UC-12.2, UC-13 ══════════════
+
+	@Test
+	@DisplayName("TC-051 · The review screen of a complete but inactive format")
+	void TC051_getSetupSummary_readyToActivate() {
+		FormatConfigField assigned = configField("bracket_size", "32");
+		assigned.setFieldDefinition(catalogField("bracket_size", "INT", "NUMBER"));
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE)).thenReturn(List.of(assigned));
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 9)));
+
+		FormatSetupSummaryResponse response = service.getSetupSummary(CODE);
+
+		assertTrue(response.isCanActivate());
+		assertTrue(response.getValidationErrors().isEmpty());
+		assertEquals(FormatSetupStatus.READY_TO_ACTIVATE, response.getSetupStatus());
+		assertEquals("Kích thước nhánh", response.getConfigFields().get(0).getLabel());
+		assertEquals(9, response.getRaceToRules().get(0).getRaceTo());
+	}
+
+	@Test
+	@DisplayName("TC-052 · The review screen names every problem instead of only the first")
+	void TC052_getSetupSummary_reportsValidationErrors() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(configField("bracket_size", "  ")));
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 0)));
+
+		FormatSetupSummaryResponse response = service.getSetupSummary(CODE);
+
+		assertFalse(response.isCanActivate());
+		// One entry per offending row, so the Admin can fix the whole screen in one pass
+		assertEquals(2, response.getValidationErrors().size());
+		assertTrue(response.getValidationErrors().get(0).contains("bracket_size"));
+		assertTrue(response.getValidationErrors().get(1).contains("final"));
+		// A field with no catalog row falls back to its key as the label
+		assertEquals("bracket_size", response.getConfigFields().get(0).getLabel());
+	}
+
+	@Test
+	@DisplayName("TC-053 · An already active format cannot be activated again")
+	void TC053_getSetupSummary_alreadyActive() {
+		TournamentFormatDefinition active = format();
+		active.setIsActive(true);
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(active));
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(configField("bracket_size", "32")));
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 9)));
+
+		FormatSetupSummaryResponse response = service.getSetupSummary(CODE);
+
+		assertFalse(response.isCanActivate());
+		assertEquals(FormatSetupStatus.ACTIVE, response.getSetupStatus());
+		assertTrue(response.getValidationErrors().isEmpty());
+	}
+
+	@Test
+	@DisplayName("TC-054 · The setup status of an active format lists no outstanding step")
+	void TC054_getSetupStatus_activeFormat() {
+		TournamentFormatDefinition active = format();
+		active.setIsActive(true);
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(active));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(7L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(5L);
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(configField("bracket_size", "32")));
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 9)));
+
+		var status = service.getSetupStatus(CODE);
+
+		assertEquals(FormatSetupStatus.ACTIVE, status.getSetupStatus());
+		assertTrue(status.getMissingSteps().isEmpty());
+		assertTrue(status.isBootstrapped());
+		assertFalse(status.isCanActivate());
+	}
+
+	@Test
+	@DisplayName("TC-055 · A complete inactive format reports activation as its only outstanding step")
+	void TC055_getSetupStatus_readyToActivate() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(7L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(5L);
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(configField("bracket_size", "32")));
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 9)));
+
+		var status = service.getSetupStatus(CODE);
+
+		assertEquals(FormatSetupStatus.READY_TO_ACTIVATE, status.getSetupStatus());
+		assertEquals(List.of("activate"), status.getMissingSteps());
+		assertTrue(status.isCanActivate());
+	}
+
+	// ══════════════ bootstrapDefaults — UC-13 AF-01 ══════════════
+
+	@Test
+	@DisplayName("TC-056 · Quick-init writes the whole single-elimination template in one call")
+	void TC056_bootstrap_happyPath() {
+		String code = "SINGLE_ELIMINATION";
+		when(formatRepository.findById(code)).thenReturn(Optional.of(
+				TournamentFormatDefinition.builder().code(code).name("Single Elimination").isActive(false).build()));
+		when(formatConfigFieldRepository.countByFormatCode(code)).thenReturn(0L);
+		when(formatRaceToRuleRepository.countByFormatCode(code)).thenReturn(0L);
+		when(tournamentRepository.existsByFormatAndStatusNotIn(anyString(), any())).thenReturn(false);
+		when(configFieldRepository.findById(anyString()))
+				.thenAnswer(inv -> Optional.of(ConfigFieldDefinition.builder()
+						.fieldKey(inv.getArgument(0)).build()));
+		when(formatConfigFieldRepository.findByFormatCodeAndFieldKey(anyString(), anyString()))
+				.thenReturn(Optional.empty());
+		when(formatRaceToRuleRepository.findByFormatCodeAndRoundKey(anyString(), anyString()))
+				.thenReturn(Optional.empty());
+
+		FormatBootstrapResponse response = service.bootstrapDefaults(code, null);
+
+		assertEquals(7, response.getConfigFieldsInserted());
+		assertEquals(5, response.getRaceToRulesInserted());
+		// The template fills both wizard screens, so the format lands straight on the review step
+		assertEquals(FormatSetupStatus.READY_TO_ACTIVATE, response.getSetupStatus());
+	}
+
+	@Test
+	@DisplayName("TC-057 · Quick-init with overwrite replaces an existing configuration")
+	void TC057_bootstrap_overwrite() {
+		String code = "PROGRESSIVE_ROUND_ROBIN";
+		when(formatRepository.findById(code)).thenReturn(Optional.of(
+				TournamentFormatDefinition.builder().code(code).name("Progressive").isActive(false).build()));
+		lenient().when(formatConfigFieldRepository.countByFormatCode(code)).thenReturn(6L);
+		lenient().when(formatRaceToRuleRepository.countByFormatCode(code)).thenReturn(2L);
+		when(tournamentRepository.existsByFormatAndStatusNotIn(anyString(), any())).thenReturn(false);
+		when(configFieldRepository.findById(anyString()))
+				.thenAnswer(inv -> Optional.of(ConfigFieldDefinition.builder()
+						.fieldKey(inv.getArgument(0)).build()));
+		when(formatConfigFieldRepository.findByFormatCodeAndFieldKey(anyString(), anyString()))
+				.thenAnswer(inv -> Optional.of(configField(inv.getArgument(1), "old")));
+		when(formatRaceToRuleRepository.findByFormatCodeAndRoundKey(anyString(), anyString()))
+				.thenReturn(Optional.empty());
+
+		BootstrapDefaultsRequest request = new BootstrapDefaultsRequest();
+		request.setOverwrite(true);
+
+		FormatBootstrapResponse response = service.bootstrapDefaults(code, request);
+
+		assertEquals(6, response.getConfigFieldsInserted());
+		assertEquals(2, response.getRaceToRulesInserted());
+	}
+
+	// ══════════════ game types — UC-11 ══════════════
+
+	@Test
+	@DisplayName("TC-058 · Searching game types matches the code and the name, case-insensitively")
+	void TC058_listGameTypes_searchSpecification() {
+		when(gameTypeRepository.findAll(any(Specification.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of(gameType("9_BALL"))));
+
+		PageResponse<GameTypeDetailResponse> response = service.listGameTypes(true, "  9Ba  ", 0, 20);
+
+		assertEquals(List.of("POOL"), response.getContent().get(0).getCompatibleTableTypes());
+
+		CriteriaBuilder cb = runSpecification(captureGameTypeSpecification(),
+				mock(Root.class, RETURNS_DEEP_STUBS));
+		verify(cb).equal(any(Expression.class), eq((Object) Boolean.TRUE));
+		// One LIKE for the code and one for the name, both against the trimmed lower-cased term
+		verify(cb, times(2)).like(any(Expression.class), eq("%9ba%"));
+		verify(cb).or(any(Predicate.class), any(Predicate.class));
+	}
+
+	@Test
+	@DisplayName("TC-059 · Listing game types with no filter applies no predicate")
+	void TC059_listGameTypes_noFilter() {
+		when(gameTypeRepository.findAll(any(Specification.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of()));
+
+		service.listGameTypes(null, "   ", 0, 20);
+
+		CriteriaBuilder cb = runSpecification(captureGameTypeSpecification(),
+				mock(Root.class, RETURNS_DEEP_STUBS));
+		// A blank search term is not a filter
+		verify(cb, never()).like(any(Expression.class), anyString());
+		verify(cb, never()).equal(any(Expression.class), any(Object.class));
+	}
+
+	@Test
+	@DisplayName("TC-060 · Opening a game type that does not exist")
+	void TC060_getGameType_notFound() {
+		when(gameTypeRepository.findById("NO_SUCH")).thenReturn(Optional.empty());
+
+		BusinessException ex = assertThrows(BusinessException.class, () -> service.getGameType("NO_SUCH"));
+
+		assertEquals(ErrorCode.GAME_TYPE_NOT_FOUND, ex.getErrorCode());
+	}
+
+	@Test
+	@DisplayName("TC-061 · Creating a game type upper-cases its code and defaults it to active")
+	void TC061_createGameType_normalisesCode() {
+		when(gameTypeRepository.existsById("9_BALL")).thenReturn(false);
+		when(gameTypeRepository.save(any(GameTypeDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+		CreateGameTypeRequest request = new CreateGameTypeRequest();
+		request.setCode(" 9_ball ");
+		request.setName("9-Ball");
+		request.setDefaultRaceTo(7);
+		request.setCompatibleTableTypes(List.of("POOL"));
+
+		GameTypeDetailResponse response = service.createGameType(request);
+
+		// The code doubles as the primary key, so it is normalised before the uniqueness check
+		assertEquals("9_BALL", response.getCode());
+		assertTrue(response.getIsActive());
+		assertEquals(List.of("POOL"), response.getCompatibleTableTypes());
+	}
+
+	@Test
+	@DisplayName("TC-062 · A game type code already in use is rejected")
+	void TC062_createGameType_duplicateCode() {
+		when(gameTypeRepository.existsById("9_BALL")).thenReturn(true);
+
+		CreateGameTypeRequest request = new CreateGameTypeRequest();
+		request.setCode("9_BALL");
+		request.setName("9-Ball");
+
+		BusinessException ex = assertThrows(BusinessException.class, () -> service.createGameType(request));
+
+		assertEquals(ErrorCode.DUPLICATE_RESOURCE, ex.getErrorCode());
+		verify(gameTypeRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-063 · Omitting the active flag on update leaves it alone")
+	void TC063_updateGameType_nullActiveFlagPreserved() {
+		GameTypeDefinition existing = gameType("9_BALL");
+		when(gameTypeRepository.findById("9_BALL")).thenReturn(Optional.of(existing));
+
+		UpdateGameTypeRequest request = new UpdateGameTypeRequest();
+		request.setName("9-Ball (bida lỗ)");
+		request.setDefaultRaceTo(9);
+
+		GameTypeDetailResponse response = service.updateGameType("9_BALL", request);
+
+		assertEquals("9-Ball (bida lỗ)", response.getName());
+		assertEquals(9, response.getDefaultRaceTo());
+		// A partial update must not silently disable a game type in use by live tournaments
+		assertTrue(response.getIsActive());
+		verify(gameTypeRepository).save(existing);
+	}
+
+	@Test
+	@DisplayName("TC-064 · Updating a game type that does not exist")
+	void TC064_updateGameType_notFound() {
+		when(gameTypeRepository.findById("NO_SUCH")).thenReturn(Optional.empty());
+
+		UpdateGameTypeRequest request = new UpdateGameTypeRequest();
+		request.setName("Whatever");
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.updateGameType("NO_SUCH", request));
+
+		assertEquals(ErrorCode.GAME_TYPE_NOT_FOUND, ex.getErrorCode());
+		verify(gameTypeRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-065 · Disabling a game type keeps the row")
+	void TC065_patchGameTypeActive_disables() {
+		GameTypeDefinition existing = gameType("9_BALL");
+		when(gameTypeRepository.findById("9_BALL")).thenReturn(Optional.of(existing));
+		when(gameTypeRepository.save(existing)).thenReturn(existing);
+
+		PatchFormatActiveRequest request = new PatchFormatActiveRequest();
+		request.setIsActive(false);
+
+		assertFalse(service.patchGameTypeActive("9_BALL", request).getIsActive());
+		// UC-11.4 is a soft disable — tournaments already played on this game type keep their history
+		verify(gameTypeRepository, never()).delete(any(GameTypeDefinition.class));
 	}
 }
