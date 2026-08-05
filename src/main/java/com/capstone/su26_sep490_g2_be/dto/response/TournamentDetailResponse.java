@@ -13,6 +13,9 @@ import java.time.Instant;
 public class TournamentDetailResponse {
 
 	private Long id;
+	/** Optimistic lock — FE gửi lại giá trị này khi update để hệ thống phát hiện xung đột
+	 * (VD 2 người cùng sửa 1 giải, ai lưu sau bị chặn thay vì ghi đè âm thầm). */
+	private Long version;
 	private String name;
 	private String description;
 	private String gameType;

@@ -8,6 +8,7 @@ import lombok.Getter;
 public class ParticipantBriefResponse {
     private Long id;
     private String displayName;
-    private Integer seedNo;
+    /** Hạng cơ thủ (BilliardRank.name()), null/UNKNOWN nếu chưa xếp hạng. */
+    private String billiardRank;
     private String avatarUrl;
 }

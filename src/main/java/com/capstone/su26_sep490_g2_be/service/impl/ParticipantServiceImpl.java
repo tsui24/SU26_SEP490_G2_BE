@@ -48,13 +48,4 @@ public class ParticipantServiceImpl implements ParticipantService {
 		return participantRepository.save(participant);
 	}
 
-	@Override
-	@Transactional
-	public void assignSeedNumbers(Long tournamentId) {
-		List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
-		for (int i = 0; i < participants.size(); i++) {
-			participants.get(i).setSeedNo(i + 1);
-		}
-		participantRepository.saveAll(participants);
-	}
 }

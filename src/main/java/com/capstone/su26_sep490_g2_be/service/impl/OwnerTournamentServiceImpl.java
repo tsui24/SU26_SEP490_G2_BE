@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
 public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	private static final List<String> SEEDING_OPTIONS = List.of(
-			SeedingMethod.RANDOM.name(), SeedingMethod.MANUAL.name(), SeedingMethod.ELO.name());
+			SeedingMethod.RANDOM.name(), SeedingMethod.RANK.name());
 
 	/** Đồng bộ maxParticipants <-> bracket_size chỉ áp dụng cho thể thức Loại trực tiếp (1 lần thua). */
 	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
@@ -245,6 +245,14 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		assertEditableStatus(tournament);
 
+		// Optimistic lock thủ công: FE gửi lại version đã thấy lúc load form. Nếu ai đó khác đã lưu
+		// giải này sau thời điểm đó (version DB đã tăng), version FE gửi lên sẽ lệch → chặn ngay thay
+		// vì để Hibernate ghi đè âm thầm (request không sửa hết mọi field nên rất dễ mất field của
+		// người kia). Bỏ trống version ở request = không kiểm tra (tương thích ngược).
+		if (request.getVersion() != null && !request.getVersion().equals(tournament.getVersion())) {
+			throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_CONFLICT);
+		}
+
 		if (request.getBranchId() != null
 				&& (tournament.getBranch() == null || !request.getBranchId().equals(tournament.getBranch().getId()))) {
 			User currentUser = userRepository.findById(userId)
@@ -326,7 +334,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				request.getStartAt() != null,
 				request.getEndAt() != null);
 
-		tournamentRepository.save(tournament);
+		tournamentRepository.saveAndFlush(tournament);
 		if (formatChanged || request.getMaxParticipants() != null) {
 			syncBracketSizeFromMaxParticipants(tournament, tournament.getFormat(), tournament.getMaxParticipants());
 		}
@@ -334,6 +342,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		return UpdateTournamentResponse.builder()
 				.id(tournament.getId())
+				.version(tournament.getVersion())
 				.status(tournament.getStatus())
 				.format(tournament.getFormat())
 				.configComplete(configComplete)
@@ -355,6 +364,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		return TournamentDetailResponse.builder()
 				.id(tournament.getId())
+				.version(tournament.getVersion())
 				.name(tournament.getName())
 				.description(tournament.getDescription())
 				.gameType(tournament.getGameType())
@@ -491,7 +501,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.formatDescription(format.getDescription())
 				.gameType(tournament.getGameType())
 				.seedingMethod(config.getSeedingMethod())
-				.seedCount(config.getSeedCount())
 				.isConfigComplete(isConfigComplete(tournamentId, tournament.getFormat()))
 				.fields(fields)
 				.raceToRules(raceToRules)
@@ -512,23 +521,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 					ConfigValidationDetailResponse.builder()
 							.fieldKey("seedingMethod")
 							.message("Phương thức xếp hạt giống không hợp lệ")
-							.build()));
-		}
-
-		boolean usesSeeding = !SeedingMethod.RANDOM.name().equals(request.getSeedingMethod());
-		if (usesSeeding && (request.getSeedCount() == null || request.getSeedCount() < 1)) {
-			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, List.of(
-					ConfigValidationDetailResponse.builder()
-							.fieldKey("seedCount")
-							.message("Cần nhập số lượng hạt giống (từ 1 trở lên) khi chọn xếp hạt giống")
-							.build()));
-		}
-		if (usesSeeding && tournament.getMaxParticipants() != null
-				&& request.getSeedCount() > tournament.getMaxParticipants()) {
-			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, List.of(
-					ConfigValidationDetailResponse.builder()
-							.fieldKey("seedCount")
-							.message("Số lượng hạt giống không được vượt quá số người tối đa của giải")
 							.build()));
 		}
 
@@ -611,7 +603,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		TournamentConfig config = getConfig(tournamentId);
 		config.setSeedingMethod(request.getSeedingMethod());
-		config.setSeedCount(usesSeeding ? request.getSeedCount() : null);
 		boolean complete = isConfigComplete(tournamentId, tournament.getFormat());
 		if (complete) {
 			config.setConfigSnapshotJson(buildConfigSnapshot(tournamentId, tournament.getFormat()));
@@ -622,7 +613,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.tournamentId(tournamentId)
 				.formatCode(tournament.getFormat())
 				.seedingMethod(config.getSeedingMethod())
-				.seedCount(config.getSeedCount())
 				.isConfigComplete(complete)
 				.validationErrors(List.of())
 				.build();
@@ -658,7 +648,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.formatName(format.getName())
 				.gameType(tournament.getGameType())
 				.seedingMethod(config.getSeedingMethod())
-				.seedCount(config.getSeedCount())
 				.isConfigComplete(isConfigComplete(tournamentId, tournament.getFormat()))
 				.fields(fields)
 				.raceToRules(raceToMap)
@@ -1115,10 +1104,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			errors.addAll(validateProgressiveConfig(tournamentId, formatFields));
 		}
 
-		if (TournamentFormat.GROUP_PLAYOFF.getValue().equals(formatCode)) {
-			errors.addAll(validateGroupPlayoffConfig(tournamentId, formatFields));
-		}
-
 		return errors;
 	}
 
@@ -1127,43 +1112,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	 * phải giảm dần nghiêm ngặt, mọi phần tử chẵn ≥ 4, phần tử cuối == {@code final_playoff_size},
 	 * và {@code maxParticipants} lớn hơn phần tử đầu.
 	 */
-	/**
-	 * GROUP_PLAYOFF: số slot chia bảng (group_count × players_per_group) phải khớp maxParticipants,
-	 * nếu không việc chia bảng sẽ thiếu/thừa người ngay sau khi đóng đăng ký.
-	 */
-	private List<ConfigValidationDetailResponse> validateGroupPlayoffConfig(
-			Long tournamentId, List<FormatConfigField> formatFields) {
-		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
-
-		String groupCountStr = resolveFieldValueByKey(tournamentId, formatFields, "group_count");
-		String playersPerGroupStr = resolveFieldValueByKey(tournamentId, formatFields, "players_per_group");
-		if (groupCountStr == null || groupCountStr.isBlank()
-				|| playersPerGroupStr == null || playersPerGroupStr.isBlank()) {
-			return errors; // thiếu field đã được báo ở vòng lặp trước
-		}
-
-		Integer maxParticipants = tournamentRepository.findById(tournamentId)
-				.map(Tournament::getMaxParticipants).orElse(null);
-		if (maxParticipants == null) {
-			return errors;
-		}
-
-		try {
-			int groupCount = Integer.parseInt(groupCountStr.trim());
-			int playersPerGroup = Integer.parseInt(playersPerGroupStr.trim());
-			int totalSlots = groupCount * playersPerGroup;
-			if (totalSlots != maxParticipants) {
-				errors.add(detail("group_count",
-						"Số bảng x số người/bảng (" + totalSlots
-								+ ") phải bằng đúng số người tối đa của giải (" + maxParticipants + ")"));
-			}
-		} catch (NumberFormatException e) {
-			// group_count/players_per_group không phải số nguyên hợp lệ — đã báo ở validateFieldValue
-		}
-
-		return errors;
-	}
-
 	private List<ConfigValidationDetailResponse> validateProgressiveConfig(
 			Long tournamentId, List<FormatConfigField> formatFields) {
 		List<ConfigValidationDetailResponse> errors = new ArrayList<>();

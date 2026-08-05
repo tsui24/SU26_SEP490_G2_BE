@@ -19,7 +19,6 @@ public class PlayerPublicProfileResponse {
     private String displayName;
     private String accountName;
     private String avatarUrl;
-    private Integer seedNo;
     private String billiardRank;
     private String bio;
     private List<TournamentAchievementEntry> achievements;

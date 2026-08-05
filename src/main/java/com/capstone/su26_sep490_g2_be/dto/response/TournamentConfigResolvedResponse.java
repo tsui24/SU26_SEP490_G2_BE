@@ -17,7 +17,6 @@ public class TournamentConfigResolvedResponse {
 	private String formatName;
 	private String gameType;
 	private String seedingMethod;
-	private Integer seedCount;
 	private Boolean isConfigComplete;
 	private Map<String, Object> fields;
 	private Map<String, Integer> raceToRules;
