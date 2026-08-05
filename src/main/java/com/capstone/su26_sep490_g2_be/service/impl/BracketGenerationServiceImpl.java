@@ -1127,8 +1127,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         if (u == null) return null;
         String name = null;
         try {
-            if (u.getProfile() != null && u.getProfile().getDisplayName() != null) {
-                name = u.getProfile().getDisplayName();
+            if (u.getProfile() != null) {
+                if (u.getProfile().getDisplayName() != null && !u.getProfile().getDisplayName().isBlank()) {
+                    name = u.getProfile().getDisplayName();
+                } else if (u.getProfile().getFullName() != null && !u.getProfile().getFullName().isBlank()) {
+                    name = u.getProfile().getFullName();
+                }
             }
         } catch (Exception ignored) {}
         if (name == null) name = u.getEmail();
