@@ -1,6 +1,7 @@
 package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.MailLayoutSettingsRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.MailLayoutTestSendRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.MailLayoutSettingsResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
@@ -37,6 +38,15 @@ public class AdminMailLayoutSettingsController {
 			@Valid @RequestBody MailLayoutSettingsRequest request) {
 		return ResponseEntity.ok(ApiResponse.success("Đã cập nhật khung email",
 				mailLayoutSettingsService.updateSettings(extractUserId(authentication), request)));
+	}
+
+	@Operation(summary = "Gửi email thử để xem khung header/footer (đã lưu hoặc đang soạn dở) trên hộp thư thật")
+	@PostMapping("/test-send")
+	public ResponseEntity<ApiResponse<Void>> sendTest(
+			Authentication authentication,
+			@Valid @RequestBody MailLayoutTestSendRequest request) {
+		mailLayoutSettingsService.sendTest(extractUserId(authentication), request);
+		return ResponseEntity.ok(ApiResponse.success("Đã gửi email thử tới " + request.getEmail(), null));
 	}
 
 	private Long extractUserId(Authentication authentication) {

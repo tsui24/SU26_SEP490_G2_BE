@@ -52,6 +52,17 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				""",
 				"[\"custom.otp\", \"system.appName\"]");
 
+		EmailTemplate userWelcome = seedTemplate(admin, "USER_WELCOME", "Chào mừng thành viên mới",
+				EmailTemplateCategory.SYSTEM,
+				"Chào mừng bạn đến với {{system.appName}}!",
+				"""
+				<p>Xin chào {{user.fullName}},</p>
+				<p>Cảm ơn bạn đã đăng ký tài khoản tại <b>{{system.appName}}</b>.</p>
+				<p>Bạn có thể đăng nhập ngay để khám phá và đăng ký tham gia các giải đấu đang mở.</p>
+				<p>Nếu cần hỗ trợ, vui lòng liên hệ <a href="mailto:{{system.supportEmail}}">{{system.supportEmail}}</a>.</p>
+				""",
+				"[\"user.fullName\", \"system.appName\", \"system.supportEmail\"]");
+
 		EmailTemplate regSubmitted = seedTemplate(admin, "REGISTRATION_SUBMITTED", "Đăng ký mới được gửi",
 				EmailTemplateCategory.TRANSACTIONAL,
 				"Đã nhận đăng ký giải \"{{tournament.name}}\"",
@@ -144,6 +155,8 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				""",
 				"[\"user.fullName\", \"custom.subject\", \"custom.message\", \"system.appName\"]");
 
+		seedRule(admin, "AUTO_USER_REGISTERED", "Gửi email chào mừng khi đăng ký tài khoản mới",
+				EmailEventType.USER_REGISTERED, userWelcome, EmailRecipientType.PLAYER, true);
 		seedRule(admin, "AUTO_REGISTRATION_SUBMITTED", "Gửi email khi có đăng ký mới",
 				EmailEventType.REGISTRATION_SUBMITTED, regSubmitted, EmailRecipientType.REGISTRATION_USER, true);
 		seedRule(admin, "AUTO_REGISTRATION_APPROVED", "Gửi email khi duyệt đăng ký",

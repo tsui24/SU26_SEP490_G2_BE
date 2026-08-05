@@ -44,12 +44,12 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 
 	@Override
 	public byte[] buildReport(Long ownerId, Instant from, Instant to, List<Long> branchIds) throws IOException {
-		AnalyticsOverviewResponse overview = analyticsService.buildOverview(ownerId, from, to, branchIds);
-		RevenueBreakdownResponse revenue = analyticsService.buildRevenueBreakdown(ownerId, from, to, "month", branchIds);
-		List<TournamentPerformanceItem> tournaments = analyticsService.buildTournamentPerformance(ownerId, from, to, branchIds);
-		List<PlayerLeaderboardItem> players = analyticsService.buildPlayerLeaderboard(ownerId, from, to, branchIds);
+		AnalyticsOverviewResponse overview = analyticsService.buildOverview(ownerId, from, to, branchIds, null, null);
+		RevenueBreakdownResponse revenue = analyticsService.buildRevenueBreakdown(ownerId, from, to, "month", branchIds, null, null);
+		List<TournamentPerformanceItem> tournaments = analyticsService.buildTournamentPerformance(ownerId, from, to, branchIds, null, null);
+		List<PlayerLeaderboardItem> players = analyticsService.buildPlayerLeaderboard(ownerId, from, to, branchIds, null, null, null, null, null, null);
 		SocialEngagementResponse social = analyticsService.buildSocialEngagement(ownerId, from, to, branchIds);
-		TransactionStatsResponse transactions = analyticsService.buildTransactionStats(ownerId, from, to, "month", branchIds);
+		TransactionStatsResponse transactions = analyticsService.buildTransactionStats(ownerId, from, to, "month", branchIds, null, null);
 
 		try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 			CellStyle headerStyle = headerStyle(workbook);
