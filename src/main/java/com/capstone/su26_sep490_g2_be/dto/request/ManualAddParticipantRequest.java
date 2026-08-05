@@ -1,6 +1,6 @@
 package com.capstone.su26_sep490_g2_be.dto.request;
 
-import jakarta.validation.constraints.Min;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -23,8 +23,8 @@ public class ManualAddParticipantRequest {
     @Size(max = 20)
     private String partnerPhone;
 
-    @Min(value = 1, message = "Hạt giống phải từ 1 trở lên")
-    private Integer seedNo;
+    @Schema(description = "Hạng cơ thủ theo hệ bi-a Việt Nam", example = "B", allowableValues = {"CHAMPION","A","B","C","D","E","F","G","H","I","J","K","L","UNKNOWN"})
+    private String billiardRank;
 
     @Size(max = 500)
     private String note;

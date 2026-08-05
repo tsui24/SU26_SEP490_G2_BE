@@ -10,6 +10,8 @@ import lombok.Getter;
 public class UpdateTournamentResponse {
 
 	private Long id;
+	/** Version mới sau khi lưu — FE cập nhật lại để lần sửa tiếp theo không bị báo xung đột giả. */
+	private Long version;
 	private String status;
 	private String format;
 	private Boolean configComplete;

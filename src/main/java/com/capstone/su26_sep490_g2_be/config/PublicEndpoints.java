@@ -26,6 +26,11 @@ final class PublicEndpoints {
 			"/api/v1/health",
 			"/api/v1/tournaments",
 			"/api/v1/tournaments/**",
+			// Hồ sơ cơ thủ công khai — PlayerProfilePage (route public /event/players/**) gọi endpoint
+			// này, thiếu pattern ở đây thì khách chưa đăng nhập nhận 401 dù controller là "Public".
+			"/api/v1/participants/**",
+			"/api/v1/leaderboard",
+			"/api/v1/leaderboard/**",
 			"/api/v1/branches",
 			"/api/v1/branches/**",
 			"/api/v1/participants/**",

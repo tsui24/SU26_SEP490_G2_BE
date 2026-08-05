@@ -16,5 +16,4 @@ public interface ParticipantService {
 
 	Participant updateStatus(Long id, String status);
 
-	void assignSeedNumbers(Long tournamentId);
 }

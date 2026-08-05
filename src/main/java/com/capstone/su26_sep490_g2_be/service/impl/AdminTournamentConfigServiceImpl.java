@@ -626,7 +626,8 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	}
 
 	private static final Set<String> ALLOWED_DATA_TYPES = Set.of("INT", "BOOLEAN", "ENUM", "STRING");
-	private static final Set<String> ALLOWED_FIELD_SCOPES = Set.of("COMMON", "KNOCKOUT", "GROUP", "DOUBLE_ELIM", "PLAYOFF");
+	private static final Set<String> ALLOWED_FIELD_SCOPES =
+			Set.of("COMMON", "KNOCKOUT", "DOUBLE_ELIM", "PROGRESSIVE");
 	private static final Set<String> ALLOWED_UI_COMPONENTS = Set.of("NUMBER", "SELECT", "CHECKBOX", "TEXT");
 
 	private void validateCatalogFieldTypes(String dataType, String fieldScope, String uiComponent) {

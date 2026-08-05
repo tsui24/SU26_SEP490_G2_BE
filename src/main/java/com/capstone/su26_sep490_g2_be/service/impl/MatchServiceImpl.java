@@ -698,7 +698,7 @@ public class MatchServiceImpl implements MatchService {
      * Loại kép (DOUBLE_ELIMINATION) là ngoại lệ: các trận vòng DE thi đấu ngay khi bracket ở
      * DRAW_DONE (chưa có nút "Bắt đầu giải đấu" riêng cho pha này) và tiếp tục ở FINAL_BRACKET_READY
      * sau khi điền bracket loại trực tiếp (CUT_TO_SE). Các thể thức còn lại (SINGLE_ELIMINATION,
-     * GROUP_PLAYOFF) bắt buộc phải chuyển sang IN_PROGRESS trước.
+     * PROGRESSIVE_ROUND_ROBIN) bắt buộc phải chuyển sang IN_PROGRESS trước.
      */
     private void assertMatchPlayable(Match match) {
         Tournament tournament = match.getTournament();

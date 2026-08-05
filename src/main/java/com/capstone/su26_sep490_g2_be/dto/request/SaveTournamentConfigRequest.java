@@ -17,11 +17,9 @@ import java.util.List;
 public class SaveTournamentConfigRequest {
 
 	@NotBlank(message = "Phương thức xếp hạt giống không được để trống")
-	@Schema(description = "Phương thức xếp hạt giống", example = "ELO")
+	@Schema(description = "Phương thức xếp hạt giống", example = "RANK",
+			allowableValues = {"RANDOM", "RANK"})
 	private String seedingMethod;
-
-	@Schema(description = "Số người dự kiến được gán hạt giống — bắt buộc khi seedingMethod khác RANDOM", example = "16")
-	private Integer seedCount;
 
 	@NotEmpty(message = "Danh sách field cấu hình không được để trống")
 	@Valid
