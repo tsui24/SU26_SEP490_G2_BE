@@ -3,7 +3,6 @@ package com.capstone.su26_sep490_g2_be.controller;
 import com.capstone.su26_sep490_g2_be.dto.request.CompleteMatchRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.AssignMatchRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.BulkAssignMatchRequest;
-import com.capstone.su26_sep490_g2_be.dto.request.EliminateBottomRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.SwapPlayersRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.UpdateScoreRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.StandingsEntryResponse;
@@ -136,19 +135,8 @@ public class MatchController {
     /* ─── Xếp hạng giải đấu ──────────────────────────────────────── */
 
     /**
-     * Bảng điểm vòng tròn (GROUP_PLAYOFF) — chỉ tính từ vòng bảng.
-     * Khác với /rankings: standings không gộp placement knockout.
-     */
-    @Operation(summary = "Xếp hạng vòng tròn — Public")
-    @GetMapping("/tournaments/{id}/standings")
-    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> standingsPublic(@PathVariable Long id) {
-        requirePublicRatio(id);
-        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.getLeagueStandings(id)));
-    }
-
-    /**
      * Bảng xếp hạng tổng hợp theo bracket — dùng cho tab "Xếp hạng" trên FE.
-     * Tự chọn chiến lược: GROUP_PLAYOFF → bảng điểm; còn lại → placement loại trực tiếp.
+     * Placement tính theo vòng bị loại của bracket loại trực tiếp.
      */
     @Operation(summary = "Xếp hạng giải đấu (theo bracket) — Public")
     @GetMapping("/tournaments/{id}/rankings")
@@ -163,30 +151,6 @@ public class MatchController {
     @GetMapping("/owner/tournaments/{id}/rankings")
     public ResponseEntity<ApiResponse<TournamentRankingResponse>> rankingsOwner(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(tournamentResultService.getRankings(id)));
-    }
-
-    @Operation(summary = "Xếp hạng vòng tròn — Owner")
-    @SecurityRequirement(name = "bearerAuth")
-    @GetMapping("/owner/tournaments/{id}/standings")
-    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> standingsOwner(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.getLeagueStandings(id)));
-    }
-
-    @Operation(summary = "[GROUP_PLAYOFF] Loại bottom — giữ keepCount người (Owner)")
-    @SecurityRequirement(name = "bearerAuth")
-    @PostMapping("/owner/tournaments/{id}/eliminate-bottom")
-    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> eliminateOwner(
-            @PathVariable Long id, @Valid @RequestBody EliminateBottomRequest req) {
-        bracketGenerationService.eliminateBottomParticipants(id, req.getKeepCount());
-        return ResponseEntity.ok(ApiResponse.success("Đã loại bottom", bracketGenerationService.getLeagueStandings(id)));
-    }
-
-    @SecurityRequirement(name = "bearerAuth")
-    @PostMapping("/manager/tournaments/{id}/eliminate-bottom")
-    public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> eliminateManager(
-            @PathVariable Long id, @Valid @RequestBody EliminateBottomRequest req) {
-        bracketGenerationService.eliminateBottomParticipants(id, req.getKeepCount());
-        return ResponseEntity.ok(ApiResponse.success("Đã loại bottom", bracketGenerationService.getLeagueStandings(id)));
     }
 
     /* ─── PROGRESSIVE_ROUND_ROBIN: chuyển giai đoạn + standings từng GĐ ── */

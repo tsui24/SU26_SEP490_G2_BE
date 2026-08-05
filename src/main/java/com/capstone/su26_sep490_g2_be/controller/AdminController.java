@@ -7,6 +7,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.UserResponse;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.service.AccountService;
+import com.capstone.su26_sep490_g2_be.service.LeaderboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class AdminController {
 
 	private final AccountService accountService;
+	private final LeaderboardService leaderboardService;
 
 	@Operation(summary = "Create Owner account", description = "Admin tạo tài khoản Owner (chủ chuỗi quán)")
 	@ApiResponses({
@@ -97,5 +99,16 @@ public class AdminController {
 			@PathVariable Long id) {
 		EmployeeAccountResponse response = accountService.reactivateEmployee(null, id);
 		return ResponseEntity.ok(ApiResponse.success("Đã mở khóa tài khoản", response));
+	}
+
+	@Operation(summary = "Tính lại điểm tích lũy",
+			description = "Tính lại points_earned cho toàn bộ kết quả của các giải đã COMPLETED theo "
+					+ "công thức hiện hành. Cần chạy 1 lần cho dữ liệu cũ (chốt trước khi có công thức "
+					+ "nên đang lưu 0 điểm), hoặc sau khi đổi thang điểm. Chạy lại nhiều lần vẫn ra "
+					+ "cùng kết quả.")
+	@PostMapping("/leaderboard/recalculate-points")
+	public ResponseEntity<ApiResponse<Integer>> recalculateLeaderboardPoints() {
+		int updated = leaderboardService.recalculatePoints();
+		return ResponseEntity.ok(ApiResponse.success("Đã cập nhật " + updated + " dòng kết quả", updated));
 	}
 }

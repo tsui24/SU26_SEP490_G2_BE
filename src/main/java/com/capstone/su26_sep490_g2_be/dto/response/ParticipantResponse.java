@@ -16,7 +16,8 @@ public class ParticipantResponse {
     private String participantType;
     private String displayName;
     private String phone;
-    private Integer seedNo;
+    /** Hạng cơ thủ (BilliardRank.name()), null/UNKNOWN nếu chưa xếp hạng. */
+    private String billiardRank;
     private String status;
     private String source;
     private String avtarUrl;

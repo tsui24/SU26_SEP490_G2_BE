@@ -15,6 +15,7 @@ import com.capstone.su26_sep490_g2_be.entity.UserProfile;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
+import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.RankingLabelFormat;
 import com.capstone.su26_sep490_g2_be.enums.RankingPlacementNote;
 import com.capstone.su26_sep490_g2_be.enums.TournamentFormat;
@@ -30,6 +31,7 @@ import com.capstone.su26_sep490_g2_be.repository.UserProfileRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
 import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
+import com.capstone.su26_sep490_g2_be.util.TournamentPointsPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -103,28 +105,42 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	}
 
 	/**
-	 * Dựng TournamentResult từ getRankings() — finalRank lấy rankFrom (hạng tốt nhất trong nhóm đồng
-	 * hạng, VD nhóm "#5-8" → 5). prizeAmount/pointsEarned để 0: hệ thống chưa có công thức chia
-	 * thưởng theo hạng hay thang điểm — BTC/Admin cần nhập tay qua {@link #record(TournamentResult)}
-	 * hoặc bổ sung công thức sau này, không tự suy diễn ở đây để tránh số liệu sai lệch.
+	 * Dựng TournamentResult từ getRankings().
+	 *
+	 * <p><b>finalRank phải duy nhất trong 1 giải</b> — {@link TournamentResult} có unique
+	 * {@code (tournament_id, final_rank)}. getRankings() trả nhóm đồng hạng dùng chung một
+	 * {@code rankFrom} (2 người thua bán kết cùng #3, nhóm "#5-8" có 4 người cùng #5), nên phải
+	 * rải thành hạng liên tiếp trước khi lưu, nếu không sẽ vi phạm ràng buộc khi chốt giải.
+	 *
+	 * <p>prizeAmount vẫn để 0 — hệ thống chưa có công thức chia thưởng theo hạng, BTC/Admin nhập
+	 * tay qua {@link #record(TournamentResult)}. Riêng pointsEarned tính theo
+	 * {@link TournamentPointsPolicy} để phục vụ bảng xếp hạng điểm tích lũy.
 	 */
 	private List<TournamentResult> buildResultsFromRankings(Long tournamentId) {
 		Tournament tournament = tournamentRepository.findById(tournamentId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 		TournamentRankingResponse ranking = getRankings(tournamentId);
+		int participantCount = (int) participantRepository.countByTournamentIdAndStatus(
+				tournamentId, ParticipantStatus.ACTIVE.getValue());
+
 		List<TournamentResult> built = new ArrayList<>();
+		int currentRank = 0;
 		for (TournamentRankingEntryResponse entry : ranking.getEntries()) {
+			Integer groupRank = entry.getRankFrom() != null ? entry.getRankFrom() : entry.getSortOrder();
+			if (groupRank == null) continue;
+			// Rải hạng: giữ hạng gốc của nhóm, nhưng luôn tiến ít nhất 1 so với dòng trước
+			currentRank = Math.max(groupRank, currentRank + 1);
+
 			if (entry.getParticipantId() == null) continue;
 			Participant participant = participantRepository.findById(entry.getParticipantId()).orElse(null);
 			if (participant == null) continue;
-			Integer finalRank = entry.getRankFrom() != null ? entry.getRankFrom() : entry.getSortOrder();
-			if (finalRank == null) continue;
+
 			built.add(TournamentResult.builder()
 					.tournament(tournament)
 					.participant(participant)
-					.finalRank(finalRank)
+					.finalRank(currentRank)
 					.prizeAmount(java.math.BigDecimal.ZERO)
-					.pointsEarned(0)
+					.pointsEarned(TournamentPointsPolicy.compute(currentRank, participantCount))
 					.note(entry.getNote())
 					.build());
 		}
@@ -142,7 +158,8 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	 * <ol>
 	 *   <li>Load giải đấu — ném lỗi nếu không tồn tại.</li>
 	 *   <li>Chọn chiến lược tính hạng theo {@link TournamentFormat}:
-	 *       GROUP_PLAYOFF dùng bảng điểm vòng tròn; các format còn lại dùng placement loại trực tiếp.</li>
+	 *       PROGRESSIVE_ROUND_ROBIN xếp theo giai đoạn bị loại; các format còn lại dùng
+	 *       placement loại trực tiếp.</li>
 	 *   <li>Đánh dấu {@code isOfficial = true} chỉ khi giải đã {@link TournamentStatus#COMPLETED}.</li>
 	 * </ol>
 	 */
@@ -168,44 +185,12 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	 */
 	private List<TournamentRankingEntryResponse> resolveRankingEntries(Tournament tournament) {
 		String formatCode = tournament.getFormat();
-		if (TournamentFormat.GROUP_PLAYOFF.getValue().equals(formatCode)) {
-			// Vòng tròn: hạng = thứ tự trên bảng điểm (điểm, hiệu số, đối đầu...)
-			return fromGroupStandings(tournament.getId());
-		}
 		if (TournamentFormat.PROGRESSIVE_ROUND_ROBIN.getValue().equals(formatCode)) {
 			// Vòng tròn loại dần: top playoff theo kết quả knockout; còn lại theo GĐ bị loại
 			return fromProgressiveRankings(tournament);
 		}
 		// Single/Double elimination và knockout playoff: hạng = vòng bị loại
 		return computeSingleEliminationRankings(tournament.getId());
-	}
-
-	/**
-	 * Xếp hạng cho giải GROUP_PLAYOFF — lấy từ bảng điểm vòng tròn đã tính sẵn.
-	 *
-	 * <p>Mỗi cơ thủ có hạng riêng (không gộp nhóm #3-4 như knockout).
-	 * Hạng 1 được gắn note {@link RankingPlacementNote#GROUP_LEADER}.
-	 */
-	private List<TournamentRankingEntryResponse> fromGroupStandings(Long tournamentId) {
-		List<StandingsEntryResponse> standings = bracketGenerationService.getLeagueStandings(tournamentId);
-		if (standings.isEmpty()) {
-			return List.of();
-		}
-
-		List<TournamentRankingEntryResponse> entries = new ArrayList<>();
-		for (StandingsEntryResponse standing : standings) {
-			int rank = standing.getRank() != null ? standing.getRank() : entries.size() + 1;
-			entries.add(TournamentRankingEntryResponse.builder()
-					.sortOrder(rank)
-					.rankLabel(RankingLabelFormat.single(rank))
-					.rankFrom(rank)
-					.rankTo(rank)
-					.participantId(standing.getParticipantId())
-					.displayName(standing.getDisplayName())
-					.note(rank == 1 ? RankingPlacementNote.GROUP_LEADER.getValue() : null)
-					.build());
-		}
-		return entries;
 	}
 
 	/**
@@ -312,14 +297,12 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	 *   <li>Các vòng trước: gộp theo khoảng (#5-8, #9-16...) theo công thức 2^(maxRound - elimRound)</li>
 	 * </ul>
 	 *
-	 * <p>Chỉ xét trận knockout — bỏ qua vòng bảng GROUP.
 	 */
 	private List<TournamentRankingEntryResponse> computeSingleEliminationRankings(Long tournamentId) {
 		List<Match> allMatches = matchRepository.findByTournamentIdOrderByRoundNoAscPositionNoAsc(tournamentId);
 
-		// Lọc chỉ trận knockout: loại vòng bảng GROUP, giữ trận 3RD nếu có roundNo hợp lệ
+		// Giữ trận 3RD nếu có roundNo hợp lệ
 		List<Match> knockoutMatches = allMatches.stream()
-				.filter(m -> !TournamentStageType.GROUP.getValue().equals(stageTypeOf(m)))
 				.filter(m -> !MatchCode.THIRD_PLACE.getValue().equals(m.getMatchCode()) || m.getRoundNo() != null)
 				.toList();
 
@@ -493,7 +476,6 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 				.displayName(participant.getDisplayName())
 				.accountName(accountName)
 				.avatarUrl(avatarUrl)
-				.seedNo(participant.getSeedNo())
 				.billiardRank(billiardRank)
 				.bio(bio)
 				.achievements(achievements)

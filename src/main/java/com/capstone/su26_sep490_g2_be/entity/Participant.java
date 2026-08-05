@@ -34,8 +34,15 @@ public class Participant {
 	@Column(name = "display_name", nullable = false)
 	private String displayName;
 
-	@Column(name = "seed_no")
-	private Integer seedNo;
+	/**
+	 * Ảnh chụp {@link com.capstone.su26_sep490_g2_be.enums.BilliardRank} tại thời điểm tạo
+	 * participant. Cố ý KHÔNG đọc trực tiếp từ hồ sơ cơ thủ lúc bốc thăm: cơ thủ đổi hạng giữa
+	 * chừng không được phép làm đổi bracket của giải đang diễn ra.
+	 *
+	 * <p>Null / giá trị lạ được coi là {@code UNKNOWN}.
+	 */
+	@Column(name = "billiard_rank", length = 20)
+	private String billiardRank;
 
 	@Column(length = 30, nullable = false)
 	@Builder.Default

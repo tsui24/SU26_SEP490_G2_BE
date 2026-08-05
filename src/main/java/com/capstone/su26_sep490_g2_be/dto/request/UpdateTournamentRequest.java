@@ -15,6 +15,9 @@ import java.time.Instant;
 @Schema(description = "Cập nhật thông tin cơ bản giải đấu")
 public class UpdateTournamentRequest {
 
+	@Schema(description = "Version FE đọc được lúc load form (optimistic lock) — bỏ trống để bỏ qua kiểm tra xung đột")
+	private Long version;
+
 	@Size(max = 255, message = "Tên giải tối đa 255 ký tự")
 	private String name;
 

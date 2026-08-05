@@ -11,8 +11,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum TournamentStageType {
 
-	GROUP("Vòng bảng"),
-	PLAYOFF("Playoff"),
 	KNOCKOUT("Knockout"),
 	WINNERS("Nhánh thắng"),
 	LOSERS("Nhánh thua"),

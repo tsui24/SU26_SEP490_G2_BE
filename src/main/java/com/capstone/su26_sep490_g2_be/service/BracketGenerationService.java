@@ -13,24 +13,12 @@ public interface BracketGenerationService {
 
     void swapPlayers(Long tournamentId, Long matchId1, String slot1, Long matchId2, String slot2);
 
-    /** Xếp hạng vòng tròn — wins → frameDiff → framesWon */
-    List<StandingsEntryResponse> getLeagueStandings(Long tournamentId);
-
-    /** Điền bracket playoff từ kết quả vòng tròn (chỉ khi tất cả trận GROUP đã hoàn thành) */
-    void populateLeaguePlayoff(Long tournamentId);
-
     /**
      * CUT_TO_SE: sau khi tất cả W và L cutoff rounds hoàn thành,
      * điền seSize/2 W survivors + seSize/2 L survivors vào SE bracket.
      * Tournament status → FINAL_BRACKET_READY.
      */
     void populateFinalBracket(Long tournamentId, Long actorUserId);
-
-    /**
-     * GROUP_PLAYOFF progressive elimination: giữ keepCount người top standings,
-     * loại bottom → INACTIVE, auto-WALKOVER các trận còn lại của họ.
-     */
-    void eliminateBottomParticipants(Long tournamentId, int keepCount);
 
     /**
      * PROGRESSIVE_ROUND_ROBIN: chuyển sang giai đoạn kế tiếp — tính standings GĐ hiện tại,
