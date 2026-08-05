@@ -128,7 +128,7 @@ class TournamentResultServiceImplTest {
 		return match;
 	}
 
-	private static StandingsEntryResponse standing(Integer rank, long participantId, String displayName) {
+	private static StandingsEntryResponse standing(Integer rank, Long participantId, String displayName) {
 		return StandingsEntryResponse.builder()
 				.rank(rank).participantId(participantId).displayName(displayName)
 				.build();
@@ -851,5 +851,25 @@ class TournamentResultServiceImplTest {
 		assertNull(response.getParticipantId());
 		assertEquals("Nguyễn Văn An", response.getDisplayName());
 		assertTrue(response.getAchievements().isEmpty());
+	}
+
+	@Test
+	@DisplayName("TC-041 · A ranking row with no participant behind it is skipped")
+	void TC041_finalize_skipsRowWithoutParticipantId() {
+		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(User.builder().id(USER_ID).build()));
+		when(resultRepository.findByTournamentIdOrderByFinalRankAsc(TOURNAMENT_ID)).thenReturn(List.of());
+		when(tournamentRepository.findById(TOURNAMENT_ID)).thenReturn(Optional.of(
+				tournament(TournamentFormat.GROUP_PLAYOFF.getValue(), TournamentStatus.COMPLETED.getValue())));
+		when(bracketGenerationService.getLeagueStandings(TOURNAMENT_ID)).thenReturn(List.of(
+				standing(1, 1L, "An"), standing(2, null, "Chỗ trống")));
+		when(participantRepository.findById(1L)).thenReturn(Optional.of(P1));
+
+		service.finalizeTournamentResults(TOURNAMENT_ID, USER_ID);
+
+		ArgumentCaptor<List<TournamentResult>> saved = ArgumentCaptor.forClass(List.class);
+		verify(resultRepository).saveAll(saved.capture());
+		// A placeholder row on the league table is not a person and cannot be given a result
+		assertEquals(1, saved.getValue().size());
+		verify(participantRepository, never()).findById(null);
 	}
 }

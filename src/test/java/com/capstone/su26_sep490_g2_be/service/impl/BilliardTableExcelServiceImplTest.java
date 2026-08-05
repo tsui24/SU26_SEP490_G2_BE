@@ -438,4 +438,78 @@ class BilliardTableExcelServiceImplTest {
 		// .xlsx name fails the magic-number check instead and is reported as unreadable
 		assertEquals(ErrorCode.TABLE_INVALID_IMPORT_FILE, ex.getErrorCode());
 	}
+
+	// ══════════════════════════ the CSV parser — UC-38 ══════════════════════════
+
+	@Test
+	@DisplayName("TC-025 · A CSV saved without a byte order mark is read all the same")
+	void TC025_import_csvWithoutBom() {
+		givenOwnerWithBranches();
+		MockMultipartFile noBom = new MockMultipartFile("file", "tables.csv", "text/csv",
+				(HEADER + "Bàn 1,1,POOL,\n").getBytes(StandardCharsets.UTF_8));
+
+		ImportTableResultResponse result = service.importFromExcel(OWNER_ID, noBom);
+
+		// A file written by a text editor carries no mark; only the first three bytes are skipped
+		// when they really are one
+		assertEquals(1, result.getImported());
+		assertEquals("Bàn 1", savedTables().get(0).getName());
+	}
+
+	@Test
+	@DisplayName("TC-026 · A quoted field may hold a comma")
+	void TC026_import_quotedFieldWithComma() {
+		givenOwnerWithBranches(branch(1L, "Chi nhánh Quận 1, Lầu 2"));
+
+		ImportTableResultResponse result = service.importFromExcel(OWNER_ID,
+				csvUpload("\"Bàn VIP, góc trái\",1,POOL,\"Chi nhánh Quận 1, Lầu 2\"\n"));
+
+		// Without the quote handling the row would split into six columns and the branch would
+		// never be found
+		assertEquals(1, result.getImported());
+		assertEquals("Bàn VIP, góc trái", savedTables().get(0).getName());
+		assertEquals(1L, savedTables().get(0).getBranch().getId());
+	}
+
+	@Test
+	@DisplayName("TC-027 · A row that stops short of four columns is still read")
+	void TC027_import_shortRow() {
+		givenOwnerWithBranches();
+
+		ImportTableResultResponse result = service.importFromExcel(OWNER_ID, csvUpload("Bàn 1,1\n"));
+
+		// Excel drops trailing empty columns when it saves, so a two-column row is normal
+		assertEquals(1, result.getImported());
+		assertNull(savedTables().get(0).getTableType());
+		assertNull(savedTables().get(0).getBranch());
+	}
+
+	@Test
+	@DisplayName("TC-028 · An empty line in the middle of the file is skipped")
+	void TC028_import_emptyLineInTheMiddle() {
+		givenOwnerWithBranches();
+
+		ImportTableResultResponse result =
+				service.importFromExcel(OWNER_ID, csvUpload("Bàn 1,1,POOL,\n\nBàn 2,2,POOL,\n"));
+
+		// A truly empty line is dropped before parsing, so it does not shift the row numbering
+		assertEquals(2, result.getTotalRows());
+		assertEquals(2, result.getImported());
+		verify(tableRepository, times(2)).save(any(BilliardTable.class));
+	}
+
+	@Test
+	@DisplayName("TC-029 · A legacy .xls name is accepted by the upload check")
+	void TC029_import_legacyXlsExtension() {
+		when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
+		MockMultipartFile legacy = new MockMultipartFile("file", "tables.xls", "application/vnd.ms-excel",
+				(HEADER + "Bàn 1,1,POOL,\n").getBytes(StandardCharsets.UTF_8));
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.importFromExcel(OWNER_ID, legacy));
+
+		// The name passes validation and the file is handed to POI as a spreadsheet, so the
+		// failure comes from the content rather than from the extension being refused
+		assertEquals(ErrorCode.TABLE_INVALID_IMPORT_FILE, ex.getErrorCode());
+	}
 }

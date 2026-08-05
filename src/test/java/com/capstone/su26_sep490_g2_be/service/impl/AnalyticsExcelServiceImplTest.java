@@ -619,6 +619,47 @@ class AnalyticsExcelServiceImplTest {
 		}
 	}
 
+	// ══════════════════ the remaining half-open conditions ══════════════════
+
+	@Test
+	@DisplayName("TC-022 · An empty registration trend adds no trend block either")
+	void TC022_buildTournamentReport_emptyTrendOmitted() throws IOException {
+		TournamentAnalyticsDetailResponse base = detail(fullSocial(4), FROM, TO);
+		when(analyticsService.buildTournamentDetail(any(), any(), any())).thenReturn(
+				TournamentAnalyticsDetailResponse.builder()
+						.id(base.getId()).name(base.getName()).branchName(base.getBranchName())
+						.statusLabel(base.getStatusLabel()).maxParticipants(base.getMaxParticipants())
+						.startAt(FROM).endAt(TO)
+						.transactionStats(fullTransactions())
+						.registrationStats(RegistrationStatsResponse.builder()
+								.total(30).approved(24)
+								.byStatus(List.of(statusCount("APPROVED", "Đã duyệt", 24)))
+								.monthlyTrend(List.of())
+								.build())
+						.participantStats(base.getParticipantStats())
+						.matchStats(base.getMatchStats())
+						.social(fullSocial(4))
+						.build());
+
+		try (XSSFWorkbook workbook = open(service.buildTournamentReport(OWNER_ID, 1L, BRANCH_IDS))) {
+			Sheet registrations = workbook.getSheet("Đăng ký");
+			// An empty list and a null list say the same thing to the reader: no chart to draw
+			assertEquals(1, registrations.getLastRowNum());
+			assertEquals(24d, valueOf(registrations, "Đã duyệt").getNumericCellValue());
+		}
+	}
+
+	@Test
+	@DisplayName("TC-023 · A range with a start but no end leaves the period line out too")
+	void TC023_buildReport_missingUpperBound() throws IOException {
+		stubReportSources();
+
+		try (XSSFWorkbook workbook = open(service.buildReport(OWNER_ID, FROM, null, BRANCH_IDS))) {
+			// Both halves of the condition have to hold, so a half-open range prints nothing
+			assertFalse(hasRowStartingWith(workbook.getSheet("Tổng quan"), "Khoảng thời gian"));
+		}
+	}
+
 	private static MonthlyReportItem monthlyItem(String label, BigDecimal revenue,
 	                                             long transactions, long tournaments, long registrations) {
 		return MonthlyReportItem.builder()

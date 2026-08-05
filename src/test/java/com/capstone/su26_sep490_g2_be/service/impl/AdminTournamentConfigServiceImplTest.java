@@ -1313,4 +1313,164 @@ class AdminTournamentConfigServiceImplTest {
 		// UC-11.4 is a soft disable — tournaments already played on this game type keep their history
 		verify(gameTypeRepository, never()).delete(any(GameTypeDefinition.class));
 	}
+
+	// ══════════════ the type pairings and the sparse rows ══════════════
+
+	@Test
+	@DisplayName("TC-066 · A BOOLEAN field rendered as a checkbox is accepted")
+	void TC066_createConfigField_booleanCheckboxPair() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+		when(configFieldRepository.save(any(ConfigFieldDefinition.class)))
+				.thenAnswer(inv -> inv.getArgument(0));
+
+		ConfigFieldCatalogItemResponse response =
+				service.createConfigFieldCatalogItem(catalogCreateRequest("BOOLEAN", "COMMON", "CHECKBOX"));
+
+		assertEquals("BOOLEAN", response.getDataType());
+		assertEquals("CHECKBOX", response.getUiComponent());
+	}
+
+	@Test
+	@DisplayName("TC-067 · A STRING field rendered as a text box is accepted")
+	void TC067_createConfigField_stringTextPair() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+		when(configFieldRepository.save(any(ConfigFieldDefinition.class)))
+				.thenAnswer(inv -> inv.getArgument(0));
+
+		assertEquals("TEXT",
+				service.createConfigFieldCatalogItem(catalogCreateRequest("STRING", "COMMON", "TEXT"))
+						.getUiComponent());
+	}
+
+	@Test
+	@DisplayName("TC-068 · A UI component outside the four allowed values is rejected first")
+	void TC068_createConfigField_unknownUiComponent() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+
+		BusinessException ex = assertThrows(BusinessException.class,
+				() -> service.createConfigFieldCatalogItem(catalogCreateRequest("INT", "COMMON", "SLIDER")));
+
+		// The allowed-set check runs before the pairing check, so the message names the four values
+		assertEquals(ErrorCode.COMMON_INVALID_REQUEST, ex.getErrorCode());
+		verify(configFieldRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("TC-069 · An INT field with only a lower bound is accepted")
+	void TC069_createConfigField_onlyMinValue() {
+		when(configFieldRepository.existsById("bracket_size")).thenReturn(false);
+		when(configFieldRepository.save(any(ConfigFieldDefinition.class)))
+				.thenAnswer(inv -> inv.getArgument(0));
+
+		CreateConfigFieldCatalogRequest request = catalogCreateRequest("INT", "KNOCKOUT", "NUMBER");
+		request.setMinValue(4);
+
+		ConfigFieldCatalogItemResponse response = service.createConfigFieldCatalogItem(request);
+
+		// The comparison only runs when both bounds are present, so an open upper end is fine
+		assertEquals(4, response.getMinValue());
+		assertNull(response.getMaxValue());
+	}
+
+	@Test
+	@DisplayName("TC-070 · Updating an INT field with only an upper bound is accepted")
+	void TC070_updateConfigField_onlyMaxValue() {
+		ConfigFieldDefinition existing = catalogField("bracket_size", "INT", "NUMBER");
+		when(configFieldRepository.findById("bracket_size")).thenReturn(Optional.of(existing));
+		when(configFieldRepository.save(existing)).thenReturn(existing);
+
+		UpdateConfigFieldCatalogRequest request = new UpdateConfigFieldCatalogRequest();
+		request.setLabel("Kích thước nhánh");
+		request.setUiComponent("NUMBER");
+		request.setMaxValue(64);
+
+		ConfigFieldCatalogItemResponse response = service.updateConfigFieldCatalogItem("bracket_size", request);
+
+		assertNull(response.getMinValue());
+		assertEquals(64, response.getMaxValue());
+	}
+
+	@Test
+	@DisplayName("TC-071 · Updating a non-ENUM field ignores any options sent with it")
+	void TC071_updateConfigField_optionsIgnoredForNonEnum() {
+		ConfigFieldDefinition existing = catalogField("bracket_size", "INT", "NUMBER");
+		when(configFieldRepository.findById("bracket_size")).thenReturn(Optional.of(existing));
+		when(configFieldRepository.save(existing)).thenReturn(existing);
+
+		UpdateConfigFieldCatalogRequest request = new UpdateConfigFieldCatalogRequest();
+		request.setLabel("Kích thước nhánh");
+		request.setUiComponent("NUMBER");
+		request.setEnumOptions(List.of());
+
+		// The empty-list guard only applies to an ENUM field, so this is not an error — the list
+		// is simply written through to a column nothing on an INT field ever reads
+		assertEquals(List.of(),
+				service.updateConfigFieldCatalogItem("bracket_size", request).getEnumOptions());
+	}
+
+	@Test
+	@DisplayName("TC-072 · The wizard form survives a field whose catalog row has gone")
+	void TC072_getConfigFieldsForm_orphanedField() {
+		FormatConfigField orphan = configField("bracket_size", "32");
+		orphan.setFieldDefinition(null);
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE)).thenReturn(List.of(orphan));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(1L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(0L);
+
+		FormatConfigFieldsFormResponse response = service.getConfigFieldsForm(CODE);
+
+		FormatConfigFieldsFormResponse.FormatConfigFieldFormItemResponse item = response.getFields().get(0);
+		// The key stands in for the label and every piece of catalog metadata comes back null,
+		// so a definition deleted out from under a format does not break the wizard
+		assertEquals("bracket_size", item.getLabel());
+		assertNull(item.getDataType());
+		assertNull(item.getUiComponent());
+		assertNull(item.getEnumOptions());
+		assertNull(item.getMinValue());
+		assertEquals("32", item.getDefaultValue());
+		// Config fields but no race-to rule yet
+		assertEquals(FormatSetupStatus.CONFIG_FIELDS_DONE, response.getSetupStatus());
+	}
+
+	@Test
+	@DisplayName("TC-073 · A format with rules but no fields still reports the missing step")
+	void TC073_getSetupStatus_raceToWithoutConfigFields() {
+		when(formatRepository.findById(CODE)).thenReturn(Optional.of(format()));
+		when(formatConfigFieldRepository.countByFormatCode(CODE)).thenReturn(0L);
+		when(formatRaceToRuleRepository.countByFormatCode(CODE)).thenReturn(5L);
+		when(formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(CODE)).thenReturn(List.of());
+		when(formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(CODE))
+				.thenReturn(List.of(raceToRule("final", 9)));
+
+		var status = service.getSetupStatus(CODE);
+
+		// Bootstrapped is true as soon as either side holds rows, but the wizard is not done
+		assertTrue(status.isBootstrapped());
+		assertFalse(status.isCanActivate());
+		assertEquals(List.of("config-fields"), status.getMissingSteps());
+		assertEquals(FormatSetupStatus.INFO_DONE, status.getSetupStatus());
+	}
+
+	@Test
+	@DisplayName("TC-074 · A null entry in the scope filter is skipped")
+	void TC074_getConfigFieldCatalog_nullScopeEntry() {
+		when(configFieldRepository.findAll(any(Specification.class), any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of()));
+
+		List<String> scopes = new java.util.ArrayList<>();
+		scopes.add(null);
+		scopes.add("KNOCKOUT");
+		service.getConfigFieldCatalog(scopes, true, 0, 20);
+
+		Root<ConfigFieldDefinition> root = mock(Root.class, RETURNS_DEEP_STUBS);
+		Path<Object> scopePath = root.get("fieldScope");
+		CriteriaBuilder cb = runSpecification(captureCatalogSpecification(), root);
+
+		ArgumentCaptor<Collection> captured = ArgumentCaptor.forClass(Collection.class);
+		verify(scopePath).in(captured.capture());
+		// A repeated query parameter with one empty value is what an unfilled filter chip sends
+		assertEquals(List.of("KNOCKOUT"), List.copyOf(captured.getValue()));
+		verify(cb).equal(any(Expression.class), eq((Object) Boolean.TRUE));
+	}
 }
