@@ -177,7 +177,7 @@ public class FacebookAutoPostListener {
 		return switch (code) {
 			case "SINGLE_ELIMINATION" -> "Loại trực tiếp";
 			case "DOUBLE_ELIMINATION" -> "Loại trực tiếp kép";
-			case "GROUP_PLAYOFF" -> "Vòng tròn + Playoff";
+			case "PROGRESSIVE_ROUND_ROBIN" -> "Vòng tròn loại dần + Playoff";
 			default -> code;
 		};
 	}

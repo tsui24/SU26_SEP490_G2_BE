@@ -20,8 +20,14 @@ public enum RankingPlacementNote {
 
 	private final String displayName;
 
-	/** Chuỗi gửi xuống FE trong field {@code note}. */
+	/**
+	 * Chuỗi lưu DB / gửi xuống FE trong field {@code note} — dùng {@code name()} (English,
+	 * ALL_CAPS) để khớp quy ước chung của các cột status/type khác trong dự án. FE tự dịch sang
+	 * tiếng Việt qua bảng label riêng (xem {@code RANKING_NOTE_LABELS} ở FE), có fallback về
+	 * nguyên văn nếu không khớp key — nên các dòng {@code tournament_results.note} cũ (đã lưu sẵn
+	 * text tiếng Việt trước khi đổi) vẫn hiển thị đúng mà không cần migrate dữ liệu.
+	 */
 	public String getValue() {
-		return displayName;
+		return name();
 	}
 }

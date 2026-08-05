@@ -14,40 +14,19 @@ public class FormatBootstrapTemplates {
 	private static final Map<String, List<UpsertFormatConfigFieldsRequest.FormatConfigFieldItemRequest>> CONFIG_FIELDS = Map.of(
 			"SINGLE_ELIMINATION", List.of(
 					field("bracket_size", "16"),
-					field("allow_bye", "true"),
-					field("seeding_enabled", "true"),
 					field("third_place_match", "true"),
 					field("break_rule", "ALTERNATE_BREAK"),
 					field("lag_for_break", "true"),
 					field("scoring_unit", "GAME", false)
 			),
 			"DOUBLE_ELIMINATION", List.of(
-					field("bracket_size", "16"),
-					field("allow_bye", "true"),
-					field("seeding_enabled", "true"),
-					field("grand_final_bracket_reset", "false"),
 					field("break_rule", "ALTERNATE_BREAK"),
 					field("lag_for_break", "true"),
 					field("scoring_unit", "GAME", false)
 			),
-			"GROUP_PLAYOFF", List.of(
-					field("break_rule", "ALTERNATE_BREAK"),
-					field("lag_for_break", "true"),
-					field("scoring_unit", "GAME", false),
-					field("group_count", "4"),
-					field("players_per_group", "4"),
-					field("advance_per_group", "2"),
-					field("group_assignment", "RANDOM"),
-					field("group_points_win", "1"),
-					field("group_points_loss", "0"),
-					field("group_tiebreaker_order", "HEAD_TO_HEAD,SCORE_DIFF"),
-					field("playoff_bracket_size", "8"),
-					field("playoff_bye_top_seeds", "0")
-			),
 			"PROGRESSIVE_ROUND_ROBIN", List.of(
 					field("pe_survivors_per_stage", "10,6,4"),
 					field("final_playoff_size", "4"),
-					field("group_tiebreaker_order", "POINTS,RACK_DIFF,RACKS_WON,HEAD_TO_HEAD"),
 					field("break_rule", "ALTERNATE_BREAK"),
 					field("lag_for_break", "true"),
 					field("scoring_unit", "GAME", false)
@@ -71,14 +50,6 @@ public class FormatBootstrapTemplates {
 					rule("losers_r3", "NTh — Vòng 3", "LOSERS", 7),
 					rule("losers_final", "NTh — Chung kết nhánh", "LOSERS", 7),
 					rule("grand_final", "Chung kết lớn", "GRAND_FINAL", 9)
-			),
-			"GROUP_PLAYOFF", List.of(
-					rule("group_default", "Vòng bảng", "GROUP", 5),
-					rule("playoff_r1", "Playoff — Vòng 1", "PLAYOFF", 7),
-					rule("playoff_qf", "Playoff — Tứ kết", "PLAYOFF", 7),
-					rule("playoff_sf", "Playoff — Bán kết", "PLAYOFF", 7),
-					rule("playoff_final", "Playoff — Chung kết", "KNOCKOUT", 9),
-					rule("third_place", "Tranh hạng 3", "KNOCKOUT", 7)
 			),
 			"PROGRESSIVE_ROUND_ROBIN", List.of(
 					rule("league_stage", "Vòng tròn loại dần", "PROGRESSIVE_ROUND", 5),

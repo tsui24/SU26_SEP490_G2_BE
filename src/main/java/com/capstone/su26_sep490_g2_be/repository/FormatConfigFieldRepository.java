@@ -29,4 +29,11 @@ public interface FormatConfigFieldRepository extends JpaRepository<FormatConfigF
 	long countByFormatCode(String formatCode);
 
 	void deleteByFieldKeyIn(List<String> fieldKeys);
+
+	/**
+	 * Gỡ liên kết field khỏi <b>một thể thức duy nhất</b>, giữ nguyên ở các thể thức khác.
+	 * Khác với {@link #deleteByFieldKeyIn} (xoá field khỏi mọi thể thức) — dùng cho trường hợp
+	 * field vẫn có tác dụng thật ở format này nhưng hoàn toàn vô nghĩa ở format kia.
+	 */
+	void deleteByFormatCodeAndFieldKey(String formatCode, String fieldKey);
 }

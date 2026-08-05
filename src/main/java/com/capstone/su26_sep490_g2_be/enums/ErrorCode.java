@@ -103,6 +103,8 @@ public enum ErrorCode {
 	PARTICIPANT_PARTNER_REQUIRED("TOURNAMENT_008", "Giải đôi yêu cầu nhập đủ thông tin cả 2 thành viên", HttpStatus.BAD_REQUEST),
 	PROGRESSIVE_STAGE_NOT_FINISHED("TOURNAMENT_009", "Vẫn còn trận của giai đoạn hiện tại chưa kết thúc — hãy hoàn thành tất cả trước khi chuyển giai đoạn", HttpStatus.CONFLICT),
 	PROGRESSIVE_CONFIG_INVALID("TOURNAMENT_010", "Cấu hình vòng tròn loại dần không hợp lệ", HttpStatus.BAD_REQUEST),
+	DRAW_SWAP_BOTH_SLOTS_EMPTY("TOURNAMENT_011", "Không thể đổi chỗ hai ô đều đang trống", HttpStatus.BAD_REQUEST),
+	DRAW_BRACKET_HAS_EMPTY_MATCH("TOURNAMENT_012", "Bracket có trận vòng 1 không còn cơ thủ nào — hãy sắp xếp lại trước khi xác nhận", HttpStatus.CONFLICT),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),

@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.BilliardRank;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.MatchStatus;
@@ -90,19 +91,11 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         TournamentConfig config = tournamentConfigRepository.findById(tournamentId).orElse(null);
         String seedingMethod = config != null ? config.getSeedingMethod() : SeedingMethod.RANDOM.name();
 
-        if (!SeedingMethod.RANDOM.name().equals(seedingMethod) && config != null && config.getSeedCount() != null) {
-            long seededCount = participants.stream().filter(p -> p.getSeedNo() != null).count();
-            if (seededCount < config.getSeedCount()) {
-                throw new BusinessException(ErrorCode.TOURNAMENT_SEED_COUNT_INSUFFICIENT);
-            }
-        }
-
         participants = resolveSeedRankOrder(seedingMethod, participants);
 
         String format = tournament.getFormat();
         BracketResult result = switch (format) {
             case "DOUBLE_ELIMINATION"       -> generateDoubleElimination(tournament, participants);
-            case "GROUP_PLAYOFF"            -> generateGroupPlayoff(tournament, participants);
             case "PROGRESSIVE_ROUND_ROBIN"  -> generateProgressiveRoundRobin(tournament, participants);
             default                         -> generateSingleElimination(tournament, participants);
         };
@@ -373,255 +366,6 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     }
 
     /* ═══════════════════════════════════════════════════════════
-     *  GROUP_PLAYOFF (Round-Robin League + Knockout Playoff)
-     *
-     *  Phase 1 — GROUP stage (Round Robin):
-     *    Circle method for n players → n-1 rounds × ⌊n/2⌋ matches/round
-     *    matchCode: "GS-R{round}-M{pos}"
-     *
-     *  Phase 2 — PLAYOFF stage (blank, populated after group stage):
-     *    Top K players (playoff_size config, default 4) advance
-     *    Single elimination bracket from standings
-     *    matchCode: "PO-R{round}-M{pos}"
-     *
-     *  Advancement to PLAYOFF:
-     *    Owner triggers POST /owner/tournaments/{id}/generate-playoff
-     *    after all group matches are COMPLETED.
-     * ═══════════════════════════════════════════════════════════ */
-
-    private BracketResult generateGroupPlayoff(Tournament t, List<Participant> participants) {
-        int n = participants.size();
-        int playoffSize = readIntConfig(t.getId(), "playoff_size", 4);
-        // playoffSize must be a power of 2 and <= n
-        playoffSize = Math.min(playoffSize, nextPowerOf2(n));
-        if (playoffSize < 2) playoffSize = 2;
-
-        // ── GROUP stage (Round-Robin, circle method) ──────────
-        TournamentStage groupStage = stageRepository.save(TournamentStage.builder()
-                .tournament(t).name("Vòng tròn").stageType("GROUP")
-                .orderNo(1).status(TournamentStageStatus.PENDING.getValue()).build());
-
-        // Circle-method schedule: totalRounds = n (odd) or n-1 (even)
-        List<Participant> roster = new ArrayList<>(participants);
-        boolean addedDummy = false;
-        if (n % 2 != 0) {
-            roster.add(null); // dummy bye player
-            addedDummy = true;
-        }
-        int sz = roster.size(); // guaranteed even
-        int totalGroupRounds = sz - 1;
-
-        List<Match> groupMatches = new ArrayList<>();
-        int[] ring = new int[sz]; // index into roster; ring[0] is fixed
-        for (int i = 0; i < sz; i++) ring[i] = i;
-
-        int raceTo = safeResolveRaceTo(t.getId(), t.getFormat(), "group_stage");
-        for (int round = 1; round <= totalGroupRounds; round++) {
-            int posNo = 0;
-            for (int k = 0; k < sz / 2; k++) {
-                Participant p1 = roster.get(ring[k]);
-                Participant p2 = roster.get(ring[sz - 1 - k]);
-                if (p1 == null || p2 == null) continue; // skip dummy bye pairs
-                posNo++;
-                Match m = matchRepository.save(Match.builder()
-                        .tournament(t).stage(groupStage).bracketType("GROUP")
-                        .roundNo(round).positionNo(posNo)
-                        .matchCode("GS-R%d-M%d".formatted(round, posNo))
-                        .raceTo(raceTo).status(MatchStatus.PENDING.getValue()).isBye(false)
-                        .player1(p1).player2(p2)
-                        .player1Score(0).player2Score(0).build());
-                groupMatches.add(m);
-            }
-            // Rotate ring[1..sz-1] clockwise by 1
-            int last = ring[sz - 1];
-            System.arraycopy(ring, 1, ring, 2, sz - 2);
-            ring[1] = last;
-        }
-
-        // ── PLAYOFF stage (blank — filled after group stage) ──
-        TournamentStage playoffStage = stageRepository.save(TournamentStage.builder()
-                .tournament(t).name("Vòng playoff").stageType("PLAYOFF")
-                .orderNo(2).status(TournamentStageStatus.PENDING.getValue()).build());
-
-        int pTotalRounds = log2(nextPowerOf2(playoffSize));
-        Match[][] pGrid = new Match[pTotalRounds + 1][(playoffSize / 2) + 1];
-        List<Match> playoffMatches = new ArrayList<>();
-
-        for (int pr = 1; pr <= pTotalRounds; pr++) {
-            int mc = nextPowerOf2(playoffSize) >> pr;
-            String rk = resolveRoundKey(pr, pTotalRounds, false);
-            for (int pos = 1; pos <= mc; pos++) {
-                Match m = matchRepository.save(Match.builder()
-                        .tournament(t).stage(playoffStage).bracketType("PLAYOFF")
-                        .roundNo(pr).positionNo(pos)
-                        .matchCode("PO-R%d-M%d".formatted(pr, pos))
-                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
-                pGrid[pr][pos] = m;
-                playoffMatches.add(m);
-            }
-        }
-
-        // Link playoff win-advancement
-        for (int pr = 1; pr < pTotalRounds; pr++) {
-            int mc = nextPowerOf2(playoffSize) >> pr;
-            for (int pos = 1; pos <= mc; pos++) {
-                int pp = (pos + 1) / 2;
-                String slot = (pos % 2 == 1) ? "player1" : "player2";
-                pGrid[pr][pos].setNextMatchWin(pGrid[pr + 1][pp]);
-                pGrid[pr][pos].setWinSlot(slot);
-                matchRepository.save(pGrid[pr][pos]);
-            }
-        }
-
-        List<TournamentStage> stages = List.of(groupStage, playoffStage);
-        List<Match> allMatches = new ArrayList<>(groupMatches);
-        allMatches.addAll(playoffMatches);
-        return new BracketResult(stages, allMatches);
-    }
-
-    /* ═══════════════════════════════════════════════════════════
-     *  LEAGUE STANDINGS
-     *  Sort: wins DESC → frameDiff DESC → framesWon DESC
-     * ═══════════════════════════════════════════════════════════ */
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<StandingsEntryResponse> getLeagueStandings(Long tournamentId) {
-        // Collect all GROUP stage matches
-        List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);
-        List<Long> groupStageIds = stages.stream()
-                .filter(s -> "GROUP".equals(s.getStageType()))
-                .map(TournamentStage::getId)
-                .toList();
-
-        if (groupStageIds.isEmpty()) return List.of();
-
-        List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
-
-        // Accumulate stats per participant
-        record Stats(int wins, int losses, int framesWon, int framesLost) {}
-        Map<Long, Stats> statsMap = new HashMap<>();
-        for (Participant p : participants) {
-            statsMap.put(p.getId(), new Stats(0, 0, 0, 0));
-        }
-
-        for (Long stageId : groupStageIds) {
-            List<Match> matches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(stageId);
-            for (Match m : matches) {
-                if (!MatchStatus.COMPLETED.getValue().equals(m.getStatus())
-                        && !MatchStatus.WALKOVER.getValue().equals(m.getStatus())) continue;
-                if (m.getWinner() == null || m.getLoser() == null) continue;
-
-                Long wId = m.getWinner().getId();
-                Long lId = m.getLoser().getId();
-                int p1s = m.getPlayer1Score(), p2s = m.getPlayer2Score();
-                int winnerFrames = m.getWinner().getId().equals(m.getPlayer1() != null ? m.getPlayer1().getId() : -1L) ? p1s : p2s;
-                int loserFrames  = winnerFrames == p1s ? p2s : p1s;
-
-                statsMap.computeIfPresent(wId, (k, s) -> new Stats(s.wins()+1, s.losses(), s.framesWon()+winnerFrames, s.framesLost()+loserFrames));
-                statsMap.computeIfPresent(lId, (k, s) -> new Stats(s.wins(), s.losses()+1, s.framesWon()+loserFrames, s.framesLost()+winnerFrames));
-            }
-        }
-
-        int playoffSize = readIntConfig(tournamentId, "playoff_size", 4);
-
-        // Build sorted list
-        Map<Long, Participant> ptcpMap = participants.stream().collect(Collectors.toMap(Participant::getId, p -> p));
-        List<Map.Entry<Long, Stats>> sorted = new ArrayList<>(statsMap.entrySet());
-        sorted.sort(Comparator
-                .comparingInt((Map.Entry<Long, Stats> e) -> e.getValue().wins()).reversed()
-                .thenComparingInt(e -> -(e.getValue().framesWon() - e.getValue().framesLost()))
-                .thenComparingInt(e -> -e.getValue().framesWon()));
-
-        List<StandingsEntryResponse> result = new ArrayList<>();
-        for (int i = 0; i < sorted.size(); i++) {
-            Map.Entry<Long, Stats> entry = sorted.get(i);
-            Stats s = entry.getValue();
-            Participant p = ptcpMap.get(entry.getKey());
-            result.add(StandingsEntryResponse.builder()
-                    .rank(i + 1)
-                    .participantId(entry.getKey())
-                    .displayName(p != null ? p.getDisplayName() : "?")
-                    .wins(s.wins()).losses(s.losses())
-                    .matchesPlayed(s.wins() + s.losses())
-                    .framesWon(s.framesWon()).framesLost(s.framesLost())
-                    .frameDiff(s.framesWon() - s.framesLost())
-                    .advancesToPlayoff(i < playoffSize)
-                    .build());
-        }
-        return result;
-    }
-
-    /* ═══════════════════════════════════════════════════════════
-     *  POPULATE PLAYOFF — fill blank playoff bracket from standings
-     *  Owner triggers after all group matches are COMPLETED.
-     * ═══════════════════════════════════════════════════════════ */
-
-    @Override
-    @Transactional
-    public void populateLeaguePlayoff(Long tournamentId) {
-        Tournament t = tournamentRepository.findById(tournamentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-
-        if (!TournamentStatus.IN_PROGRESS.getValue().equals(t.getStatus())) {
-            throw new BusinessException(ErrorCode.INVALID_OPERATION);
-        }
-
-        List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);
-        TournamentStage groupStage = stages.stream()
-                .filter(s -> "GROUP".equals(s.getStageType())).findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_OPERATION));
-        TournamentStage playoffStage = stages.stream()
-                .filter(s -> "PLAYOFF".equals(s.getStageType())).findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_OPERATION));
-
-        // All group matches must be finished
-        List<Match> groupMatches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(groupStage.getId());
-        boolean allDone = groupMatches.stream()
-                .allMatch(m -> MatchStatus.COMPLETED.getValue().equals(m.getStatus())
-                            || MatchStatus.WALKOVER.getValue().equals(m.getStatus())
-                            || MatchStatus.BYE.getValue().equals(m.getStatus()));
-        if (!allDone) throw new BusinessException(ErrorCode.INVALID_OPERATION);
-
-        // Get standings, take top K
-        List<StandingsEntryResponse> standings = getLeagueStandings(tournamentId);
-        int playoffSize = readIntConfig(tournamentId, "playoff_size", 4);
-        List<StandingsEntryResponse> advancers = standings.stream()
-                .filter(StandingsEntryResponse::getAdvancesToPlayoff)
-                .limit(playoffSize)
-                .toList();
-
-        if (advancers.size() < 2) throw new BusinessException(ErrorCode.INVALID_OPERATION);
-
-        // Get playoff R1 matches sorted by position
-        List<Match> poR1 = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(playoffStage.getId())
-                .stream().filter(m -> m.getRoundNo() == 1).toList();
-
-        // Assign top-seeded to R1 in standard bracket order:
-        // Seed 1 vs Seed K, Seed 2 vs Seed K-1, etc. (alternating top/bottom)
-        Map<Long, Participant> ptcpMap = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue())
-                .stream().collect(Collectors.toMap(Participant::getId, p -> p));
-
-        int lo = 0, hi = advancers.size() - 1;
-        for (Match m : poR1) {
-            if (lo > hi) break;
-            Participant p1 = ptcpMap.get(advancers.get(lo).getParticipantId());
-            Participant p2 = (lo < hi) ? ptcpMap.get(advancers.get(hi).getParticipantId()) : null;
-            m.setPlayer1(p1);
-            m.setPlayer2(p2);
-            if (p2 == null) { m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(p1); }
-            matchRepository.save(m);
-            if (p2 == null) placeParticipantInMatch(m.getNextMatchWin(), m.getWinSlot(), p1);
-            lo++;
-            if (lo <= hi) hi--;
-        }
-
-        groupStage.setStatus(TournamentStageStatus.COMPLETED.getValue());
-        stageRepository.save(groupStage);
-    }
-
-    /* ═══════════════════════════════════════════════════════════
      *  PROGRESSIVE_ROUND_ROBIN (Vòng tròn loại dần nhiều giai đoạn + Playoff)
      *
      *  Tại draw: sinh SẴN TOÀN BỘ khung — tất cả GĐ League (round-robin) + bracket Playoff.
@@ -873,8 +617,19 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     /**
      * Bảng xếp hạng RIÊNG của một giai đoạn (theo stageId) — dùng cho PROGRESSIVE_ROUND_ROBIN.
      * Người chơi lấy từ player của các trận trong stage (không dùng participant ACTIVE toàn giải,
-     * vì người đã bị loại giờ INACTIVE). Tiêu chí: Points (thắng) → Rack Diff → Racks Won →
-     * Head-to-head (đối đầu trong nhóm hòa) → hạt giống → id.
+     * vì người đã bị loại giờ INACTIVE).
+     *
+     * <p><b>Thứ tự phân định:</b>
+     * <ol>
+     *   <li>Số trận thắng</li>
+     *   <li>Hiệu số ván (ván thắng − ván thua), tính trên toàn giai đoạn</li>
+     *   <li>Đối đầu trực tiếp giữa những người còn hoà</li>
+     *   <li>Tổng số ván thắng</li>
+     *   <li>ID participant — chốt cuối để kết quả luôn tất định</li>
+     * </ol>
+     *
+     * <p>Frontend phải hiển thị theo đúng thứ tự này (xem {@code MatchesTab.computeStandings}),
+     * nếu lệch thì khán giả thấy một bảng còn hệ thống loại người theo bảng khác.
      */
     @Override
     @Transactional(readOnly = true)
@@ -907,13 +662,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         List<Long> ids = new ArrayList<>(players.keySet());
         ids.sort((a, b) -> {
             int[] sa = stat.get(a), sb = stat.get(b);
-            if (sa[0] != sb[0]) return Integer.compare(sb[0], sa[0]);            // wins desc
+            if (sa[0] != sb[0]) return Integer.compare(sb[0], sa[0]);            // 1. wins desc
             int da = sa[2] - sa[3], db = sb[2] - sb[3];
-            if (da != db) return Integer.compare(db, da);                        // rackDiff desc
-            if (sa[2] != sb[2]) return Integer.compare(sb[2], sa[2]);            // racksWon desc
-            return 0;                                                            // head-to-head sau
+            if (da != db) return Integer.compare(db, da);                        // 2. rackDiff desc
+            return 0;                                                            // 3+ do resolveHeadToHead xử lý
         });
-        resolveHeadToHead(ids, stat, matches, players);
+        resolveHeadToHead(ids, stat, matches);
 
         int advanceCount = (stage != null && stage.getPeActiveCount() != null && stage.getPeEliminateCount() != null)
                 ? stage.getPeActiveCount() - stage.getPeEliminateCount() : -1;
@@ -937,9 +691,17 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         return result;
     }
 
-    /** Sắp lại các nhóm bằng nhau (Points, RackDiff, RacksWon) theo đối đầu trực tiếp trong nhóm. */
-    private void resolveHeadToHead(List<Long> ids, Map<Long, int[]> stat,
-                                   List<Match> matches, Map<Long, Participant> players) {
+    /**
+     * Phân định các nhóm còn hoà sau 2 tiêu chí đầu (số trận thắng, hiệu số ván).
+     *
+     * <p>Thứ tự trong nhóm: <b>đối đầu trực tiếp → số ván thắng → id</b>.
+     * Đối đầu trực tiếp đứng trên số ván thắng theo điều lệ giải: khi hai cơ thủ ngang nhau
+     * về thành tích chung thì kết quả gặp nhau trực tiếp có tiếng nói trước.
+     *
+     * <p>Nhóm hoà vòng (A thắng B, B thắng C, C thắng A) sẽ cùng số trận thắng đối đầu → tự động
+     * rơi xuống tiêu chí kế tiếp. Bậc cuối dùng id nên kết quả luôn tất định.
+     */
+    private void resolveHeadToHead(List<Long> ids, Map<Long, int[]> stat, List<Match> matches) {
         int i = 0;
         while (i < ids.size()) {
             int j = i + 1;
@@ -950,12 +712,10 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                 Map<Long, Integer> h2h = headToHeadWins(matches, groupSet);
                 group.sort((a, b) -> {
                     int ha = h2h.getOrDefault(a, 0), hb = h2h.getOrDefault(b, 0);
-                    if (ha != hb) return Integer.compare(hb, ha);                // h2h wins desc
-                    Integer sa = players.get(a).getSeedNo(), sb = players.get(b).getSeedNo();
-                    if (sa != null && sb != null && !sa.equals(sb)) return Integer.compare(sa, sb);
-                    if (sa != null && sb == null) return -1;
-                    if (sa == null && sb != null) return 1;
-                    return Long.compare(a, b);
+                    if (ha != hb) return Integer.compare(hb, ha);                // 3. đối đầu trực tiếp
+                    int wa = stat.get(a)[2], wb = stat.get(b)[2];
+                    if (wa != wb) return Integer.compare(wb, wa);                // 4. số ván thắng
+                    return Long.compare(a, b);                                   // 5. chốt tất định
                 });
                 for (int k = i; k < j; k++) ids.set(k, group.get(k - i));
             }
@@ -963,8 +723,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         }
     }
 
+    /**
+     * Hai cơ thủ được coi là còn hoà (cần xét tiếp) khi bằng nhau ở 2 tiêu chí đầu.
+     * KHÔNG tính số ván thắng ở đây — nó đã bị đẩy xuống sau đối đầu trực tiếp.
+     */
     private boolean samePrimary(int[] a, int[] b) {
-        return a[0] == b[0] && (a[2] - a[3]) == (b[2] - b[3]) && a[2] == b[2];
+        return a[0] == b[0] && (a[2] - a[3]) == (b[2] - b[3]);
     }
 
     private Map<Long, Integer> headToHeadWins(List<Match> matches, Set<Long> groupIds) {
@@ -995,6 +759,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         assertActorCanAccessTournament(actorUserId, t);
         if (!TournamentStatus.DRAW_PREVIEW.getValue().equals(t.getStatus())) throw new BusinessException(ErrorCode.INVALID_OPERATION);
+
+        assertNoEmptyRound1Match(tournamentId);
+
         String previousStatus = t.getStatus();
         t.setStatus(TournamentStatus.DRAW_DONE.getValue());
         tournamentRepository.save(t);
@@ -1009,6 +776,38 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                 .variables(variables)
                 .entityKey("TOURNAMENT-DRAW-" + t.getId())
                 .build());
+    }
+
+    /**
+     * Lưới an toàn trước khi chốt bracket: không cho phép tồn tại trận vòng 1 mà cả 2 ô đều trống —
+     * trận đó không ai đá được, cũng không phải BYE nên không tự phân định, khiến giải không bao giờ
+     * kết thúc được.
+     *
+     * <p><b>Chỉ xét stage đã có người.</b> Nhiều stage cố ý để TRỐNG lúc bốc thăm và được điền sau:
+     * nhánh thua của Loại kép (điền bằng người thua từ nhánh thắng), bracket Playoff của Vòng tròn
+     * loại dần, các giai đoạn League phía sau. Nếu vòng 1 của một stage trống hoàn toàn thì đó là
+     * placeholder hợp lệ → bỏ qua. Chỉ khi stage đã có người mà vẫn lẫn trận rỗng mới là bất thường.
+     *
+     * <p>Trận BYE (đúng 1 cơ thủ) luôn hợp lệ — giải có sĩ số không phải lũy thừa 2 buộc phải có BYE.
+     */
+    private void assertNoEmptyRound1Match(Long tournamentId) {
+        Map<Long, List<Match>> round1ByStage = matchRepository
+                .findByTournamentIdOrderByRoundNoAscPositionNoAsc(tournamentId).stream()
+                .filter(m -> m.getStage() != null && m.getRoundNo() != null && m.getRoundNo() == 1)
+                .collect(Collectors.groupingBy(m -> m.getStage().getId()));
+
+        for (List<Match> stageRound1 : round1ByStage.values()) {
+            boolean stageHasPlayers = stageRound1.stream()
+                    .anyMatch(m -> m.getPlayer1() != null || m.getPlayer2() != null);
+            if (!stageHasPlayers) {
+                continue; // placeholder chờ điền — hợp lệ
+            }
+            boolean hasEmptyMatch = stageRound1.stream()
+                    .anyMatch(m -> m.getPlayer1() == null && m.getPlayer2() == null);
+            if (hasEmptyMatch) {
+                throw new BusinessException(ErrorCode.DRAW_BRACKET_HAS_EMPTY_MATCH);
+            }
+        }
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1042,6 +841,12 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         Participant p1 = getSlot(m1, slot1);
         Participant p2 = getSlot(m2, slot2);
+
+        // Đổi chỗ 2 ô đều trống là vô nghĩa và chỉ tạo ra trận rỗng không ai đá được
+        if (p1 == null && p2 == null) {
+            throw new BusinessException(ErrorCode.DRAW_SWAP_BOTH_SLOTS_EMPTY);
+        }
+
         setSlot(m1, slot1, p2);
         setSlot(m2, slot2, p1);
         updateByeStatus(m1);
@@ -1138,7 +943,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private ParticipantBriefResponse brief(Participant p) {
         if (p == null) return null;
         return ParticipantBriefResponse.builder()
-                .id(p.getId()).displayName(p.getDisplayName()).seedNo(p.getSeedNo())
+                .id(p.getId()).displayName(p.getDisplayName())
                 .avatarUrl(p.getAvtarUrl()).build();
     }
 
@@ -1190,27 +995,69 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
     /**
      * Sắp participants theo "seed rank" (index 0 = hạng 1 — mạnh nhất, được ưu tiên BYE khi có).
-     * - RANDOM: bỏ qua seedNo, xáo toàn bộ ngẫu nhiên (bốc thăm hoàn toàn).
-     * - Còn lại (MANUAL/ELO): người có seedNo được xếp trước theo seedNo tăng dần; người KHÔNG có
-     *   seedNo được xáo ngẫu nhiên và xếp sau — cho phép seed một phần (VD chỉ 16/64 người có hạt
-     *   giống), phần còn lại vẫn bốc thăm công bằng thay vì giữ nguyên thứ tự đăng ký/tạo participant.
+     *
+     * <ul>
+     *   <li><b>RANK</b> — xếp theo {@link BilliardRank} của cơ thủ, xem {@link #resolveRankOrder}.</li>
+     *   <li><b>RANDOM</b> (và mọi giá trị lạ) — xáo toàn bộ, bốc thăm thuần.</li>
+     * </ul>
      */
     private List<Participant> resolveSeedRankOrder(String seedingMethod, List<Participant> participants) {
-        if (SeedingMethod.RANDOM.name().equals(seedingMethod)) {
-            List<Participant> shuffled = new ArrayList<>(participants);
-            Collections.shuffle(shuffled);
-            return shuffled;
+        if (SeedingMethod.RANK.name().equals(seedingMethod)) {
+            return resolveRankOrder(participants);
         }
-        List<Participant> seeded = participants.stream()
-                .filter(p -> p.getSeedNo() != null)
-                .sorted(Comparator.comparingInt(Participant::getSeedNo))
-                .collect(Collectors.toCollection(ArrayList::new));
-        List<Participant> unseeded = participants.stream()
-                .filter(p -> p.getSeedNo() == null)
-                .collect(Collectors.toCollection(ArrayList::new));
-        Collections.shuffle(unseeded);
-        seeded.addAll(unseeded);
-        return seeded;
+        List<Participant> shuffled = new ArrayList<>(participants);
+        Collections.shuffle(shuffled);
+        return shuffled;
+    }
+
+    /**
+     * Xếp thứ tự hạt giống theo hạng cơ thủ (hệ bi-a Việt Nam: CN → A → … → L).
+     *
+     * <ol>
+     *   <li>Người ĐÃ có hạng: sắp theo bậc hạng, <b>xáo ngẫu nhiên trong cùng một bậc</b> — trùng
+     *       hạng là chuyện bình thường nên không có tiêu chí phụ, cùng hạng thì bốc thăm.
+     *       Muốn can thiệp tay thì dùng chức năng đổi chỗ ở màn Bốc thăm.</li>
+     *   <li>Người CHƯA có hạng: xáo ngẫu nhiên rồi xếp sau toàn bộ nhóm có hạng, để nhóm có hạng
+     *       giữ trọn các hạt giống đầu — xem {@link #appendUnrankedAfterRanked}.</li>
+     * </ol>
+     */
+    private List<Participant> resolveRankOrder(List<Participant> participants) {
+        List<Participant> ranked = new ArrayList<>();
+        List<Participant> unranked = new ArrayList<>();
+        for (Participant p : participants) {
+            if (BilliardRank.fromNullable(p.getBilliardRank()).isRanked()) {
+                ranked.add(p);
+            } else {
+                unranked.add(p);
+            }
+        }
+
+        // Xáo trước rồi mới sort ổn định theo bậc → trong cùng bậc thứ tự là ngẫu nhiên
+        Collections.shuffle(ranked);
+        ranked.sort(Comparator.comparingInt(p -> BilliardRank.fromNullable(p.getBilliardRank()).ordinal()));
+
+        Collections.shuffle(unranked);
+        return appendUnrankedAfterRanked(ranked, unranked);
+    }
+
+    /**
+     * Ghép nhóm chưa xếp hạng vào sau danh sách đã sắp theo hạng.
+     *
+     * <p>Nhóm CÓ hạng giữ trọn các hạt giống đầu theo đúng bậc; nhóm CHƯA xếp hạng (đã xáo ngẫu
+     * nhiên từ trước) xếp sau.
+     *
+     * <p><b>Vì sao không rải ngẫu nhiên nhóm chưa xếp hạng ra toàn bảng:</b> {@code standardSeedOrder}
+     * ghép vị trí 1 với vị trí n, 2 với n-1... nên nó chỉ tách được các cơ thủ mạnh khi họ thực sự
+     * nằm ở các hạt giống ĐẦU. Nếu người chưa xếp hạng chiếm mất vị trí đầu, cơ thủ hạng cao bị đẩy
+     * xuống giữa bảng và có thể gặp nhau ngay vòng 1 — đã tái hiện được: một giải 16 người (2 CN,
+     * 2 A, 4 B, 8 chưa xếp hạng) cho ra cặp CN vs A ở vòng 1. Rải ngẫu nhiên và bảo toàn việc tách
+     * nhánh là hai mục tiêu xung đột; ở đây ưu tiên tách nhánh.
+     */
+    private List<Participant> appendUnrankedAfterRanked(List<Participant> ranked, List<Participant> unranked) {
+        List<Participant> merged = new ArrayList<>(ranked.size() + unranked.size());
+        merged.addAll(ranked);
+        merged.addAll(unranked);
+        return merged;
     }
 
     /**
@@ -1264,9 +1111,29 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private Participant getSlot(Match m, String slot) { return "player1".equals(slot) ? m.getPlayer1() : m.getPlayer2(); }
     private void setSlot(Match m, String slot, Participant p) { if ("player1".equals(slot)) m.setPlayer1(p); else m.setPlayer2(p); }
 
+    /**
+     * Tính lại trạng thái BYE sau khi {@link #swapPlayers} đổi chỗ — nhận diện BYE ở CẢ HAI phía
+     * giống {@link #assignSeededRound1}, không chỉ khi người nằm ở {@code player1}.
+     *
+     * <p><b>Chuẩn hoá:</b> nếu trận chỉ còn 1 người thì luôn dồn về {@code player1}. Toàn bộ code
+     * phía sau đều ngầm dựa vào bất biến "trận BYE có người ở player1, ô trống là player2" —
+     * {@link #refreshBracketFromR1} chỉ đẩy {@code m.getPlayer1()} lên vòng sau, và FE cũng khoá ô
+     * trống dựa trên {@code slot === "player2"}. Để người còn lại nằm ở {@code player2} sẽ khiến
+     * cơ thủ đó mất suất miễn trận và trận kẹt vĩnh viễn ở PENDING.
+     */
     private void updateByeStatus(Match m) {
-        if (m.getPlayer1() != null && m.getPlayer2() == null) {
-            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(m.getPlayer1());
+        Participant p1 = m.getPlayer1();
+        Participant p2 = m.getPlayer2();
+
+        if (p1 == null && p2 != null) {
+            m.setPlayer1(p2);
+            m.setPlayer2(null);
+            p1 = p2;
+            p2 = null;
+        }
+
+        if (p1 != null && p2 == null) {
+            m.setIsBye(true); m.setStatus(MatchStatus.BYE.getValue()); m.setWinner(p1);
         } else {
             m.setIsBye(false); m.setStatus(MatchStatus.PENDING.getValue()); m.setWinner(null);
         }
@@ -1566,58 +1433,6 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         tournamentRepository.save(t);
         tournamentAuditService.recordChange(t, previousStatus, TournamentStatus.FINAL_BRACKET_READY.getValue(),
                 actorUserId, "Điền bracket loại trực tiếp (CUT_TO_SE)");
-    }
-
-    /* ═══════════════════════════════════════════════════════════
-     *  ELIMINATE BOTTOM — Progressive elimination cho GROUP_PLAYOFF
-     *
-     *  Giữ keepCount người xếp hạng cao nhất.
-     *  Người bị loại → INACTIVE.
-     *  Match PENDING với người bị loại → tự động WALKOVER cho đối thủ.
-     * ═══════════════════════════════════════════════════════════ */
-
-    @Override
-    @Transactional
-    public void eliminateBottomParticipants(Long tournamentId, int keepCount) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!TournamentStatus.IN_PROGRESS.getValue().equals(tournament.getStatus())) {
-            throw new BusinessException(ErrorCode.INVALID_OPERATION);
-        }
-
-        List<StandingsEntryResponse> standings = getLeagueStandings(tournamentId);
-        if (keepCount >= standings.size()) return;
-
-        Set<Long> eliminatedIds = standings.stream()
-                .filter(s -> s.getRank() > keepCount)
-                .map(StandingsEntryResponse::getParticipantId)
-                .collect(Collectors.toSet());
-
-        // Đánh dấu INACTIVE
-        List<Participant> toElim = participantRepository.findAllById(eliminatedIds);
-        toElim.forEach(p -> p.setStatus(ParticipantStatus.INACTIVE.getValue()));
-        participantRepository.saveAll(toElim);
-
-        // Auto-WALKOVER tất cả PENDING matches có người bị loại
-        List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);
-        for (TournamentStage stage : stages) {
-            if (!"GROUP".equals(stage.getStageType())) continue;
-            matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(stage.getId()).stream()
-                    .filter(m -> MatchStatus.PENDING.getValue().equals(m.getStatus()))
-                    .forEach(m -> {
-                        boolean p1Elim = m.getPlayer1() != null && eliminatedIds.contains(m.getPlayer1().getId());
-                        boolean p2Elim = m.getPlayer2() != null && eliminatedIds.contains(m.getPlayer2().getId());
-                        if (p1Elim && p2Elim) {
-                            m.setStatus(MatchStatus.BYE.getValue()); m.setIsBye(true);
-                        } else if (p1Elim && m.getPlayer2() != null) {
-                            m.setStatus(MatchStatus.WALKOVER.getValue()); m.setWinner(m.getPlayer2()); m.setLoser(m.getPlayer1());
-                        } else if (p2Elim && m.getPlayer1() != null) {
-                            m.setStatus(MatchStatus.WALKOVER.getValue()); m.setWinner(m.getPlayer1()); m.setLoser(m.getPlayer2());
-                        }
-                        matchRepository.save(m);
-                    });
-        }
-        log.info("Eliminated {} participants (tournamentId={}), kept top {}", eliminatedIds.size(), tournamentId, keepCount);
     }
 
     /* ═══════════════════════════════════════════════════════════

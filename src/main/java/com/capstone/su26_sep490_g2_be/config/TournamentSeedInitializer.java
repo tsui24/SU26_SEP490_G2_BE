@@ -8,6 +8,7 @@ import com.capstone.su26_sep490_g2_be.service.MatchService;
 import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRankingEntryResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRankingResponse;
+import com.capstone.su26_sep490_g2_be.util.TournamentPointsPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -27,7 +28,6 @@ import java.util.stream.Collectors;
  * <ol>
  *   <li>SINGLE_ELIMINATION — 8 cơ thủ, 9-Ball</li>
  *   <li>DOUBLE_ELIMINATION — 8 cơ thủ, 8-Ball</li>
- *   <li>GROUP_PLAYOFF — 8 cơ thủ, 10-Ball</li>
  *   <li>PROGRESSIVE_ROUND_ROBIN — 8 cơ thủ, 9-Ball</li>
  * </ol>
  *
@@ -71,7 +71,6 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 
 		seedSingleElimination(owner, branch);
 		seedDoubleElimination(owner, branch);
-		seedGroupPlayoff(owner, branch);
 		seedProgressiveRoundRobin(owner, branch);
 
 		log.info("TournamentSeedInitializer hoàn thành — 4 giải đấu mẫu (1 per format)");
@@ -144,38 +143,6 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  3. GROUP_PLAYOFF — 8 cơ thủ, 10-Ball
-	// ══════════════════════════════════════════════════════════════════════
-
-	private void seedGroupPlayoff(User owner, Branch branch) {
-		final String name = "Giải 10-Ball Vòng Bảng + Playoff 2026";
-		if (tournamentExists(name)) return;
-
-		Tournament t = createTournament(name,
-				"Giải đấu 10-Ball — 8 cơ thủ vòng tròn, top 4 vào playoff bán kết + chung kết.",
-				"10_BALL", "GROUP_PLAYOFF", 8,
-				BigDecimal.valueOf(100000), BigDecimal.valueOf(3000000),
-				"Vô địch 1.500.000đ · Á quân 900.000đ · Hạng 3-4 300.000đ",
-				owner, branch);
-
-		createConfig(t, SeedingMethod.RANDOM.name());
-
-		addRaceToRule(t, "group_stage", "GROUP", 5);
-		addRaceToRule(t, "semi_final", "PLAYOFF", 7);
-		addRaceToRule(t, "final", "PLAYOFF", 9);
-
-		addConfigValue(t, "playoff_size", "4");
-
-		List<String> names = List.of(
-				"Nguyễn Văn Hùng", "Trần Minh Tuấn", "Lê Hoàng Nam", "Phạm Đức Anh",
-				"Hoàng Quốc Việt", "Vũ Thanh Bình", "Phan Trọng Khôi", "Trương Xuân Long");
-		Map<Long, Integer> power = createParticipantsWithPower(t, names);
-
-		generateAndComplete(t, owner, power, null);
-		log.info("Seeded GROUP_PLAYOFF: {} (8 cơ thủ, COMPLETED)", name);
-	}
-
-	// ══════════════════════════════════════════════════════════════════════
 	//  4. PROGRESSIVE_ROUND_ROBIN — 8 cơ thủ, 9-Ball
 	// ══════════════════════════════════════════════════════════════════════
 
@@ -213,7 +180,6 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 
 		addConfigValue(t, "pe_survivors_per_stage", "6,4");
 		addConfigValue(t, "final_playoff_size", "4");
-		addConfigValue(t, "group_tiebreaker_order", "POINTS,RACK_DIFF,RACKS_WON,HEAD_TO_HEAD");
 		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
 		addConfigValue(t, "lag_for_break", "true");
 		addConfigValue(t, "scoring_unit", "GAME");
@@ -324,7 +290,7 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 
 	/**
 	 * Generate bracket → simulate all matches → finish.
-	 * Works for SINGLE_ELIMINATION, DOUBLE_ELIMINATION, GROUP_PLAYOFF.
+	 * Works for SINGLE_ELIMINATION, DOUBLE_ELIMINATION.
 	 */
 	private void generateAndComplete(Tournament t, User owner, Map<Long, Integer> power,
 			String stageTypeFilter) {
@@ -450,7 +416,7 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 			if (resultRepository.existsByTournamentIdAndParticipantId(t.getId(), participantId)) continue;
 
 			BigDecimal prize = computePrize(prizePool, entry.getRankFrom(), entry.getRankTo());
-			int points = computePoints(entry.getRankFrom());
+			int points = TournamentPointsPolicy.compute(currentRank, participantMap.size());
 
 			resultRepository.save(TournamentResult.builder()
 					.tournament(t)
@@ -483,14 +449,6 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 				.setScale(0, RoundingMode.HALF_UP);
 	}
 
-	private int computePoints(int rankFrom) {
-		if (rankFrom == 1) return 100;
-		if (rankFrom == 2) return 70;
-		if (rankFrom <= 4) return 50;
-		if (rankFrom <= 8) return 30;
-		if (rankFrom <= 16) return 15;
-		return 3;
-	}
 
 	private boolean tournamentExists(String name) {
 		return tournamentRepository.findAll().stream()

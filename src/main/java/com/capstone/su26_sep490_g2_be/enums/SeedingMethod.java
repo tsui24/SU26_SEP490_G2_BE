@@ -9,9 +9,17 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public enum SeedingMethod {
 
+	/** Bốc thăm thuần — xáo toàn bộ, không ưu tiên ai. */
 	RANDOM("Ngẫu nhiên"),
-	MANUAL("Thủ công"),
-	ELO("Theo ELO");
+	/**
+	 * Xếp theo {@link BilliardRank} của cơ thủ.
+	 *
+	 * <p>Thay cho hai chế độ cũ đã gỡ: {@code ELO} (chưa từng được cài đặt, không có nguồn dữ liệu)
+	 * và {@code MANUAL} (Owner tự gõ {@code seedNo} — chưa giải nào dùng, và dữ liệu để lại bị hỏng
+	 * hàng loạt do thiếu ràng buộc duy nhất). Muốn can thiệp tay thì dùng chức năng đổi chỗ ở màn
+	 * Bốc thăm sau khi đã sinh bracket.
+	 */
+	RANK("Theo hạng cơ thủ");
 
 	private final String displayName;
 

@@ -57,7 +57,6 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
         Long getTotal();
     }
 
-    boolean existsByTournamentIdAndStatusAndSeedNo(Long tournamentId, String status, Integer seedNo);
 
     boolean existsByRegistrationId(Long registrationId);
 

@@ -15,47 +15,39 @@ public class DatabaseSeedData {
 
 	public static List<ConfigFieldDefinition> configFieldCatalog() {
 		return List.of(
-				field("break_rule", "Luật break", "COMMON", "ENUM", "SELECT",
+				field("break_rule", "Luật giao bóng (break)", "COMMON", "ENUM", "SELECT",
 						"[\"ALTERNATE_BREAK\",\"WINNER_BREAK\",\"LOSER_BREAK\"]", null, null,
-						"Luật xác định ai break sau mỗi rack"),
-				field("lag_for_break", "Lag for break", "COMMON", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Bốc thăm quyền break game đầu"),
+						"Quy định ai được phá bi mở ván sau mỗi ván đấu: luân phiên, người thắng ván trước, "
+								+ "hoặc người thua ván trước."),
+				field("lag_for_break", "Đấu lag giành quyền giao bóng", "COMMON", "BOOLEAN", "CHECKBOX",
+						null, null, null,
+						"Hai cơ thủ cùng đẩy bi chạm băng cuối bàn để giành quyền phá bi ván đầu tiên, "
+								+ "thay vì bốc thăm."),
 				field("scoring_unit", "Đơn vị tính điểm", "COMMON", "ENUM", "SELECT",
-						"[\"GAME\",\"FRAME\"]", null, null, "Đơn vị thắng trận"),
-				field("bracket_size", "Số slot bracket", "KNOCKOUT", "INT", "NUMBER",
-						null, 8, 64, "Số slot trên nhánh đấu loại trực tiếp"),
-				field("allow_bye", "Cho phép BYE", "KNOCKOUT", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Tự động thắng khi không đủ số người"),
-				field("seeding_enabled", "Bốc hạt giống", "KNOCKOUT", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Sắp xếp vị trí theo hạt giống"),
+						"[\"GAME\",\"FRAME\"]", null, null,
+						"Đơn vị dùng để tính thắng thua một trận: ván (game) hoặc hiệp (frame)."),
+				field("bracket_size", "Số người tối đa", "KNOCKOUT", "INT", "NUMBER",
+						null, 8, 64, "Đồng bộ hai chiều với số người tối đa của giải. "
+								+ "Nhánh đấu thật luôn tự tính theo số người dự thi thực tế."),
 				field("third_place_match", "Trận tranh hạng 3", "KNOCKOUT", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Tổ chức trận tranh hạng 3"),
-				field("grand_final_bracket_reset", "Bracket reset chung kết", "DOUBLE_ELIM", "BOOLEAN", "CHECKBOX",
-						null, null, null, "Nếu nhánh thua thắng chung kết lớn thì đánh thêm trận"),
-				field("group_count", "Số bảng", "GROUP", "INT", "NUMBER",
-						null, 2, 8, "Chia bao nhiêu bảng vòng bảng"),
-				field("players_per_group", "Số người / bảng", "GROUP", "INT", "NUMBER",
-						null, 3, 8, "Số participant tối đa mỗi bảng"),
-				field("advance_per_group", "Số đội đi tiếp / bảng", "GROUP", "INT", "NUMBER",
-						null, 1, 4, "Số đội top mỗi bảng vào playoff"),
-				field("group_assignment", "Phân bảng", "GROUP", "ENUM", "SELECT",
-						"[\"RANDOM\",\"SEEDED\",\"MANUAL\"]", null, null, "Cách xếp participant vào bảng"),
-				field("group_points_win", "Điểm thắng vòng bảng", "GROUP", "INT", "NUMBER",
-						null, 0, 3, "Điểm cộng khi thắng trận vòng bảng"),
-				field("group_points_loss", "Điểm thua vòng bảng", "GROUP", "INT", "NUMBER",
-						null, 0, 3, "Điểm cộng khi thua trận vòng bảng"),
-				field("group_tiebreaker_order", "Thứ tự tie-break", "GROUP", "STRING", "TEXT",
-						null, null, null, "Quy tắc xếp hạng khi bằng điểm, vd HEAD_TO_HEAD,SCORE_DIFF"),
-				field("playoff_bracket_size", "Số slot playoff", "PLAYOFF", "INT", "NUMBER",
-						null, 4, 32, "Kích thước nhánh playoff sau vòng bảng"),
-				field("playoff_bye_top_seeds", "BYE cho hạt giống playoff", "PLAYOFF", "INT", "NUMBER",
-						null, 0, 8, "Số hạt giống được BYE vòng playoff đầu"),
+						null, null, null,
+						"Tổ chức thêm trận giữa hai cơ thủ thua bán kết để xác định hạng 3."),
 				field("pe_survivors_per_stage", "Số người đi tiếp mỗi giai đoạn", "PROGRESSIVE", "STRING", "TEXT",
 						null, null, null,
 						"Danh sách số người còn lại SAU mỗi giai đoạn vòng tròn, cách nhau bởi dấu phẩy (vd 10,6,4). "
-								+ "Phần tử cuối là số người vào Playoff. Mọi phần tử phải là số chẵn, giảm dần."),
-				field("final_playoff_size", "Số người vào Playoff", "PROGRESSIVE", "INT", "NUMBER",
-						null, 4, 8, "Số cơ thủ xếp hạng cao nhất vào vòng Playoff loại trực tiếp (4 hoặc 8).")
+								+ "Phần tử cuối là số người vào vòng chung kết loại trực tiếp. "
+								+ "Mọi phần tử phải là số chẵn, giảm dần."),
+				field("final_playoff_size", "Số người vào vòng chung kết", "PROGRESSIVE", "INT", "NUMBER",
+						null, 4, 8,
+						"Số cơ thủ xếp hạng cao nhất được vào vòng chung kết loại trực tiếp (4 hoặc 8)."),
+				field("de_mode", "Cách kết thúc giải loại kép", "KNOCKOUT", "ENUM", "RADIO_GROUP",
+						"[\"FULL_DE\",\"CUT_TO_SE\"]", null, null,
+						"Đánh loại kép tới tận ngôi vô địch, hoặc đánh loại kép tới một mốc rồi "
+								+ "gộp hai nhánh lại đánh loại trực tiếp một lần thua."),
+				field("se_phase_size", "Số người vào vòng loại trực tiếp", "KNOCKOUT", "INT", "NUMBER",
+						null, 4, 256,
+						"Chỉ dùng khi chọn cách gộp hai nhánh: tổng số cơ thủ còn sống ở cả nhánh thắng và "
+								+ "nhánh thua được chuyển sang đánh loại trực tiếp. Phải là lũy thừa của 2.")
 		);
 	}
 
@@ -77,10 +69,6 @@ public class DatabaseSeedData {
 						"Loại kép (2 lần thua)",
 						"Nhánh thắng + nhánh thua, chung kết lớn.",
 						"pool_double_elimination_handler"),
-				format("GROUP_PLAYOFF",
-						"Vòng bảng + Playoff",
-						"Chia bảng round-robin, top bảng vào knockout.",
-						"pool_group_playoff_handler"),
 				format("PROGRESSIVE_ROUND_ROBIN",
 						"Vòng tròn loại dần + Playoff",
 						"Nhiều giai đoạn vòng tròn loại dần, nhóm còn lại vào Playoff loại trực tiếp.",
@@ -90,42 +78,21 @@ public class DatabaseSeedData {
 
 	public static List<FormatConfigFieldSeed> formatConfigFields() {
 		return List.of(
-				// SINGLE_ELIMINATION (7)
+				// SINGLE_ELIMINATION (5) — bracket_size chỉ có tác dụng thật ở thể thức này
 				configField("SINGLE_ELIMINATION", "bracket_size", "16", true),
-				configField("SINGLE_ELIMINATION", "allow_bye", "true", true),
-				configField("SINGLE_ELIMINATION", "seeding_enabled", "true", true),
 				configField("SINGLE_ELIMINATION", "third_place_match", "true", true),
 				configField("SINGLE_ELIMINATION", "break_rule", "ALTERNATE_BREAK", true),
 				configField("SINGLE_ELIMINATION", "lag_for_break", "true", true),
 				configField("SINGLE_ELIMINATION", "scoring_unit", "GAME", false),
 
-				// DOUBLE_ELIMINATION (7)
-				configField("DOUBLE_ELIMINATION", "bracket_size", "16", true),
-				configField("DOUBLE_ELIMINATION", "allow_bye", "true", true),
-				configField("DOUBLE_ELIMINATION", "seeding_enabled", "true", true),
-				configField("DOUBLE_ELIMINATION", "grand_final_bracket_reset", "false", true),
+				// DOUBLE_ELIMINATION (3) — de_mode / se_phase_size gắn riêng ở DataInitializer
 				configField("DOUBLE_ELIMINATION", "break_rule", "ALTERNATE_BREAK", true),
 				configField("DOUBLE_ELIMINATION", "lag_for_break", "true", true),
 				configField("DOUBLE_ELIMINATION", "scoring_unit", "GAME", false),
 
-				// GROUP_PLAYOFF (12)
-				configField("GROUP_PLAYOFF", "break_rule", "ALTERNATE_BREAK", true),
-				configField("GROUP_PLAYOFF", "lag_for_break", "true", true),
-				configField("GROUP_PLAYOFF", "scoring_unit", "GAME", false),
-				configField("GROUP_PLAYOFF", "group_count", "4", true),
-				configField("GROUP_PLAYOFF", "players_per_group", "4", true),
-				configField("GROUP_PLAYOFF", "advance_per_group", "2", true),
-				configField("GROUP_PLAYOFF", "group_assignment", "RANDOM", true),
-				configField("GROUP_PLAYOFF", "group_points_win", "1", true),
-				configField("GROUP_PLAYOFF", "group_points_loss", "0", true),
-				configField("GROUP_PLAYOFF", "group_tiebreaker_order", "HEAD_TO_HEAD,SCORE_DIFF", true),
-				configField("GROUP_PLAYOFF", "playoff_bracket_size", "8", true),
-				configField("GROUP_PLAYOFF", "playoff_bye_top_seeds", "0", true),
-
-				// PROGRESSIVE_ROUND_ROBIN (6)
+				// PROGRESSIVE_ROUND_ROBIN (5)
 				configField("PROGRESSIVE_ROUND_ROBIN", "pe_survivors_per_stage", "10,6,4", true),
 				configField("PROGRESSIVE_ROUND_ROBIN", "final_playoff_size", "4", true),
-				configField("PROGRESSIVE_ROUND_ROBIN", "group_tiebreaker_order", "POINTS,RACK_DIFF,RACKS_WON,HEAD_TO_HEAD", true),
 				configField("PROGRESSIVE_ROUND_ROBIN", "break_rule", "ALTERNATE_BREAK", true),
 				configField("PROGRESSIVE_ROUND_ROBIN", "lag_for_break", "true", true),
 				configField("PROGRESSIVE_ROUND_ROBIN", "scoring_unit", "GAME", false)
@@ -150,14 +117,6 @@ public class DatabaseSeedData {
 				raceTo("DOUBLE_ELIMINATION", "losers_r3", "NTh — Vòng 3", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "losers_final", "NTh — Chung kết nhánh", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "grand_final", "Chung kết lớn", "GRAND_FINAL", 9),
-
-				// GROUP_PLAYOFF (6)
-				raceTo("GROUP_PLAYOFF", "group_default", "Vòng bảng", "GROUP", 5),
-				raceTo("GROUP_PLAYOFF", "playoff_r1", "Playoff — Vòng 1", "PLAYOFF", 7),
-				raceTo("GROUP_PLAYOFF", "playoff_qf", "Playoff — Tứ kết", "PLAYOFF", 7),
-				raceTo("GROUP_PLAYOFF", "playoff_sf", "Playoff — Bán kết", "PLAYOFF", 7),
-				raceTo("GROUP_PLAYOFF", "playoff_final", "Playoff — Chung kết", "KNOCKOUT", 9),
-				raceTo("GROUP_PLAYOFF", "third_place", "Tranh hạng 3", "KNOCKOUT", 7),
 
 				// PROGRESSIVE_ROUND_ROBIN (2)
 				raceTo("PROGRESSIVE_ROUND_ROBIN", "league_stage", "Vòng tròn loại dần", "PROGRESSIVE_ROUND", 5),

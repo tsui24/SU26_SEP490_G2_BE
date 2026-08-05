@@ -35,9 +35,6 @@ public class TournamentConfig {
 	@Builder.Default
 	private String seedingMethod = "RANDOM";
 
-	/** Số người dự kiến được gán hạt giống — chỉ có ý nghĩa khi seedingMethod != RANDOM. */
-	@Column(name = "seed_count")
-	private Integer seedCount;
 
 	@Column(name = "config_snapshot_json", columnDefinition = "JSON")
 	private String configSnapshotJson;

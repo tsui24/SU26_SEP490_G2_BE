@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @Component
@@ -22,8 +24,49 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
+	/**
+	 * Field đã bị gỡ khỏi catalog — {@link #cleanupRemovedConfigFields()} tự xoá khỏi
+	 * {@code config_field_definitions}, {@code format_config_fields} và
+	 * {@code tournament_config_values} để DB cũ không còn dữ liệu mồ côi.
+	 *
+	 * <p>Nhóm thứ hai thuộc thể thức GROUP_PLAYOFF (chia vòng bảng) đã được gỡ hoàn toàn.
+	 *
+	 * <p>Nhóm thứ ba là các field <b>không nơi nào đọc</b> — Owner chỉnh được trên wizard nhưng
+	 * giải chạy ra khác hẳn, gây hiểu nhầm nghiêm trọng hơn là không có field:
+	 * <ul>
+	 *   <li>{@code allow_bye} — BYE luôn được gán tự động khi sĩ số không phải lũy thừa 2,
+	 *       tắt cờ này không ngăn được gì.</li>
+	 *   <li>{@code seeding_enabled} — trùng chức năng với {@code seedingMethod = RANDOM},
+	 *       hai nút cùng điều khiển một thứ.</li>
+	 *   <li>{@code grand_final_bracket_reset} — bộ sinh nhánh chỉ tạo đúng một trận
+	 *       GRAND_FINAL, không hề có nhánh reset.</li>
+	 *   <li>{@code group_tiebreaker_order} — thứ tự tie-break hard-code trong
+	 *       {@code computeStageStandings()}; tệ hơn, giá trị mặc định cũ còn ghi sai thứ tự thật.</li>
+	 * </ul>
+	 *
+	 * <p>Các field chỉ mang tính <b>thông tin thi đấu</b> ({@code break_rule},
+	 * {@code lag_for_break}, {@code scoring_unit}) thì <b>giữ lại</b>: code không đọc nhưng trọng
+	 * tài và cơ thủ áp dụng bằng tay, nên chúng vẫn có giá trị khi hiển thị.
+	 */
 	private static final List<String> REMOVED_CONFIG_FIELD_KEYS =
-			List.of("is_show_tournament", "is_public_ratio", "is_register");
+			List.of("is_show_tournament", "is_public_ratio", "is_register",
+					"group_count", "players_per_group", "advance_per_group", "group_assignment",
+					"group_points_win", "group_points_loss",
+					"playoff_bracket_size", "playoff_bye_top_seeds", "playoff_size",
+					"allow_bye", "seeding_enabled", "grand_final_bracket_reset",
+					"group_tiebreaker_order");
+
+	/**
+	 * Field bị gỡ khỏi <b>một thể thức cụ thể</b> nhưng vẫn sống ở thể thức khác — không thể cho
+	 * vào {@link #REMOVED_CONFIG_FIELD_KEYS} vì làm vậy sẽ xoá luôn ở nơi nó còn tác dụng.
+	 *
+	 * <p>{@code bracket_size} đồng bộ hai chiều với {@code maxParticipants} — nhưng
+	 * {@code syncBracketSizeFromMaxParticipants} / {@code syncMaxParticipantsFromBracketSize} đều
+	 * thoát ngay nếu format không phải SINGLE_ELIMINATION. Với DOUBLE_ELIMINATION thì Owner vẫn
+	 * thấy ô nhập, vẫn lưu được, mà không có bất kỳ tác dụng nào.
+	 */
+	private static final List<Map.Entry<String, String>> REMOVED_FORMAT_SCOPED_FIELDS =
+			List.of(Map.entry("DOUBLE_ELIMINATION", "bracket_size"));
 
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;
@@ -50,7 +93,6 @@ public class DataInitializer implements CommandLineRunner {
 		seedFormatConfigFields();
 		seedFormatRaceToRules();
 		cleanupRemovedConfigFields();
-		ensureDEConfigFieldsExist();
 		ensureFormatConfigFieldsForDE();
 
 		seedAccounts();
@@ -79,15 +121,32 @@ public class DataInitializer implements CommandLineRunner {
 		}
 	}
 
+	/**
+	 * Seed catalog field. Với field đã tồn tại thì <b>vẫn đồng bộ lại nhãn/mô tả</b> — nếu chỉ
+	 * {@code existsById} rồi bỏ qua, mọi lần sửa nhãn trong {@code DatabaseSeedData} sẽ không bao
+	 * giờ tới được DB đang chạy, và nhãn cũ (sai nghĩa) nằm lại vĩnh viễn. Giá trị/ràng buộc
+	 * (min/max, default) thì <b>không</b> ghi đè vì Admin có thể đã chỉnh cho phù hợp thực tế.
+	 */
 	private void seedConfigFieldCatalog() {
 		int seeded = 0;
+		int relabeled = 0;
 		for (ConfigFieldDefinition field : DatabaseSeedData.configFieldCatalog()) {
-			if (!configFieldRepository.existsById(field.getFieldKey())) {
+			ConfigFieldDefinition existing = configFieldRepository.findById(field.getFieldKey()).orElse(null);
+			if (existing == null) {
 				configFieldRepository.save(field);
 				seeded++;
+				continue;
+			}
+			if (!Objects.equals(existing.getLabel(), field.getLabel())
+					|| !Objects.equals(existing.getDescription(), field.getDescription())) {
+				existing.setLabel(field.getLabel());
+				existing.setDescription(field.getDescription());
+				configFieldRepository.save(existing);
+				relabeled++;
 			}
 		}
 		if (seeded > 0) log.info("Seeded config_field_definitions: {} rows", seeded);
+		if (relabeled > 0) log.info("Relabeled config_field_definitions: {} rows", relabeled);
 	}
 
 	private void seedGameTypes() {
@@ -153,45 +212,13 @@ public class DataInitializer implements CommandLineRunner {
 		tournamentConfigValueRepository.deleteByIdFieldKeyIn(REMOVED_CONFIG_FIELD_KEYS);
 		formatConfigFieldRepository.deleteByFieldKeyIn(REMOVED_CONFIG_FIELD_KEYS);
 		configFieldRepository.deleteByFieldKeyIn(REMOVED_CONFIG_FIELD_KEYS);
-	}
 
-	private void ensureDEConfigFieldsExist() {
-		if (!configFieldRepository.existsById("de_mode")) {
-			configFieldRepository.save(ConfigFieldDefinition.builder()
-					.fieldKey("de_mode")
-					.label("Chế độ Double Elimination")
-					.description("FULL_DE: DE đến vô địch | CUT_TO_SE: DE đến cutoff rồi chuyển sang SE")
-					.dataType("ENUM")
-					.fieldScope("KNOCKOUT")
-					.uiComponent("RADIO_GROUP")
-					.isActive(true)
-					.build());
-		}
-		if (!configFieldRepository.existsById("se_phase_size")) {
-			configFieldRepository.save(ConfigFieldDefinition.builder()
-					.fieldKey("se_phase_size")
-					.label("Số người vào Last X (SE phase)")
-					.description("Tổng W+L survivors chuyển vào SE bracket. Phải là lũy thừa 2.")
-					.dataType("INT")
-					.fieldScope("KNOCKOUT")
-					.uiComponent("NUMBER_INPUT")
-					.minValue(4)
-					.maxValue(256)
-					.isActive(true)
-					.build());
-		}
-		if (!configFieldRepository.existsById("playoff_size")) {
-			configFieldRepository.save(ConfigFieldDefinition.builder()
-					.fieldKey("playoff_size")
-					.label("Số cơ thủ vào Playoff")
-					.description("Số cơ thủ xếp hạng cao nhất được vào vòng playoff. Phải là lũy thừa 2.")
-					.dataType("INT")
-					.fieldScope("GROUP")
-					.uiComponent("NUMBER_INPUT")
-					.minValue(2)
-					.maxValue(16)
-					.isActive(true)
-					.build());
+		// Chỉ gỡ ở format chỉ định — định nghĩa field trong catalog vẫn giữ cho format còn dùng.
+		for (Map.Entry<String, String> scoped : REMOVED_FORMAT_SCOPED_FIELDS) {
+			String formatCode = scoped.getKey();
+			String fieldKey = scoped.getValue();
+			tournamentConfigValueRepository.deleteByFieldKeyForFormat(fieldKey, formatCode);
+			formatConfigFieldRepository.deleteByFormatCodeAndFieldKey(formatCode, fieldKey);
 		}
 	}
 

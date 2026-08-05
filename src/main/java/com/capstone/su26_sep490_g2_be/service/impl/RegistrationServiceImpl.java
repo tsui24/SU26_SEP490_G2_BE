@@ -6,6 +6,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.CheckoutResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.PageResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.TournamentRegistrationResponse;
 import com.capstone.su26_sep490_g2_be.entity.*;
+import com.capstone.su26_sep490_g2_be.enums.BilliardRank;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
@@ -21,6 +22,7 @@ import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldDefinitionRepo
 import com.capstone.su26_sep490_g2_be.repository.RegistrationFieldValueRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.repository.UserProfileRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
@@ -61,6 +63,8 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private final RegistrationRepository registrationRepository;
 	private final TournamentRepository tournamentRepository;
 	private final UserRepository userRepository;
+	/** Dùng để chụp hạng cơ thủ khi tạo participant từ đăng ký online. */
+	private final UserProfileRepository userProfileRepository;
 	private final RegistrationFormService registrationFormService;
 	private final RegistrationFieldValueRepository fieldValueRepository;
 	private final RegistrationFieldDefinitionRepository fieldDefinitionRepository;
@@ -557,6 +561,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.registration(reg)
 				.participantType(tournament.getParticipantType())
 				.displayName(displayName)
+				.billiardRank(resolveRegistrantRank(reg))
 				.status(ParticipantStatus.ACTIVE.getValue())
 				.build();
 		participant = participantRepository.save(participant);
@@ -567,6 +572,21 @@ public class RegistrationServiceImpl implements RegistrationService {
 					reg.getPlayerFullName(), reg.getPlayerPhone(), reg.getUser(),
 					partnerFullName, partnerPhone));
 		}
+	}
+
+	/**
+	 * Chụp hạng cơ thủ từ hồ sơ người đăng ký tại thời điểm tạo participant.
+	 *
+	 * <p>Trả {@code UNKNOWN} khi đăng ký không gắn tài khoản (đăng ký thủ công do BQT tạo hộ)
+	 * hoặc cơ thủ chưa khai hạng trên hồ sơ.
+	 */
+	private String resolveRegistrantRank(Registration reg) {
+		if (reg.getUser() == null) {
+			return BilliardRank.UNKNOWN.name();
+		}
+		return userProfileRepository.findById(reg.getUser().getId())
+				.map(profile -> BilliardRank.fromNullable(profile.getBilliardRank()).name())
+				.orElse(BilliardRank.UNKNOWN.name());
 	}
 
 	private Map<String, String> loadFieldValues(Long registrationId) {

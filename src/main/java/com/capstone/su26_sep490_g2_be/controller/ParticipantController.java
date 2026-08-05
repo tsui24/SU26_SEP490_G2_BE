@@ -10,6 +10,7 @@ import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
+import com.capstone.su26_sep490_g2_be.enums.BilliardRank;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
@@ -241,11 +242,6 @@ public class ParticipantController {
             }
         }
 
-        if (request.getSeedNo() != null && participantRepository.existsByTournamentIdAndStatusAndSeedNo(
-                tournamentId, ParticipantStatus.ACTIVE.getValue(), request.getSeedNo())) {
-            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
-        }
-
         User approver = securityUtil.resolveCurrentUser(authentication);
 
         String phone = request.getPhone();
@@ -282,7 +278,7 @@ public class ParticipantController {
                 .registration(registration)
                 .participantType(tournament.getParticipantType())
                 .displayName(displayName)
-                .seedNo(request.getSeedNo())
+                .billiardRank(BilliardRank.fromNullable(request.getBilliardRank()).name())
                 .status(ParticipantStatus.ACTIVE.getValue())
                 .build();
         participant = participantRepository.save(participant);
@@ -352,7 +348,7 @@ public class ParticipantController {
                 .participantType(p.getParticipantType())
                 .displayName(p.getDisplayName())
                 .phone(reg != null ? reg.getPlayerPhone() : null)
-                .seedNo(p.getSeedNo())
+                .billiardRank(p.getBilliardRank())
                 .status(p.getStatus())
                 .source(source)
                 .avtarUrl(p.getAvtarUrl())

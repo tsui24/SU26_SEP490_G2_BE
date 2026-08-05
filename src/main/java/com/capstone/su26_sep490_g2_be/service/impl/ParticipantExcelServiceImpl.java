@@ -7,6 +7,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewRowRe
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
+import com.capstone.su26_sep490_g2_be.enums.BilliardRank;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
@@ -48,6 +49,10 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	private static final String TEMPLATE_XLSX_FILENAME = "template_import_participant.xlsx";
 	private static final String TEMPLATE_CSV_FILENAME = "template_import_participant.csv";
 	private static final String SHEET_NAME = "Người tham gia";
+	/** Nhãn cột hạng — dùng chung cho template XLSX và CSV để hai bản không lệch nhau. */
+	private static final String RANK_COLUMN_HEADER = "Hạng (CN / A-L, bỏ trống nếu chưa rõ)";
+	/** Số cột tối đa cần đọc từ file: DOUBLE = 4 tên/SĐT + hạt giống + hạng. */
+	private static final int MAX_IMPORT_COLUMNS = 5;
 	private static final DataFormatter DATA_FORMATTER = new DataFormatter();
 	private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
@@ -84,31 +89,31 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				setPhoneCell(header.createCell(1), textStyle, "SĐT VĐV 1");
 				header.createCell(2).setCellValue("Tên VĐV 2");
 				setPhoneCell(header.createCell(3), textStyle, "SĐT VĐV 2");
-				header.createCell(4).setCellValue("Hạt giống");
+				header.createCell(4).setCellValue(RANK_COLUMN_HEADER);
 
 				sample.createCell(0).setCellValue("Nguyễn Văn A");
 				setPhoneCell(sample.createCell(1), textStyle, "0901234567");
 				sample.createCell(2).setCellValue("Trần Văn B");
 				setPhoneCell(sample.createCell(3), textStyle, "0907654321");
-				sample.createCell(4).setCellValue(1);
+				sample.createCell(4).setCellValue("B");
 
 				sheet.setColumnWidth(0, 20 * 256);
 				sheet.setColumnWidth(1, 18 * 256);
 				sheet.setColumnWidth(2, 20 * 256);
 				sheet.setColumnWidth(3, 18 * 256);
-				sheet.setColumnWidth(4, 12 * 256);
+				sheet.setColumnWidth(4, 26 * 256);
 			} else {
 				header.createCell(0).setCellValue("Tên hiển thị");
 				setPhoneCell(header.createCell(1), textStyle, "Số điện thoại");
-				header.createCell(2).setCellValue("Hạt giống");
+				header.createCell(2).setCellValue(RANK_COLUMN_HEADER);
 
 				sample.createCell(0).setCellValue("Nguyễn Văn A");
 				setPhoneCell(sample.createCell(1), textStyle, "0901234567");
-				sample.createCell(2).setCellValue(1);
+				sample.createCell(2).setCellValue("B");
 
 				sheet.setColumnWidth(0, 20 * 256);
 				sheet.setColumnWidth(1, 18 * 256);
-				sheet.setColumnWidth(2, 12 * 256);
+				sheet.setColumnWidth(2, 26 * 256);
 			}
 
 			workbook.write(out);
@@ -125,8 +130,10 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	public byte[] buildImportTemplateCsv(Long tournamentId) {
 		// Công thức Excel ="..." để khi mở CSV, cột SĐT vẫn là text và giữ số 0 đầu
 		String csv = isDouble(tournamentId)
-				? "Tên VĐV 1,SĐT VĐV 1,Tên VĐV 2,SĐT VĐV 2,Hạt giống\nNguyễn Văn A,=\"0901234567\",Trần Văn B,=\"0907654321\",1\n"
-				: "Tên hiển thị,Số điện thoại,Hạt giống\nNguyễn Văn A,=\"0901234567\",1\n";
+				? "Tên VĐV 1,SĐT VĐV 1,Tên VĐV 2,SĐT VĐV 2," + RANK_COLUMN_HEADER
+						+ "\nNguyễn Văn A,=\"0901234567\",Trần Văn B,=\"0907654321\",B\n"
+				: "Tên hiển thị,Số điện thoại," + RANK_COLUMN_HEADER
+						+ "\nNguyễn Văn A,=\"0901234567\",B\n";
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		try {
 			out.write(UTF8_BOM);
@@ -200,10 +207,12 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
 		List<String[]> rows = request.getRows().stream()
 				.map(r -> {
-					String seedStr = r.getSeedNo() == null ? null : String.valueOf(r.getSeedNo());
+					String rank = r.getBilliardRank();
+					// Mảng phải đủ MAX_IMPORT_COLUMNS và ĐÚNG vị trí cột theo SINGLE/DOUBLE,
+					// vì validateRows đọc lại theo chỉ số cột.
 					return isDouble
-							? new String[] {r.getName1(), r.getPhone1(), r.getName2(), r.getPhone2(), seedStr}
-							: new String[] {r.getName1(), r.getPhone1(), seedStr, null, null};
+							? new String[] {r.getName1(), r.getPhone1(), r.getName2(), r.getPhone2(), rank}
+							: new String[] {r.getName1(), r.getPhone1(), rank, null, null};
 				})
 				.toList();
 
@@ -220,7 +229,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 						.phone1(p.phone1)
 						.name2(p.name2)
 						.phone2(p.phone2)
-						.seedNo(p.seedNo)
+						.billiardRank(p.billiardRank)
 						.valid(p.valid)
 						.error(p.error)
 						.build())
@@ -242,29 +251,30 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		final String phone1;
 		final String name2;
 		final String phone2;
-		final Integer seedNo;
+		/** {@code BilliardRank.name()}; dòng lỗi để null vì không được lưu. */
+		final String billiardRank;
 		final boolean valid;
 		final String error;
 
 		private ParsedRow(int rowNo, String name1, String phone1, String name2, String phone2,
-				Integer seedNo, boolean valid, String error) {
+				String billiardRank, boolean valid, String error) {
 			this.rowNo = rowNo;
 			this.name1 = name1;
 			this.phone1 = phone1;
 			this.name2 = name2;
 			this.phone2 = phone2;
-			this.seedNo = seedNo;
+			this.billiardRank = billiardRank;
 			this.valid = valid;
 			this.error = error;
 		}
 
-		static ParsedRow ok(int rowNo, String name1, String phone1, String name2, String phone2, Integer seedNo) {
-			return new ParsedRow(rowNo, name1, phone1, name2, phone2, seedNo, true, null);
+		static ParsedRow ok(int rowNo, String name1, String phone1, String name2, String phone2, String billiardRank) {
+			return new ParsedRow(rowNo, name1, phone1, name2, phone2, billiardRank, true, null);
 		}
 
-		static ParsedRow invalid(int rowNo, String name1, String phone1, String name2, String phone2,
-				Integer seedNo, String error) {
-			return new ParsedRow(rowNo, name1, phone1, name2, phone2, seedNo, false, error);
+		/** Giữ nguyên chữ ký cũ — dòng lỗi không cần mang hạng, thông báo lỗi đã nêu rõ giá trị sai. */
+		static ParsedRow invalid(int rowNo, String name1, String phone1, String name2, String phone2, String error) {
+			return new ParsedRow(rowNo, name1, phone1, name2, phone2, null, false, error);
 		}
 	}
 
@@ -273,13 +283,10 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		List<ParsedRow> result = new ArrayList<>();
 
 		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
-		int seedCol = isDouble ? 4 : 2;
+		int rankCol = isDouble ? 4 : 2;
 
 		List<Participant> activeParticipants = participantRepository
 				.findByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
-
-		Set<Integer> usedSeeds = new HashSet<>();
-		activeParticipants.forEach(p -> { if (p.getSeedNo() != null) usedSeeds.add(p.getSeedNo()); });
 
 		Integer maxParticipants = tournament.getMaxParticipants();
 		int remainingSlots = maxParticipants == null
@@ -288,7 +295,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 
 		for (int i = 0; i < rows.size(); i++) {
 			String[] cols = rows.get(i);
-			if (isDataRowEmpty(cols, seedCol)) {
+			if (isDataRowEmpty(cols, rankCol)) {
 				continue;
 			}
 
@@ -300,69 +307,59 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 			String phone2 = isDouble ? normalizePhone(normalizeCell(cols, 3)) : null;
 
 			if (name1 == null || name1.isBlank()) {
-				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
 						"Tên VĐV 1 không được để trống"));
 				continue;
 			}
 			if (name1.length() > 255) {
-				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null, "Tên quá dài"));
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, "Tên quá dài"));
 				continue;
 			}
 			if (phone1 != null && !phone1.isBlank() && !isValidPhone(phone1)) {
-				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
 						"Số điện thoại VĐV 1 không hợp lệ"));
 				continue;
 			}
 
 			if (isDouble) {
 				if (name2 == null || name2.isBlank()) {
-					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
 							"Tên VĐV 2 không được để trống (giải đôi)"));
 					continue;
 				}
 				if (name2.length() > 255) {
-					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null, "Tên VĐV 2 quá dài"));
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, "Tên VĐV 2 quá dài"));
 					continue;
 				}
 				if (phone2 != null && !phone2.isBlank() && !isValidPhone(phone2)) {
-					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
 							"Số điện thoại VĐV 2 không hợp lệ"));
 					continue;
 				}
 			}
 
 			if (remainingSlots <= 0) {
-				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
+				result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
 						"Giải đã đủ " + maxParticipants + " người tham gia, không thể thêm nữa"));
 				continue;
 			}
 
-			Integer seedNo = null;
-			String seedRaw = normalizeCell(cols, seedCol);
-			if (seedRaw != null && !seedRaw.isBlank()) {
-				try {
-					int parsed = Integer.parseInt(seedRaw.trim());
-					if (parsed < 1) {
-						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
-								"Hạt giống phải từ 1 trở lên"));
-						continue;
-					}
-					seedNo = parsed;
-				} catch (NumberFormatException e) {
-					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, null,
-							"Hạt giống phải là số nguyên"));
+			// Hạng cơ thủ — để trống là hợp lệ (UNKNOWN), nhưng gõ sai thì báo lỗi thay vì
+			// âm thầm quy về UNKNOWN, tránh việc BQT tưởng đã nhập hạng mà thực ra không có.
+			String rankRaw = normalizeCell(cols, rankCol);
+			String billiardRank = BilliardRank.UNKNOWN.name();
+			if (rankRaw != null && !rankRaw.isBlank()) {
+				if (!BilliardRank.isValid(rankRaw)) {
+					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
+							"Hạng \"" + rankRaw.trim() + "\" không hợp lệ — chỉ nhận CN, A đến L (bỏ trống nếu chưa rõ)"));
 					continue;
 				}
-				if (usedSeeds.contains(seedNo)) {
-					result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2, seedNo,
-							"Hạt giống " + seedNo + " đã được dùng cho người khác"));
-					continue;
-				}
-				usedSeeds.add(seedNo);
+				// Chuẩn hoá về name() để DB thống nhất với luồng hồ sơ (VD "CN" → "CHAMPION")
+				billiardRank = BilliardRank.fromNullable(rankRaw).name();
 			}
 
 			remainingSlots--;
-			result.add(ParsedRow.ok(rowNo, name1, phone1, name2, phone2, seedNo));
+			result.add(ParsedRow.ok(rowNo, name1, phone1, name2, phone2, billiardRank));
 		}
 
 		return result;
@@ -401,7 +398,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 					.registration(registration)
 					.participantType(tournament.getParticipantType())
 					.displayName(displayName)
-					.seedNo(row.seedNo)
+					.billiardRank(row.billiardRank)
 					.status(ParticipantStatus.ACTIVE.getValue())
 					.build());
 
@@ -431,13 +428,11 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				if (row.getRowNum() == 0) {
 					continue;
 				}
-				rows.add(new String[] {
-						getCellString(row, 0),
-						getCellString(row, 1),
-						getCellString(row, 2),
-						getCellString(row, 3),
-						getCellString(row, 4)
-				});
+				String[] cols = new String[MAX_IMPORT_COLUMNS];
+				for (int c = 0; c < MAX_IMPORT_COLUMNS; c++) {
+					cols[c] = getCellString(row, c);
+				}
+				rows.add(cols);
 			}
 		}
 		return rows;
@@ -528,11 +523,11 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		return filename != null && filename.toLowerCase().endsWith(".csv");
 	}
 
-	private boolean isDataRowEmpty(String[] cols, int seedCol) {
+	private boolean isDataRowEmpty(String[] cols, int lastCol) {
 		if (cols == null || cols.length == 0) {
 			return true;
 		}
-		for (int i = 0; i <= seedCol; i++) {
+		for (int i = 0; i <= lastCol; i++) {
 			if (i < cols.length) {
 				String value = normalizeCell(cols, i);
 				if (value != null && !value.isBlank()) {
