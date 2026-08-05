@@ -108,15 +108,22 @@ public class DatabaseSeedData {
 				raceTo("SINGLE_ELIMINATION", "third_place", "Tranh hạng 3", "KNOCKOUT", 7),
 				raceTo("SINGLE_ELIMINATION", "final", "Chung kết", "KNOCKOUT", 9),
 
-				// DOUBLE_ELIMINATION (8)
+				// DOUBLE_ELIMINATION (13) — winners_r1/qf/sf/final và losers_r1/r2/r3/final dùng
+				// chung cho cả FULL_DE lẫn CUT_TO_SE (xem resolveWinnersRoundKey/resolveLosersRoundKey
+				// trong BracketGenerationServiceImpl); se_* dành riêng cho bracket Last-X của CUT_TO_SE.
 				raceTo("DOUBLE_ELIMINATION", "winners_r1", "NT — Vòng 1", "WINNERS", 5),
 				raceTo("DOUBLE_ELIMINATION", "winners_qf", "NT — Tứ kết", "WINNERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "winners_sf", "NT — Bán kết", "WINNERS", 7),
+				raceTo("DOUBLE_ELIMINATION", "winners_final", "NT — Chung kết nhánh", "WINNERS", 9),
 				raceTo("DOUBLE_ELIMINATION", "losers_r1", "NTh — Vòng 1", "LOSERS", 5),
 				raceTo("DOUBLE_ELIMINATION", "losers_r2", "NTh — Vòng 2", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "losers_r3", "NTh — Vòng 3", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "losers_final", "NTh — Chung kết nhánh", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "grand_final", "Chung kết lớn", "GRAND_FINAL", 9),
+				raceTo("DOUBLE_ELIMINATION", "se_round_1", "Last X — Vòng đầu", "FINAL_BRACKET", 5),
+				raceTo("DOUBLE_ELIMINATION", "se_quarter_final", "Last X — Tứ kết", "FINAL_BRACKET", 7),
+				raceTo("DOUBLE_ELIMINATION", "se_semi_final", "Last X — Bán kết", "FINAL_BRACKET", 7),
+				raceTo("DOUBLE_ELIMINATION", "se_final", "Last X — Chung kết", "FINAL_BRACKET", 9),
 
 				// PROGRESSIVE_ROUND_ROBIN (2)
 				raceTo("PROGRESSIVE_ROUND_ROBIN", "league_stage", "Vòng tròn loại dần", "PROGRESSIVE_ROUND", 5),

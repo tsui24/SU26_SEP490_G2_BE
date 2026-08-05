@@ -81,10 +81,16 @@ public class ManagerEmailController {
 			Authentication authentication,
 			@PathVariable Long id,
 			@RequestParam(required = false) String status,
+			@RequestParam(required = false) String triggerType,
+			@RequestParam(required = false) String templateCode,
+			@RequestParam(required = false) String recipientEmail,
+			@RequestParam(required = false) String fromDate,
+			@RequestParam(required = false) String toDate,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
-		return ResponseEntity.ok(ApiResponse.success(
-				tournamentEmailService.listLogs(extractUserId(authentication), id, true, status, page, size)));
+		return ResponseEntity.ok(ApiResponse.success(tournamentEmailService.listLogs(
+				extractUserId(authentication), id, true, status, triggerType, templateCode, recipientEmail,
+				fromDate, toDate, page, size)));
 	}
 
 	private Long extractUserId(Authentication authentication) {

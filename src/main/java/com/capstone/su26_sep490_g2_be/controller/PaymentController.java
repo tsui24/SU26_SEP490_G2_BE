@@ -26,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -125,6 +126,7 @@ public class PaymentController {
     @Operation(summary = "Danh sách thanh toán theo registration (Manager/Owner)")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/registrations/{id}/payments")
+    @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<java.util.List<PaymentHistoryResponse>>> getPaymentsByRegistration(
             Authentication authentication,
             @PathVariable Long id) {
@@ -137,6 +139,7 @@ public class PaymentController {
 
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/owner/registrations/{id}/payments")
+    @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<java.util.List<PaymentHistoryResponse>>> getPaymentsByRegistrationOwner(
             Authentication authentication,
             @PathVariable Long id) {

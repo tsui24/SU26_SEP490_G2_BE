@@ -12,6 +12,10 @@ public interface OwnerTournamentService {
 			boolean filterByOwner,
 			String status,
 			String search,
+			String gameType,
+			String participantType,
+			Boolean isRegister,
+			Long branchId,
 			int page,
 			int size);
 

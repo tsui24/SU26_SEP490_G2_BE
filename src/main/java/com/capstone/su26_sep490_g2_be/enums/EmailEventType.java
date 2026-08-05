@@ -3,10 +3,13 @@ package com.capstone.su26_sep490_g2_be.enums;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Set;
+
 @Getter
 @RequiredArgsConstructor
 public enum EmailEventType {
 
+	USER_REGISTERED("Người dùng đăng ký tài khoản mới"),
 	REGISTRATION_SUBMITTED("Đăng ký mới được gửi"),
 	REGISTRATION_APPROVED("Đăng ký được duyệt"),
 	REGISTRATION_REJECTED("Đăng ký bị từ chối"),
@@ -30,5 +33,16 @@ public enum EmailEventType {
 
 	public String getValue() {
 		return name();
+	}
+
+	/**
+	 * Sự kiện KHÔNG gắn với 1 giải đấu cụ thể (tài khoản người dùng/nhân sự) — chỉ Admin quản lý
+	 * ở phạm vi toàn hệ thống, không hiển thị trong danh sách rule của Owner/Manager theo giải đấu.
+	 */
+	private static final Set<EmailEventType> ACCOUNT_SCOPED_EVENTS =
+			Set.of(USER_REGISTERED, STAFF_ACCOUNT_CREATED, MANAGER_ACCOUNT_CREATED);
+
+	public boolean isTournamentScoped() {
+		return !ACCOUNT_SCOPED_EVENTS.contains(this);
 	}
 }

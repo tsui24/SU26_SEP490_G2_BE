@@ -15,4 +15,13 @@ public interface MailRenderService {
 	RenderedEmailResponse render(EmailTemplate template, Map<String, Object> variables);
 
 	RenderedEmailResponse renderByCode(String templateCode, Map<String, Object> variables);
+
+	/**
+	 * Render nội dung mẫu (không lấy từ {@link EmailTemplate} trong DB) bọc trong khung header/footer,
+	 * dùng cho tính năng "gửi thử" ở trang cấu hình khung email. {@code headerHtmlOverride}/
+	 * {@code footerHtmlOverride} cho phép xem trước bản đang soạn dở, chưa lưu — null/rỗng thì dùng
+	 * bản đã lưu trong {@link com.capstone.su26_sep490_g2_be.entity.MailLayoutSettings}.
+	 */
+	RenderedEmailResponse renderLayoutTest(String headerHtmlOverride, String footerHtmlOverride,
+			Map<String, Object> variables);
 }
