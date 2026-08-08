@@ -44,6 +44,13 @@ public final class AvatarUrlResolver {
 	/**
 	 * Trả presigned URL mới cho client hiển thị ảnh.
 	 * Dùng cho detail — kiểm tra object tồn tại trước.
+	 *
+	 * Nuốt lỗi của MinIO y như {@link #resolveForList}: cả {@code exists} lẫn
+	 * {@code getPresignedUrl} đều là lời gọi qua mạng, nên MinIO tắt hay object bị xoá đều ném
+	 * exception. Để nó thoát ra ngoài thì một cái ảnh đại diện hỏng kéo sập nguyên API hồ sơ —
+	 * người dùng mất luôn tên, số điện thoại, ngày sinh chỉ vì không lấy được avatar.
+	 *
+	 * Trả null là đủ: client vốn đã fallback sang ảnh mặc định khi không có avatarUrl.
 	 */
 	public static String resolveForResponse(
 			String storedValue, MinioStorageService minioStorageService, String bucket) {
@@ -54,10 +61,17 @@ public final class AvatarUrlResolver {
 		if (key.contains("://")) {
 			key = normalizeForStorage(key, bucket);
 		}
-		if (!StringUtils.hasText(key) || !minioStorageService.exists(key)) {
+		if (!StringUtils.hasText(key)) {
 			return null;
 		}
-		return minioStorageService.getPresignedUrl(key);
+		try {
+			if (!minioStorageService.exists(key)) {
+				return null;
+			}
+			return minioStorageService.getPresignedUrl(key);
+		} catch (Exception ex) {
+			return null;
+		}
 	}
 
 	/**
