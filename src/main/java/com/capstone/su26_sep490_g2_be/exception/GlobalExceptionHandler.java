@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -65,6 +66,17 @@ public class GlobalExceptionHandler {
 						.message(details.isBlank()
 								? ErrorCode.COMMON_INVALID_REQUEST.getMessage()
 								: details)
+						.build());
+	}
+
+	@ExceptionHandler(MissingServletRequestParameterException.class)
+	public ResponseEntity<ApiResponse<Void>> handleMissingParam(MissingServletRequestParameterException ex) {
+		return ResponseEntity
+				.badRequest()
+				.body(ApiResponse.<Void>builder()
+						.success(false)
+						.code(ErrorCode.COMMON_INVALID_REQUEST.getCode())
+						.message("Thiếu tham số bắt buộc: " + ex.getParameterName())
 						.build());
 	}
 
