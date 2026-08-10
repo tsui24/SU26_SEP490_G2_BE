@@ -137,6 +137,16 @@ public class ManagerTournamentController {
 				ownerTournamentService.patchStatus(extractUserId(authentication), id, request, true)));
 	}
 
+	@Operation(summary = "Bật/tắt hiển thị công khai", description = "Cho phép đổi ở mọi trạng thái giải, không chỉ Nháp — giải DRAFT/CANCELLED vẫn luôn bị ẩn khỏi trang công khai bất kể giá trị này")
+	@PatchMapping("/tournaments/{id}/visibility")
+	public ResponseEntity<ApiResponse<PatchTournamentVisibilityResponse>> updateVisibility(
+			Authentication authentication,
+			@PathVariable Long id,
+			@Valid @RequestBody PatchTournamentVisibilityRequest request) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.updateVisibility(extractUserId(authentication), id, request, true)));
+	}
+
 	@Operation(summary = "Lịch sử đổi trạng thái giải", description = "Audit trail — cả thao tác thủ công và tự động")
 	@GetMapping("/tournaments/{id}/audit-logs")
 	public ResponseEntity<ApiResponse<List<TournamentStatusHistoryResponse>>> getAuditLogs(@PathVariable Long id) {

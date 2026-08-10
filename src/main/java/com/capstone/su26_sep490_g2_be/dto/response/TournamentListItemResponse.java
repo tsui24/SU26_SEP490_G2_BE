@@ -24,6 +24,7 @@ public class TournamentListItemResponse {
 	private Integer tableCount;
 	private BigDecimal entryFee;
 	private Boolean isRegister;
+	private Boolean isShowTournament;
 	private Boolean configComplete;
 	private Long approvedCount;
 	private Instant registrationDeadline;
