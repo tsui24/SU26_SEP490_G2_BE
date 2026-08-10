@@ -1,0 +1,102 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Dozzle — xem log ứng dụng real-time qua trình duyệt
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  Đây là file OVERLAY, không phải file compose độc lập. Nó được gộp lên trên
+#  /opt/deploy/docker-compose.yml của server bằng cách truyền nhiều cờ -f:
+#
+#      docker compose \
+#        -f /opt/deploy/docker-compose.yml \
+#        -f deploy/docker-compose.dozzle.yml \
+#        --env-file /opt/deploy/.env \
+#        up -d backend dozzle
+#
+#  Cách này có chủ đích: file compose gốc nằm trên EC2 và KHÔNG được version
+#  control. Tách riêng phần thêm mới vào repo để thay đổi có lịch sử, review
+#  được, và không phải sửa tay trên server (dễ sai, mất khi thay máy).
+#
+#  Mục `backend:` bên dưới chỉ khai `logging:` — compose sẽ gộp khoá này vào
+#  định nghĩa backend sẵn có chứ không thay thế nó, nên image/ports/env của
+#  bạn giữ nguyên.
+#
+#  Lưu ý: chạy file này MỘT MÌNH sẽ lỗi "service backend has neither an image
+#  nor a build context" — đúng như thiết kế, vì nó là mảnh ghép chứ không phải
+#  file hoàn chỉnh.
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  #  Bổ sung xoay vòng log cho backend.
+  #
+  #  Docker mặc định ghi log JSON KHÔNG giới hạn dung lượng. Một service chạy
+  #  vài tháng có thể ăn hết ổ đĩa và làm sập cả EC2. Rủi ro này tăng lên khi
+  #  có Dozzle, vì log trở nên "vô hình" — bạn xem qua web UI và không còn để ý
+  #  file đang phình to dưới /var/lib/docker/containers.
+  #
+  #  20 MB × 5 file = tối đa 100 MB log gần nhất cho mỗi container.
+  #
+  #  CHỈ có hiệu lực khi container được TẠO LẠI, không phải restart. Lần deploy
+  #  kế tiếp (up -d --build backend) sẽ tự làm việc đó.
+  # ─────────────────────────────────────────────────────────────────────────
+  backend:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+
+    volumes:
+      # Dozzle đọc log qua Docker API. `:ro` giới hạn ở quyền đọc.
+      #
+      # Dù vậy vẫn phải hiểu rõ: quyền đọc socket cho phép liệt kê MỌI container
+      # cùng toàn bộ biến môi trường của chúng — tức DB_PASSWORD, JWT_SECRET,
+      # PAYOS_CHECKSUM_KEY trong /opt/deploy/.env đều đọc được. Cộng thêm log
+      # ứng dụng thường chứa email người dùng và câu truy vấn.
+      #
+      # Đó là lý do cổng bên dưới chỉ mở trên loopback.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    ports:
+      # ⚠️  Tiền tố 127.0.0.1 là thứ QUAN TRỌNG NHẤT trong file này.
+      #
+      # Viết "9999:8080" (thiếu tiền tố) sẽ mở toàn bộ log ứng dụng ra Internet,
+      # không cần mật khẩu. Giữ nguyên loopback và truy cập qua SSH tunnel:
+      #
+      #     ssh -L 9999:127.0.0.1:9999 <user>@<ec2-host>
+      #     → mở http://localhost:9999
+      #
+      # Số 8080 bên phải là cổng BÊN TRONG container Dozzle, không đụng gì tới
+      # backend: mỗi container có network namespace riêng.
+      - "127.0.0.1:9999:8080"
+
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+
+      # ── Mở cho trình duyệt truy cập thẳng? Bật khối này TRƯỚC ─────────────
+      # Không bao giờ bỏ tiền tố 127.0.0.1 ở trên mà không bật auth.
+      #
+      # DOZZLE_AUTH_PROVIDER: simple
+      #
+      # Tạo user (kiểm tra cú pháp theo phiên bản: dozzle generate --help):
+      #   sudo mkdir -p /opt/deploy/dozzle
+      #   docker run --rm amir20/dozzle generate \
+      #     --name "Nam" --email nam@example.com --password '<mat-khau-manh>' admin \
+      #     | sudo tee /opt/deploy/dozzle/users.yml
+      #
+      # Rồi bỏ chú thích volume /data bên dưới, và đưa ra ngoài qua Cloudflare
+      # Tunnel thay vì mở cổng trực tiếp.
+
+    # volumes bổ sung khi bật auth (gộp cùng docker.sock ở trên):
+    #   - /opt/deploy/dozzle:/data
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

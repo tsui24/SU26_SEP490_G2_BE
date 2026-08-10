@@ -34,9 +34,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build & restart backend container
+      # File compose gốc nằm trên EC2 và không được version control; overlay
+      # trong repo bổ sung Dozzle (xem log real-time) + xoay vòng log cho
+      # backend. Thứ tự -f quan trọng: file đầu tiên quyết định tên project,
+      # nên phải giữ /opt/deploy/docker-compose.yml ở vị trí đầu — đổi chỗ sẽ
+      # làm compose coi các container đang chạy là của project khác và bỏ rơi chúng.
+      - name: Build & restart backend + dozzle
         run: |
-          docker compose -f /opt/deploy/docker-compose.yml --env-file /opt/deploy/.env up -d --build backend
+          docker compose \
+            -f /opt/deploy/docker-compose.yml \
+            -f "$GITHUB_WORKSPACE/deploy/docker-compose.dozzle.yml" \
+            --env-file /opt/deploy/.env \
+            up -d --build backend dozzle
 
       - name: Clean up dangling images
         run: docker image prune -f
