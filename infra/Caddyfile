@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Caddy — reverse proxy + HTTPS tự động (Let's Encrypt) cho stack trên EC2
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  Domain đã điền sẵn: biliardtournament.cloud — không cần thay gì nữa.
+#
+#  Cài đặt trên EC2 (không chạy trong Docker — xem README-EC2.md §6):
+#      sudo cp /opt/deploy/Caddyfile /etc/caddy/Caddyfile
+#      sudo caddy validate --config /etc/caddy/Caddyfile
+#      sudo systemctl reload caddy
+#
+#  Caddy tự xin và tự gia hạn chứng chỉ cho từng hostname khai bên dưới.
+#
+#  ĐIỀU KIỆN BẮT BUỘC — DNS phải trỏ đúng TRƯỚC khi reload:
+#  api. và cdn. phải có A record về Elastic IP của EC2. Reload khi DNS chưa sẵn
+#  sàng thì Let's Encrypt fail và Caddy lùi thời gian thử lại theo cấp số nhân.
+#
+#  Nếu sau này chuyển nameserver sang Cloudflare: 2 bản ghi này phải để
+#  **mây xám (DNS only)**, KHÔNG bật proxy (mây cam). Bật proxy thì thử thách
+#  HTTP-01 dừng ở Cloudflare, không tới được Caddy, chứng chỉ không cấp được.
+#
+#  Caddy giữ nguyên header Host khi reverse_proxy (khác nginx). Điều này là
+#  BẮT BUỘC với MinIO: chữ ký presigned URL của MinIO được tính trên Host, đổi
+#  Host là chữ ký sai và ảnh trả về 403 SignatureDoesNotMatch.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── API + WebSocket ────────────────────────────────────────────────────────
+# WebSocket (/ws) không cần cấu hình gì thêm: Caddy tự nhận diện và nâng cấp
+# kết nối. FE gọi wss://api.biliardtournament.cloud/ws.
+api.biliardtournament.cloud {
+	reverse_proxy localhost:8080
+}
+
+# ── Ảnh MinIO ──────────────────────────────────────────────────────────────
+# Chỉ để trình duyệt tải ảnh qua presigned URL. Console quản trị MinIO (9001)
+# CỐ Ý không khai ở đây — nó vẫn chỉ nghe loopback, vào bằng SSH tunnel:
+#     ssh -L 9001:127.0.0.1:9001 <user>@<ec2-host>
+cdn.biliardtournament.cloud {
+	reverse_proxy localhost:9000
+}
+
+# ── KHÔNG có khối cho frontend ─────────────────────────────────────────────
+# Apex biliardtournament.cloud và www.biliardtournament.cloud do Cloudflare Pages phục vụ, không đi qua Caddy.
+# Hai bản ghi DNS đó trỏ về Pages (CNAME, được proxy), KHÔNG trỏ về Elastic IP.
+#
+# Caddy trên EC2 chỉ lo đúng 2 hostname api. và cdn. ở trên — và chỉ 2 bản ghi
+# này mới cần A record trỏ về Elastic IP ở chế độ mây xám (DNS only).
