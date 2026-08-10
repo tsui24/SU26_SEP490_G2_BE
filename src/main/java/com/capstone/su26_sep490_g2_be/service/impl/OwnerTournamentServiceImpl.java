@@ -760,6 +760,27 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	@Override
+	@Transactional
+	public PatchTournamentVisibilityResponse updateVisibility(Long userId, Long tournamentId,
+			PatchTournamentVisibilityRequest request, boolean enforceOwnership) {
+		// Cố ý KHÔNG gọi assertEditableStatus() — hiển thị công khai cần bật/tắt được ở mọi trạng thái
+		// (không chỉ DRAFT), khác với các field thông tin cơ bản khác. Giải ở trạng thái DRAFT/CANCELLED
+		// vẫn luôn bị ẩn khỏi trang công khai bất kể giá trị này (xem listPlayerTournaments/getPlayerTournamentDetail).
+		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
+		boolean previous = Boolean.TRUE.equals(tournament.getIsShowTournament());
+		boolean next = Boolean.TRUE.equals(request.getIsShowTournament());
+
+		tournament.setIsShowTournament(next);
+		tournamentRepository.save(tournament);
+
+		return PatchTournamentVisibilityResponse.builder()
+				.id(tournamentId)
+				.isShowTournament(next)
+				.previousIsShowTournament(previous)
+				.build();
+	}
+
+	@Override
 	@Transactional(readOnly = true)
 	public List<TournamentStatusHistoryResponse> getStatusHistory(Long tournamentId) {
 		if (!tournamentRepository.existsById(tournamentId)) {
@@ -809,6 +830,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 					.tableCount(tournament.getTableCount())
 					.entryFee(tournament.getEntryFee())
 					.isRegister(Boolean.TRUE.equals(tournament.getIsRegister()))
+					.isShowTournament(Boolean.TRUE.equals(tournament.getIsShowTournament()))
 					.approvedCount(approvedCountByTournamentId.getOrDefault(tournament.getId(), 0L))
 					.registrationDeadline(tournament.getRegistrationDeadline())
 					.startAt(tournament.getStartAt())
