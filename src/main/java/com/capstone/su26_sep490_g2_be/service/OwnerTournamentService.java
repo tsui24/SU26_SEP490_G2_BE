@@ -46,6 +46,9 @@ public interface OwnerTournamentService {
 	PatchTournamentStatusResponse patchStatus(Long userId, Long tournamentId, PatchTournamentStatusRequest request,
 	                                          boolean enforceOwnership);
 
+	PatchTournamentVisibilityResponse updateVisibility(Long userId, Long tournamentId,
+	                                          PatchTournamentVisibilityRequest request, boolean enforceOwnership);
+
 	List<TournamentStatusHistoryResponse> getStatusHistory(Long tournamentId);
 
 	RegistrationFormPreviewResponse getTournamentRegistrationForm(
