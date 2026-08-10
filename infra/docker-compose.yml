@@ -1,0 +1,77 @@
+services:
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      # Console 9001 chỉ bind localhost — muốn dùng phải SSH tunnel, không public
+      - "127.0.0.1:9001:9001"
+      # API 9000 cũng chỉ bind localhost. Caddy chạy TRÊN HOST nên với tới được
+      # qua localhost; trình duyệt thì đi đường https://cdn.<domain> do Caddy phục vụ.
+      # Thiếu dòng này, Caddy không thể reverse_proxy tới MinIO (connection refused).
+      - "127.0.0.1:9000:9000"
+    networks: [app-net]
+
+  backend:
+    build:
+      context: ${BE_REPO_PATH}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${RDS_USERNAME}
+      DB_PASSWORD: ${RDS_PASSWORD}
+      # ⚠️  PHẢI là hostname công khai, KHÔNG phải http://minio:9000.
+      #
+      # BE chỉ có MỘT property app.minio.endpoint, dùng chung cho cả kết nối lẫn
+      # việc KÝ presigned URL (MinioStorageServiceImpl#getPresignedUrl). Nếu để
+      # http://minio:9000 thì URL ảnh trả về cho trình duyệt là "http://minio:9000/..."
+      # — không client nào phân giải được, toàn bộ avatar/ảnh tin tức hỏng.
+      #
+      # Không thể chữa bằng cách thay host trong chuỗi URL: chữ ký SigV4 của MinIO
+      # tính trên cả Host, đổi host là 403 SignatureDoesNotMatch.
+      MINIO_ENDPOINT: https://${MINIO_PUBLIC_HOST}
+      MINIO_SECURE: "true"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+    # Hệ quả của dòng MINIO_ENDPOINT ở trên: backend giờ phải tự gọi được
+    # https://cdn.<domain>. Nếu để nó phân giải ra Elastic IP, gói tin đi ra
+    # Internet Gateway rồi vòng lại chính máy mình — AWS không đảm bảo hoạt động
+    # (hairpin NAT), upload ảnh có thể treo.
+    #
+    # host-gateway trỏ thẳng về host, nơi Caddy đang nghe 443. TLS vẫn hợp lệ vì
+    # SNI là cdn.<domain> và Caddy trình đúng chứng chỉ đó. Traffic không rời máy.
+    extra_hosts:
+      - "${MINIO_PUBLIC_HOST}:host-gateway"
+    depends_on: [minio]
+    networks: [app-net]
+    ports:
+      # Chỉ loopback: Caddy trên host là đường vào duy nhất.
+      # Nhớ ĐÓNG port 8080 trong Security Group của EC2.
+      - "127.0.0.1:8080:8080"
+
+# ── KHÔNG có service frontend ─────────────────────────────────────────────
+# Frontend chạy trên Cloudflare Pages, không deploy trên EC2 nữa (2026-08-08).
+#
+# Lý do: build FE ngay trên EC2 là phần nặng nhất của máy này — mỗi lần push
+# `prod`, self-hosted runner chạy `npm ci` + `npm run build` trong Docker.
+# Pages build trên hạ tầng của Cloudflare, EC2 chỉ còn lo backend + MinIO.
+#
+# Kèm theo đó, trên EC2 nên gỡ luôn:
+#   - self-hosted runner của repo FE (~/actions-runner-fe)
+#   - job `deploy` trong .github/workflows/deploy.yml của repo FE
+#
+# Chi tiết: SU26_SEP490_G2_FE/docs/deploy-cloudflare-pages.md
+
+networks:
+  app-net:
+
+volumes:
+  minio_data:
