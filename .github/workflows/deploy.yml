@@ -34,15 +34,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # File compose gốc nằm trên EC2 và không được version control; overlay
-      # trong repo bổ sung Dozzle (xem log real-time) + xoay vòng log cho
-      # backend. Thứ tự -f quan trọng: file đầu tiên quyết định tên project,
-      # nên phải giữ /opt/deploy/docker-compose.yml ở vị trí đầu — đổi chỗ sẽ
-      # làm compose coi các container đang chạy là của project khác và bỏ rơi chúng.
+      # File compose gốc nằm trên EC2 và không được version control. Hai overlay
+      # được gộp lên trên nó:
+      #   - docker-compose.mysql.yml : database chạy trong Docker thay cho RDS
+      #   - docker-compose.dozzle.yml: xem log real-time + xoay vòng log backend
+      #
+      # ⚠️  KHÔNG được bỏ overlay mysql. Thiếu nó, compose tạo lại backend với
+      # biến RDS_* trong docker-compose.yml gốc — ứng dụng vẫn chạy, health check
+      # vẫn 200, nhưng đã âm thầm nối về RDS cũ và dữ liệu mới ghi vào đó.
+      # Kiểm tra sau mỗi lần deploy:
+      #     docker exec deploy-backend-1 printenv DB_URL   # phải là mysql:3306
+      #
+      # Thứ tự -f quan trọng: file đầu tiên quyết định tên project, nên phải giữ
+      # /opt/deploy/docker-compose.yml ở vị trí đầu — đổi chỗ sẽ làm compose coi
+      # các container đang chạy là của project khác và bỏ rơi chúng.
       - name: Build & restart backend + dozzle
         run: |
           docker compose \
             -f /opt/deploy/docker-compose.yml \
+            -f /opt/deploy/docker-compose.mysql.yml \
             -f "$GITHUB_WORKSPACE/deploy/docker-compose.dozzle.yml" \
             --env-file /opt/deploy/.env \
             up -d --build backend dozzle
