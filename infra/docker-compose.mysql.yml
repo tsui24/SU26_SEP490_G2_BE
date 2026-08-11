@@ -1,0 +1,112 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Overlay: MySQL chạy trong Docker, thay cho AWS RDS
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#  Lý do rời RDS: instance 1 GiB có buffer pool quá nhỏ, query nặng là nghẽn,
+#  trong khi chi phí cao hơn tự chạy MySQL trên một EC2 nhiều RAM hơn.
+#
+#  Cách dùng — gộp lên trên compose gốc, thứ tự -f không được đổi:
+#
+#      docker compose \
+#        -f /opt/deploy/docker-compose.yml \
+#        -f /opt/deploy/docker-compose.mysql.yml \
+#        --env-file /opt/deploy/.env \
+#        up -d
+#
+#  Mục `backend:` chỉ khai đè DB_* và depends_on — compose GỘP theo khoá nên
+#  image/ports/extra_hosts của backend giữ nguyên.
+#
+#  ⚠️  YÊU CẦU PHẦN CỨNG
+#  KHÔNG bật trên t3.small (2 GiB). Ước lượng lúc cao điểm: MySQL ~1.5 GB +
+#  backend ~1 GB + MinIO ~0.4 GB + Maven build ~1.5 GB + OS ~0.5 GB ≈ 5 GB.
+#  Cần tối thiểu 8 GiB RAM (vd. m7i-flex.large) và disk 60–80 GB.
+#
+#  ⚠️  BẮT BUỘC TRƯỚC KHI CHUYỂN
+#  RDS lo giúp snapshot tự động. Tự chạy Docker là tự nhận trách nhiệm đó.
+#  Cài cron backup (scripts/backup-mysql.sh) TRƯỚC, không phải sau — một lệnh
+#  `docker compose down -v` gõ nhầm là mất sạch, không có đường lùi.
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+
+  mysql:
+    # Giữ đúng major.minor với DB đang chạy để dump/restore không lệch.
+    # Kiểm tra bằng: SELECT VERSION();
+    image: mysql:8.0
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+
+      # User của ứng dụng. Image tự cấp toàn quyền TRÊN ĐÚNG database này,
+      # không phải toàn server — đây là thứ RDS không làm giúp (hiện backend
+      # đang nối RDS bằng chính master user).
+      MYSQL_USER: ${MYSQL_APP_USER}
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD}
+
+      # ⚠️  QUAN TRỌNG khi mở cổng ra ngoài.
+      # Mặc định image tạo root@'%' — tức root đăng nhập được TỪ INTERNET.
+      # Ghim về localhost: muốn dùng root thì phải vào trong container:
+      #     docker exec -it deploy-mysql-1 mysql -u root -p
+      MYSQL_ROOT_HOST: localhost
+
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --require-secure-transport=ON
+      --max-connections=100
+      --innodb-buffer-pool-size=2G
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    ports:
+      # ⚠️  CỔNG NÀY MỞ RA NGOÀI — để nối được từ MySQL Workbench như với RDS.
+      #
+      # Thứ DUY NHẤT chắn giữa Internet và database bây giờ là Security Group
+      # cùng mật khẩu. BẮT BUỘC giới hạn Source của rule 3306 theo IP của các
+      # thành viên, KHÔNG để 0.0.0.0/0.
+      #
+      # Muốn an toàn tuyệt đối mà vẫn dùng GUI: đổi dòng dưới thành
+      #     - "127.0.0.1:3306:3306"
+      # rồi nối qua SSH tunnel. Workbench có sẵn "Standard TCP/IP over SSH".
+      - "3306:3306"
+
+    healthcheck:
+      # backend phải chờ MySQL sẵn sàng, không chỉ chờ container "started".
+      # Lần khởi tạo đầu MySQL mất vài chục giây; thiếu healthcheck thì backend
+      # lên trước, không nối được DB và crash-loop.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+    networks: [app-net]
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  backend:
+    environment:
+      # Trỏ vào hostname nội bộ Docker thay vì endpoint RDS.
+      #
+      # sslMode=REQUIRED vì --require-secure-transport=ON ở trên. MySQL tự sinh
+      # chứng chỉ self-signed lúc khởi tạo nên REQUIRED (mã hoá, không kiểm tra
+      # CA) là mức phù hợp — traffic này không rời khỏi docker network.
+      #
+      # Nếu backend báo lỗi TLS lúc khởi động: bỏ --require-secure-transport=ON
+      # ở trên VÀ đổi sslMode=DISABLED ở đây. Đừng đổi một bên.
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?sslMode=REQUIRED&serverTimezone=UTC
+      DB_USERNAME: ${MYSQL_APP_USER}
+      DB_PASSWORD: ${MYSQL_APP_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
