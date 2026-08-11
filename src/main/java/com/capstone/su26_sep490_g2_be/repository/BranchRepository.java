@@ -21,4 +21,6 @@ public interface BranchRepository extends JpaRepository<Branch, Long>, JpaSpecif
 	List<Branch> findByIdInAndStatus(List<Long> ids, BranchStatus status);
 
 	List<Branch> findByOwnerIdAndStatus(Long ownerId, BranchStatus status);
+
+	long countByStatus(BranchStatus status);
 }

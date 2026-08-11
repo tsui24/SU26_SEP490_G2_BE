@@ -35,6 +35,9 @@ public class SecurityConfig {
 						.authenticationEntryPoint(restAuthenticationEntryPoint))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(PublicEndpoints.PATTERNS).permitAll()
+						// Actuator chỉ dùng nội bộ để đọc MeterRegistry qua AdminDashboardController —
+						// không lộ endpoint /actuator/** ra cho bất kỳ role nào, kể cả ADMIN.
+						.requestMatchers("/actuator/**").denyAll()
 						.requestMatchers("/api/v1/profile/**").authenticated()
 
 						// Shared endpoints (Owner + Manager)
