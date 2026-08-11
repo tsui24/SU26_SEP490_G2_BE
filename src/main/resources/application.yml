@@ -25,6 +25,14 @@ spring:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
 
+management:
+  endpoints:
+    access:
+      default: none
+    web:
+      exposure:
+        include: []
+
 # JWT
 app:
   jwt:

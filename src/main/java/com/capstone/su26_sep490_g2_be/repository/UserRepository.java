@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -72,4 +73,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 			"WHERE r.code = 'STAFF' AND u.status = 'ACTIVE' AND u.branch.id = :branchId " +
 			"ORDER BY p.fullName ASC")
 	List<User> findActiveStaffByBranch(@Param("branchId") Long branchId);
+
+	long countByStatusNot(UserStatus status);
+
+	long countByStatus(UserStatus status);
+
+	@Query("SELECT u.createdAt FROM User u WHERE u.status <> 'DELETED' AND u.createdAt >= :after")
+	List<Instant> findCreatedAtSince(@Param("after") Instant after);
+
+	@Query("SELECT r.code, COUNT(u) FROM User u JOIN u.role r WHERE u.status <> 'DELETED' GROUP BY r.code")
+	List<Object[]> countGroupByRole();
 }

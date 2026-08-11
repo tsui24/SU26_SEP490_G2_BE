@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.config;
 
+import com.capstone.su26_sep490_g2_be.component.metrics.AuthMetrics;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
@@ -34,6 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private final JwtUtil jwtUtil;
 	private final UserRepository userRepository;
+	private final AuthMetrics authMetrics;
 
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -49,17 +51,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		String header = request.getHeader(AUTHORIZATION_HEADER);
 
 		if (header == null || header.isBlank() || !header.startsWith(BEARER_PREFIX)) {
+			authMetrics.recordFailure("MISSING_TOKEN");
 			writeError(response, ErrorCode.AUTH_MISSING_TOKEN);
 			return;
 		}
 
 		String token = header.substring(BEARER_PREFIX.length()).trim();
 		if (token.isEmpty()) {
+			authMetrics.recordFailure("MISSING_TOKEN");
 			writeError(response, ErrorCode.AUTH_MISSING_TOKEN);
 			return;
 		}
 
 		if (!jwtUtil.isTokenValid(token)) {
+			authMetrics.recordFailure("INVALID_TOKEN");
 			writeError(response, ErrorCode.AUTH_INVALID_TOKEN);
 			return;
 		}
@@ -73,6 +78,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		// ở vài endpoint riêng lẻ (login/getMe), nếu không tài khoản LOCKED vẫn dùng token cũ được
 		// tới khi token hết hạn (mặc định 24h).
 		if (userId == null || userRepository.findByIdAndStatus(userId, UserStatus.ACTIVE).isEmpty()) {
+			authMetrics.recordFailure("ACCOUNT_LOCKED");
 			writeError(response, ErrorCode.AUTH_ACCOUNT_LOCKED);
 			return;
 		}

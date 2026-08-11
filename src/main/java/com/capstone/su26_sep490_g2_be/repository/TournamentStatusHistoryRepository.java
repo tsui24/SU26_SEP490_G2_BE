@@ -1,6 +1,7 @@
 package com.capstone.su26_sep490_g2_be.repository;
 
 import com.capstone.su26_sep490_g2_be.entity.TournamentStatusHistory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,4 +20,12 @@ public interface TournamentStatusHistoryRepository extends JpaRepository<Tournam
 	List<TournamentStatusHistory> findByTournamentIdOrderByCreatedAtDesc(@Param("tournamentId") Long tournamentId);
 
 	boolean existsByTournamentIdAndChangeType(Long tournamentId, String changeType);
+
+	@Query("""
+		SELECT h FROM TournamentStatusHistory h
+		LEFT JOIN FETCH h.tournament t
+		WHERE h.changeType = :changeType
+		ORDER BY h.createdAt DESC, h.id DESC
+		""")
+	List<TournamentStatusHistory> findRecentByChangeType(@Param("changeType") String changeType, Pageable pageable);
 }

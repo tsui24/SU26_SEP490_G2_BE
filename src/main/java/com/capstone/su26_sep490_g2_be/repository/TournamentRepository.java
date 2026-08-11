@@ -43,4 +43,8 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long>,
 
     /** Có giải nào dùng format này mà không còn ở trạng thái có thể sửa tự do (DRAFT/CANCELLED) không? */
     boolean existsByFormatAndStatusNotIn(String format, List<String> statuses);
+
+    /** Projection nhẹ cho dashboard admin — tránh load cả entity (branch/createdBy) chỉ để đếm. */
+    @Query("SELECT t.status, t.format, t.gameType, t.registrationFormTemplateId, t.createdAt FROM Tournament t")
+    List<Object[]> findDashboardProjection();
 }

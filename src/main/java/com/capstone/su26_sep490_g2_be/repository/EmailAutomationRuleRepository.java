@@ -24,4 +24,6 @@ public interface EmailAutomationRuleRepository extends JpaRepository<EmailAutoma
 
 	@EntityGraph(attributePaths = { "template", "tournament" })
 	List<EmailAutomationRule> findByScope(String scope);
+
+	long countByIsEnabled(Boolean isEnabled);
 }

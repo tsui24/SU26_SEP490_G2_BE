@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface EmailSendLogRepository extends JpaRepository<EmailSendLog, Long> {
@@ -41,4 +42,14 @@ public interface EmailSendLogRepository extends JpaRepository<EmailSendLog, Long
 			@Param("fromDate") Instant fromDate,
 			@Param("toDate") Instant toDate,
 			Pageable pageable);
+
+	@Query("SELECT l.status FROM EmailSendLog l WHERE l.createdAt >= :after")
+	List<String> findStatusesSince(@Param("after") Instant after);
+
+	@Query("SELECT l.createdAt, l.sentAt FROM EmailSendLog l " +
+			"WHERE l.status = 'SENT' AND l.sentAt IS NOT NULL AND l.createdAt >= :after")
+	List<Object[]> findSentTimingsSince(@Param("after") Instant after);
+
+	@EntityGraph(attributePaths = { "tournament" })
+	List<EmailSendLog> findFirst5ByStatusOrderByCreatedAtDesc(String status);
 }

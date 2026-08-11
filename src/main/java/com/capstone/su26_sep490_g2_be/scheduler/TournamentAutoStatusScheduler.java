@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.scheduler;
 
+import com.capstone.su26_sep490_g2_be.component.metrics.SchedulerHealthTracker;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
@@ -35,42 +36,47 @@ public class TournamentAutoStatusScheduler {
 
 	private final TournamentRepository tournamentRepository;
 	private final TournamentAuditService tournamentAuditService;
+	private final SchedulerHealthTracker schedulerHealthTracker;
 
 	@Scheduled(fixedRate = 5 * 60 * 1000)
 	@Transactional
 	public void autoCloseExpiredRegistrations() {
-		Instant now = Instant.now();
-		List<Tournament> due = tournamentRepository.findByStatusAndRegistrationDeadlineBefore(
-				TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), now);
+		schedulerHealthTracker.runTracked("autoCloseExpiredRegistrations", () -> {
+			Instant now = Instant.now();
+			List<Tournament> due = tournamentRepository.findByStatusAndRegistrationDeadlineBefore(
+					TournamentStatus.OPEN_FOR_REGISTRATION.getValue(), now);
 
-		for (Tournament tournament : due) {
-			String previousStatus = tournament.getStatus();
-			tournament.setStatus(TournamentStatus.REGISTRATION_CLOSED.getValue());
-			tournamentRepository.save(tournament);
-			tournamentAuditService.recordChange(tournament, previousStatus,
-					TournamentStatus.REGISTRATION_CLOSED.getValue(), null,
-					"Hệ thống tự động đóng đăng ký do đã quá hạn đăng ký (" +
-							DATE_FORMATTER.format(tournament.getRegistrationDeadline()) + ")");
-			log.info("Auto-closed registration for tournament id={} ('{}')", tournament.getId(), tournament.getName());
-		}
+			for (Tournament tournament : due) {
+				String previousStatus = tournament.getStatus();
+				tournament.setStatus(TournamentStatus.REGISTRATION_CLOSED.getValue());
+				tournamentRepository.save(tournament);
+				tournamentAuditService.recordChange(tournament, previousStatus,
+						TournamentStatus.REGISTRATION_CLOSED.getValue(), null,
+						"Hệ thống tự động đóng đăng ký do đã quá hạn đăng ký (" +
+								DATE_FORMATTER.format(tournament.getRegistrationDeadline()) + ")");
+				log.info("Auto-closed registration for tournament id={} ('{}')", tournament.getId(), tournament.getName());
+			}
+		});
 	}
 
 	@Scheduled(fixedRate = 5 * 60 * 1000)
 	@Transactional
 	public void warnOverdueTournamentStart() {
-		Instant now = Instant.now();
-		List<Tournament> overdue = tournamentRepository.findByStatusInAndStartAtBefore(
-				START_NOT_READY_STATUSES, now);
+		schedulerHealthTracker.runTracked("warnOverdueTournamentStart", () -> {
+			Instant now = Instant.now();
+			List<Tournament> overdue = tournamentRepository.findByStatusInAndStartAtBefore(
+					START_NOT_READY_STATUSES, now);
 
-		for (Tournament tournament : overdue) {
-			if (tournamentAuditService.hasExistingWarning(tournament.getId())) {
-				continue;
+			for (Tournament tournament : overdue) {
+				if (tournamentAuditService.hasExistingWarning(tournament.getId())) {
+					continue;
+				}
+				tournamentAuditService.recordWarning(tournament,
+						"Đã quá hạn bắt đầu thi đấu (" + DATE_FORMATTER.format(tournament.getStartAt()) +
+								") nhưng bracket chưa sẵn sàng — cần xử lý thủ công.");
+				log.warn("Tournament id={} ('{}') is past its startAt but bracket is not ready",
+						tournament.getId(), tournament.getName());
 			}
-			tournamentAuditService.recordWarning(tournament,
-					"Đã quá hạn bắt đầu thi đấu (" + DATE_FORMATTER.format(tournament.getStartAt()) +
-							") nhưng bracket chưa sẵn sàng — cần xử lý thủ công.");
-			log.warn("Tournament id={} ('{}') is past its startAt but bracket is not ready",
-					tournament.getId(), tournament.getName());
-		}
+		});
 	}
 }
