@@ -426,6 +426,11 @@ public class MatchServiceImpl implements MatchService {
         }
         User updatedBy = getUser(updatedByUserId);
 
+        int raceTo = match.getRaceTo() != null ? match.getRaceTo() : Integer.MAX_VALUE;
+        if (player1Score > raceTo || player2Score > raceTo) {
+            throw new BusinessException(ErrorCode.MATCH_SCORE_OUT_OF_RANGE);
+        }
+
         match.setPlayer1Score(player1Score);
         match.setPlayer2Score(player2Score);
         match.setStatus(MatchStatus.IN_PROGRESS.getValue());

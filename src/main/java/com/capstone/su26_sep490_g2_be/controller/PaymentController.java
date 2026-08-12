@@ -110,11 +110,14 @@ public class PaymentController {
             }
             JsonNode root = objectMapper.readTree(rawBody);
             String code = root.path("code").asText();
+            long orderCode = root.path("data").path("orderCode").asLong();
             if ("00".equals(code)) {
-                long orderCode = root.path("data").path("orderCode").asLong();
                 String ref = root.path("data").path("reference").asText(null);
                 registrationService.markAsPaid(orderCode, ref);
                 log.info("PayOS payment confirmed: orderCode={}", orderCode);
+            } else {
+                registrationService.markAsFailed(orderCode, code);
+                log.info("PayOS payment failed: orderCode={}, code={}", orderCode, code);
             }
         } catch (Exception e) {
             log.error("PayOS webhook error: {}", e.getMessage(), e);
