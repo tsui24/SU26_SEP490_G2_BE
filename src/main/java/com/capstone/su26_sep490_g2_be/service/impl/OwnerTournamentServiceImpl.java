@@ -57,6 +57,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	/** Đồng bộ maxParticipants <-> bracket_size chỉ áp dụng cho thể thức Loại trực tiếp (1 lần thua). */
 	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
+	private static final String DOUBLE_ELIMINATION_FORMAT_CODE = "DOUBLE_ELIMINATION";
 
 	/**
 	 * DRAW_DONE chỉ được vào qua bracketGenerationService.confirmDraw() (không phải patchStatus trực
@@ -579,6 +580,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				errors.addAll(validateFieldValue(formatField, value));
 				valuesToSave.put(fieldKey, value);
 			}
+		}
+
+		if (DOUBLE_ELIMINATION_FORMAT_CODE.equals(tournament.getFormat())) {
+			errors.addAll(validateSePhaseSize(valuesToSave.get("se_phase_size"), tournament.getMaxParticipants()));
 		}
 
 		if (!errors.isEmpty()) {
@@ -1316,6 +1321,37 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 					errors.add(detail(fieldKey, "Giá trị không được để trống"));
 				}
 			}
+		}
+		return errors;
+	}
+
+	/**
+	 * DOUBLE_ELIMINATION luôn cắt về loại trực tiếp khi còn {@code se_phase_size} người
+	 * (không còn "đánh loại kép tới vô địch" làm phương án dự phòng) — nên giá trị này bắt buộc
+	 * phải hợp lệ ngay lúc lưu config, không âm thầm làm tròn/kẹp nữa: phải là lũy thừa của 2
+	 * (2, 4, 8, 16...) và nhỏ hơn số người tối đa của giải, để luôn còn ít nhất 1 vòng đấu ở
+	 * nhánh thắng/thua trước khi gộp lại. (Bốc thăm vẫn giữ lớp kẹp an toàn cho trường hợp số
+	 * người đăng ký thực tế thấp hơn số tối đa — xem BracketGenerationServiceImpl.generateCutToSEDE.)
+	 */
+	private List<ConfigValidationDetailResponse> validateSePhaseSize(String value, Integer maxParticipants) {
+		List<ConfigValidationDetailResponse> errors = new ArrayList<>();
+		if (value == null || value.isBlank()) {
+			return errors; // đã báo "Thiếu field bắt buộc" ở vòng lặp phía trên
+		}
+		int seSize;
+		try {
+			seSize = Integer.parseInt(value);
+		} catch (NumberFormatException e) {
+			return errors; // đã báo "Giá trị số nguyên không hợp lệ" ở validateFieldValue
+		}
+		if (seSize < 2 || (seSize & (seSize - 1)) != 0) {
+			errors.add(detail("se_phase_size", "Phải là lũy thừa của 2 (2, 4, 8, 16...)"));
+			return errors;
+		}
+		if (maxParticipants != null && seSize >= maxParticipants) {
+			errors.add(detail("se_phase_size",
+					"Phải nhỏ hơn số người tối đa của giải (" + maxParticipants
+							+ ") để còn ít nhất 1 vòng đấu nhánh thắng/thua trước khi gộp lại"));
 		}
 		return errors;
 	}
