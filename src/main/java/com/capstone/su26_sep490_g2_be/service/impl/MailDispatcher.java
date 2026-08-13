@@ -1,6 +1,7 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.config.MailProperties;
+import com.capstone.su26_sep490_g2_be.config.StartupMailGuard;
 import com.capstone.su26_sep490_g2_be.entity.EmailSendLog;
 import com.capstone.su26_sep490_g2_be.enums.EmailSendStatus;
 import com.capstone.su26_sep490_g2_be.repository.EmailSendLogRepository;
@@ -31,10 +32,16 @@ public class MailDispatcher {
 	private final JavaMailSender mailSender;
 	private final MailProperties mailProperties;
 	private final EmailSendLogRepository emailSendLogRepository;
+	private final StartupMailGuard startupMailGuard;
 
 	@Async("mailTaskExecutor")
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onEmailQueued(EmailQueuedEvent event) {
+		if (startupMailGuard.isSuppressed()) {
+			log.debug("Skip SMTP dispatch during seed (logId={})", event.emailLogId());
+			return;
+		}
+
 		Long emailLogId = event.emailLogId();
 		EmailSendLog emailLog = emailSendLogRepository.findById(emailLogId).orElse(null);
 		if (emailLog == null) {
