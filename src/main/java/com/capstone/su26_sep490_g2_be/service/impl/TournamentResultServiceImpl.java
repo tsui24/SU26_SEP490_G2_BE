@@ -189,8 +189,76 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 			// Vòng tròn loại dần: top playoff theo kết quả knockout; còn lại theo GĐ bị loại
 			return fromProgressiveRankings(tournament);
 		}
-		// Single/Double elimination và knockout playoff: hạng = vòng bị loại
+		if (TournamentFormat.DOUBLE_ELIMINATION.getValue().equals(formatCode)) {
+			// Loại kép (CUT_TO_SE): 3 stage riêng (WINNERS/LOSERS/FINAL_BRACKET) có roundNo
+			// đánh số độc lập — không thể gộp chung như single elimination.
+			return computeDoubleEliminationRankings(tournament.getId());
+		}
+		// Single elimination và knockout playoff: hạng = vòng bị loại
 		return computeSingleEliminationRankings(tournament.getId());
+	}
+
+	/**
+	 * Xếp hạng cho giải DOUBLE_ELIMINATION (luôn ở dạng CUT_TO_SE).
+	 *
+	 * <p>Tournament có 3 stage tách biệt (WINNERS, LOSERS, FINAL_BRACKET), mỗi stage tự đánh số
+	 * {@code roundNo} riêng từ 1 — không thể gộp chung theo roundNo thô như single elimination
+	 * (sẽ lẫn lộn người thua vòng 2 nhánh Thắng/Thua với người thua bán kết Last X thật sự).
+	 *
+	 * <ul>
+	 *   <li>Stage FINAL_BRACKET (Last X) là trận đấu loại trực tiếp thật sự cuối cùng của giải →
+	 *       xếp hạng 1..seSize bằng đúng thuật toán knockout (VĐ, Á quân, bán kết, tứ kết...).</li>
+	 *   <li>Ai bị loại trước khi vào Last X (thua trận thứ 2, tức thua ở nhánh Thua) được xếp ngay
+	 *       sau nhóm Last X — thua ở vòng nhánh Thua càng muộn thì hạng càng cao. Nhánh Thắng chỉ
+	 *       làm rớt xuống nhánh Thua (chưa loại), nên không dùng vòng nhánh Thắng để xếp hạng.</li>
+	 * </ul>
+	 */
+	private List<TournamentRankingEntryResponse> computeDoubleEliminationRankings(Long tournamentId) {
+		List<TournamentStage> stages = stageRepository.findByTournamentIdOrderByOrderNoAsc(tournamentId);
+		TournamentStage seStage = stages.stream()
+				.filter(s -> "FINAL_BRACKET".equals(s.getStageType()))
+				.findFirst().orElse(null);
+		if (seStage == null) {
+			// Chưa bốc thăm / chưa sinh bracket CUT_TO_SE — chưa có gì để xếp hạng
+			return List.of();
+		}
+		TournamentStage lStage = stages.stream()
+				.filter(s -> "LOSERS".equals(s.getStageType()))
+				.findFirst().orElse(null);
+
+		List<Match> seMatches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(seStage.getId());
+		List<TournamentRankingEntryResponse> entries = new ArrayList<>(computeKnockoutPlacements(seMatches));
+		Set<Long> placedParticipantIds = new HashSet<>();
+		entries.forEach(e -> placedParticipantIds.add(e.getParticipantId()));
+
+		if (lStage != null) {
+			List<Match> lMatches = matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(lStage.getId());
+			int lMaxRound = lMatches.stream().mapToInt(Match::getRoundNo).max().orElse(0);
+			int nextRank = entries.size() + 1;
+			for (int round = lMaxRound; round >= 1; round--) {
+				int roundNo = round;
+				List<Participant> roundLosers = lMatches.stream()
+						.filter(m -> m.getRoundNo() == roundNo && isFinished(m) && m.getLoser() != null)
+						.map(Match::getLoser)
+						.filter(p -> !placedParticipantIds.contains(p.getId()))
+						.toList();
+				if (roundLosers.isEmpty()) {
+					continue;
+				}
+				int rankFrom = nextRank;
+				int rankTo = nextRank + roundLosers.size() - 1;
+				for (Participant p : roundLosers) {
+					addEntry(entries, placedParticipantIds, p, rankFrom, rankTo, null);
+				}
+				nextRank = rankTo + 1;
+			}
+		}
+
+		entries.sort(Comparator
+				.comparingInt(TournamentRankingEntryResponse::getSortOrder)
+				.thenComparing(TournamentRankingEntryResponse::getDisplayName,
+						Comparator.nullsLast(String::compareToIgnoreCase)));
+		return entries;
 	}
 
 	/**
@@ -300,9 +368,19 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	 */
 	private List<TournamentRankingEntryResponse> computeSingleEliminationRankings(Long tournamentId) {
 		List<Match> allMatches = matchRepository.findByTournamentIdOrderByRoundNoAscPositionNoAsc(tournamentId);
+		return computeKnockoutPlacements(allMatches);
+	}
 
+	/**
+	 * Xếp hạng loại trực tiếp cho MỘT bracket knockout độc lập (danh sách trận đã được lọc đúng
+	 * stage — roundNo trong danh sách này phải liền mạch 1..maxRound của riêng bracket đó).
+	 * Dùng chung cho single elimination toàn giải, và cho từng sub-bracket knockout (vd stage
+	 * FINAL_BRACKET của DOUBLE_ELIMINATION) — không được truyền match trộn từ nhiều stage khác
+	 * nhau vì mỗi stage tự đánh số roundNo riêng.
+	 */
+	private List<TournamentRankingEntryResponse> computeKnockoutPlacements(List<Match> matches) {
 		// Giữ trận 3RD nếu có roundNo hợp lệ
-		List<Match> knockoutMatches = allMatches.stream()
+		List<Match> knockoutMatches = matches.stream()
 				.filter(m -> !MatchCode.THIRD_PLACE.getValue().equals(m.getMatchCode()) || m.getRoundNo() != null)
 				.toList();
 
