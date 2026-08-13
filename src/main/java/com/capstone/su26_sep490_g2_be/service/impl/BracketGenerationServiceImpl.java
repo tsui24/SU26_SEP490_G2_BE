@@ -11,13 +11,16 @@ import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStageStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
 import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import com.capstone.su26_sep490_g2_be.util.ProgressiveSurvivorsUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +51,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private final MatchSchedulingService matchSchedulingService;
     private final UserRepository userRepository;
     private final BranchAccessService branchAccessService;
+    private final MinioStorageService minioStorageService;
+    private final MinioProperties minioProperties;
 
     /** Owner thao tác được bracket của mọi giải (1 chuỗi); Manager chỉ giải thuộc chi nhánh được cấp quyền. */
     private void assertActorCanAccessTournament(Long actorUserId, Tournament tournament) {
@@ -815,7 +820,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         if (p == null) return null;
         return ParticipantBriefResponse.builder()
                 .id(p.getId()).displayName(p.getDisplayName())
-                .avatarUrl(p.getAvtarUrl()).build();
+                .avatarUrl(AvatarUrlResolver.resolveForList(
+                        p.getAvtarUrl(), minioStorageService, minioProperties.getBucket()))
+                .build();
     }
 
     /* ═══════════════════════════════════════════════════════════
