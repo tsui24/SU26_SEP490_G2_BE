@@ -1342,6 +1342,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private long countActiveParticipants(Long tournamentId) {
 		return participantRepository.countByTournamentIdAndStatus(
 				tournamentId, ParticipantStatus.ACTIVE.getValue());
+	}
+
 	/**
 	 * DOUBLE_ELIMINATION luôn cắt về loại trực tiếp khi còn {@code se_phase_size} người
 	 * (không còn "đánh loại kép tới vô địch" làm phương án dự phòng) — nên giá trị này bắt buộc
