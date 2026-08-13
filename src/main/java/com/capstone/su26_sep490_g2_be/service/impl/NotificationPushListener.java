@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.config.StartupMailGuard;
 import com.capstone.su26_sep490_g2_be.entity.EmailAutomationRule;
 import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.EmailRecipientType;
@@ -44,6 +45,7 @@ public class NotificationPushListener {
 	private final MailRecipientResolver mailRecipientResolver;
 	private final ExpoPushService expoPushService;
 	private final TournamentRepository tournamentRepository;
+	private final StartupMailGuard startupMailGuard;
 
 	/**
 	 * Cố ý KHÔNG đánh {@code @Transactional} ở đây, giống {@link MailAutomationEventListener}.
@@ -57,6 +59,10 @@ public class NotificationPushListener {
 	@Async("mailTaskExecutor")
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onMailDomainEvent(MailDomainEvent event) {
+		if (startupMailGuard.isSuppressed()) {
+			return;
+		}
+
 		List<EmailAutomationRule> rules = mailAutomationService
 				.resolveActiveRulesForEvent(event.eventType(), event.tournamentId());
 

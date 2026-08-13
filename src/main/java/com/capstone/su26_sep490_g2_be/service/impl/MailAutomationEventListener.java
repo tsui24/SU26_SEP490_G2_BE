@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.config.StartupMailGuard;
 import com.capstone.su26_sep490_g2_be.entity.EmailAutomationRule;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.enums.EmailRecipientType;
@@ -34,10 +35,16 @@ public class MailAutomationEventListener {
 	private final MailRecipientResolver mailRecipientResolver;
 	private final MailSendService mailSendService;
 	private final TournamentRepository tournamentRepository;
+	private final StartupMailGuard startupMailGuard;
 
 	@Async("mailTaskExecutor")
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onMailDomainEvent(MailDomainEvent event) {
+		if (startupMailGuard.isSuppressed()) {
+			log.debug("Skip seed mail event {} (tournamentId={})", event.eventType(), event.tournamentId());
+			return;
+		}
+
 		List<EmailAutomationRule> rules = mailAutomationService
 				.resolveActiveRulesForEvent(event.eventType(), event.tournamentId());
 
