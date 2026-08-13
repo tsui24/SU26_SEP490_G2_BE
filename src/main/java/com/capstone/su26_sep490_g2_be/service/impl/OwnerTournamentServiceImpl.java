@@ -59,6 +59,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
 
 	/**
+	 * {@code bracket_size} là giá trị dẫn xuất — luôn bằng số người ACTIVE thực tế của giải, không
+	 * phải giá trị Owner nhập. Xem {@link #countActiveParticipants(Long)}.
+	 */
+	private static final String BRACKET_SIZE_FIELD_KEY = "bracket_size";
+
+	/**
 	 * DRAW_DONE chỉ được vào qua bracketGenerationService.confirmDraw() (không phải patchStatus trực
 	 * tiếp) nên REGISTRATION_CLOSED không có đường đi thẳng tới DRAW_DONE ở đây — tránh bỏ qua bước
 	 * sinh bracket. Tương tự DRAW_PREVIEW/FINAL_BRACKET_READY chỉ vào qua generate()/populateFinalBracket().
@@ -227,8 +233,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				.build();
 		tournamentConfigRepository.save(config);
 
-		syncBracketSizeFromMaxParticipants(tournament, request.getFormat(), request.getMaxParticipants());
-
 		return CreateTournamentResponse.builder()
 				.id(tournament.getId())
 				.name(tournament.getName())
@@ -342,9 +346,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 				request.getEndAt() != null);
 
 		tournamentRepository.saveAndFlush(tournament);
-		if (formatChanged || request.getMaxParticipants() != null) {
-			syncBracketSizeFromMaxParticipants(tournament, tournament.getFormat(), tournament.getMaxParticipants());
-		}
 		boolean configComplete = isConfigComplete(tournamentId, tournament.getFormat());
 
 		return UpdateTournamentResponse.builder()
@@ -585,8 +586,12 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, errors);
 		}
 
+		// bracket_size là giá trị dẫn xuất từ số người thực tế — không lưu, và tuyệt đối không ghi
+		// ngược vào maxParticipants. Trước đây chiều ghi ngược đó khiến giải 4 người bị đổi thành
+		// 8 chỉ vì Owner bấm Lưu ở màn config.
+		valuesToSave.remove(BRACKET_SIZE_FIELD_KEY);
+
 		configValueService.saveAll(tournamentId, valuesToSave);
-		syncMaxParticipantsFromBracketSize(tournament, valuesToSave.get("bracket_size"));
 
 		if (request.getRaceToOverrides() != null) {
 			for (SaveTournamentConfigRequest.RaceToOverrideItem override : request.getRaceToOverrides()) {
@@ -1138,7 +1143,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	/**
 	 * Validate cấu hình riêng cho PROGRESSIVE_ROUND_ROBIN: dãy {@code pe_survivors_per_stage}
-	 * phải giảm dần nghiêm ngặt, mọi phần tử chẵn ≥ 4, phần tử cuối == {@code final_playoff_size},
+	 * phải giảm dần nghiêm ngặt, mọi phần tử ≥ 4, phần tử cuối == {@code final_playoff_size},
 	 * và {@code maxParticipants} lớn hơn phần tử đầu.
 	 */
 	private List<ConfigValidationDetailResponse> validateProgressiveConfig(
@@ -1240,6 +1245,14 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		String value = saved.map(TournamentConfigValue::getValue).orElse(formatField.getDefaultValue());
 		FieldSource source = saved.isPresent() ? FieldSource.TOURNAMENT : FieldSource.ADMIN_DEFAULT;
 
+		// bracket_size là giá trị DẪN XUẤT, không phải giá trị người dùng nhập: luôn hiển thị số
+		// người đang thực sự có mặt trong giải. Trước đây nó được lưu như một field độc lập và bị
+		// clamp theo minValue=8, nên giải tạo 4 người lại hiện 8 ở màn config.
+		if (BRACKET_SIZE_FIELD_KEY.equals(formatField.getFieldKey())) {
+			value = String.valueOf(countActiveParticipants(tournamentId));
+			source = FieldSource.TOURNAMENT;
+		}
+
 		return TournamentConfigFormResponse.ConfigFieldItem.builder()
 				.fieldKey(formatField.getFieldKey())
 				.label(def != null ? def.getLabel() : formatField.getFieldKey())
@@ -1320,33 +1333,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		return errors;
 	}
 
-	/**
-	 * bracket_size chỉ được đồng bộ với maxParticipants cho thể thức Loại trực tiếp
-	 * (SINGLE_ELIMINATION) — DOUBLE_ELIMINATION và các format khác không áp dụng.
-	 * Đồng bộ ngay lúc tạo giải để 2 giá trị không lệch nhau ngay từ đầu — clamp theo
-	 * min/max của field để không vi phạm validate khi owner mở lại màn config.
-	 */
-	private void syncBracketSizeFromMaxParticipants(Tournament tournament, String formatCode, Integer maxParticipants) {
-		if (maxParticipants == null || !SINGLE_ELIMINATION_FORMAT_CODE.equals(formatCode)) return;
-		formatConfigFieldRepository.findByFormatCodeAndFieldKey(formatCode, "bracket_size")
-				.ifPresent(field -> {
-					int clamped = clampToFieldRange(field, maxParticipants);
-					configValueService.saveAll(tournament.getId(), Map.of("bracket_size", String.valueOf(clamped)));
-				});
-	}
-
-	/** Chiều ngược lại: khi owner sửa bracket_size ở màn config (chỉ SINGLE_ELIMINATION), đồng bộ lại maxParticipants. */
-	private void syncMaxParticipantsFromBracketSize(Tournament tournament, String bracketSizeValue) {
-		if (bracketSizeValue == null || !SINGLE_ELIMINATION_FORMAT_CODE.equals(tournament.getFormat())) return;
-		try {
-			int bracketSize = Integer.parseInt(bracketSizeValue);
-			if (!Objects.equals(tournament.getMaxParticipants(), bracketSize)) {
-				tournament.setMaxParticipants(bracketSize);
-				tournamentRepository.save(tournament);
-			}
-		} catch (NumberFormatException ignored) {
-			// bracket_size đã được validateFieldValue kiểm tra là INT hợp lệ trước đó
-		}
+	/** Số cơ thủ đang thực sự có mặt trong giải — nguồn duy nhất cho {@code bracket_size}. */
+	private long countActiveParticipants(Long tournamentId) {
+		return participantRepository.countByTournamentIdAndStatus(
+				tournamentId, ParticipantStatus.ACTIVE.getValue());
 	}
 
 	private int clampToFieldRange(FormatConfigField formatField, int value) {
@@ -1511,7 +1501,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private TournamentDetailResponse.ConfigSummary buildConfigSummary(Long tournamentId, String formatCode,
 			TournamentConfig config) {
 		Map<String, Object> fields = buildResolvedFields(tournamentId, formatCode);
-		Integer bracketSize = fields.get("bracket_size") instanceof Integer i ? i : null;
+		// Số người thực tế đang có trong giải, không đọc từ config value đã lưu.
+		Integer bracketSize = (int) countActiveParticipants(tournamentId);
 		Boolean thirdPlace = fields.get("third_place_match") instanceof Boolean b ? b : null;
 		String breakRule = fields.get("break_rule") != null ? fields.get("break_rule").toString() : null;
 

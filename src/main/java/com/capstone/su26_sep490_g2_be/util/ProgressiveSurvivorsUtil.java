@@ -44,9 +44,15 @@ public final class ProgressiveSurvivorsUtil {
 	 * <ul>
 	 *   <li>maxParticipants &gt; phần tử đầu tiên (giai đoạn đầu phải loại ít nhất 1 người)</li>
 	 *   <li>Giảm dần nghiêm ngặt</li>
-	 *   <li>Mọi phần tử là số chẵn và &ge; 4</li>
+	 *   <li>Mọi phần tử &ge; 4</li>
 	 *   <li>Phần tử cuối == playoffSize</li>
 	 * </ul>
+	 *
+	 * <p>Phần tử cuối (playoffSize) không bắt buộc là số chẵn hay lũy thừa 2 — bracket Playoff
+	 * dùng {@code nextPowerOf2()} + seeding chuẩn (giống hệt SINGLE_ELIMINATION), tự phát BYE cho
+	 * các seed hạng cao nhất khi playoffSize không tròn lũy thừa 2 (VD 5 người → bracket 8, hạng
+	 * 1-3 BYE vòng 1; 6 người → bracket 8, hạng 1-2 BYE). Xem
+	 * {@link com.capstone.su26_sep490_g2_be.service.impl.BracketGenerationServiceImpl#fillProgressivePlayoff}.
 	 */
 	public static List<String> validate(List<Integer> survivors, int maxParticipants, int playoffSize) {
 		List<String> errors = new ArrayList<>();
@@ -65,9 +71,6 @@ public final class ProgressiveSurvivorsUtil {
 			int v = survivors.get(i);
 			if (v < 4) {
 				errors.add("Mỗi giai đoạn phải giữ lại ít nhất 4 người (phần tử thứ " + (i + 1) + " = " + v + ")");
-			}
-			if (v % 2 != 0) {
-				errors.add("Mọi số người đi tiếp phải là số chẵn (phần tử thứ " + (i + 1) + " = " + v + ")");
 			}
 			if (i > 0 && v >= survivors.get(i - 1)) {
 				errors.add("Danh sách số người đi tiếp phải giảm dần nghiêm ngặt (" + survivors.get(i - 1) + " → " + v + ")");
