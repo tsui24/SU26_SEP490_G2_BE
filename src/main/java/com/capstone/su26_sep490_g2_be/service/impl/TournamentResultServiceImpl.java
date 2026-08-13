@@ -29,8 +29,11 @@ import com.capstone.su26_sep490_g2_be.repository.TournamentStageRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentResultRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserProfileRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import com.capstone.su26_sep490_g2_be.util.TournamentPointsPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -65,6 +68,8 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 	private final ParticipantRepository participantRepository;
 	private final UserProfileRepository userProfileRepository;
 	private final TournamentStageRepository stageRepository;
+	private final MinioStorageService minioStorageService;
+	private final MinioProperties minioProperties;
 
 	@Override
 	public List<TournamentResult> getByTournament(Long tournamentId) {
@@ -553,7 +558,8 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 				.userId(userId)
 				.displayName(participant.getDisplayName())
 				.accountName(accountName)
-				.avatarUrl(avatarUrl)
+				.avatarUrl(AvatarUrlResolver.resolveForResponse(
+						avatarUrl, minioStorageService, minioProperties.getBucket()))
 				.billiardRank(billiardRank)
 				.bio(bio)
 				.achievements(achievements)
@@ -597,7 +603,8 @@ public class TournamentResultServiceImpl implements TournamentResultService {
 				.userId(userId)
 				.displayName(displayName)
 				.accountName(accountName)
-				.avatarUrl(avatarUrl)
+				.avatarUrl(AvatarUrlResolver.resolveForResponse(
+						avatarUrl, minioStorageService, minioProperties.getBucket()))
 				.billiardRank(billiardRank)
 				.bio(bio)
 				.achievements(achievements)
