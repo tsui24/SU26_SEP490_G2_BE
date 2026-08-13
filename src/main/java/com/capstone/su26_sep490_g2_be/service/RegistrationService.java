@@ -45,4 +45,7 @@ public interface RegistrationService {
 	CheckoutResponse checkout(Long registrationId, Long userId);
 
 	void markAsPaid(long orderCode, String transactionRef);
+
+	/** Đánh dấu payment thất bại/bị hủy — registration ở lại PENDING_PAYMENT để player checkout lại. */
+	void markAsFailed(long orderCode, String reason);
 }

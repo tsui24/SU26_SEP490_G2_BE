@@ -498,6 +498,45 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.build());
 	}
 
+	@Override
+	@Transactional
+	public void markAsFailed(long orderCode, String reason) {
+		// orderCode == payment.id
+		Payment payment = paymentRepository.findById(orderCode).orElse(null);
+		if (payment == null) return;
+		if (PaymentStatus.SUCCESS.getValue().equals(payment.getStatus())) return; // đã thanh toán, không ghi đè
+		if (PaymentStatus.FAILED.getValue().equals(payment.getStatus())
+				|| PaymentStatus.CANCELLED.getValue().equals(payment.getStatus())) return; // idempotent
+
+		payment.setStatus(PaymentStatus.FAILED.getValue());
+		paymentRepository.save(payment);
+
+		Registration reg = payment.getRegistration();
+		if (reg == null) return;
+		publishPaymentFailedEvent(payment, reg, reason);
+		// Registration ở lại PENDING_PAYMENT — player checkout lại (tạo payment mới) qua luồng
+		// "tái sử dụng/tạo mới link" đã có sẵn trong checkout(), không cần đổi status ở đây.
+	}
+
+	private void publishPaymentFailedEvent(Payment payment, Registration reg, String reason) {
+		if (reg.getUser() == null || reg.getUser().getEmail() == null) {
+			return;
+		}
+		Map<String, Object> variables = new HashMap<>(mailContextBuilder.systemContext());
+		mailContextBuilder.putRegistration(variables, reg);
+		mailContextBuilder.putPayment(variables, payment);
+		if (reason != null) {
+			variables.put("failureReason", reason);
+		}
+		eventPublisher.publishEvent(MailDomainEvent.builder()
+				.eventType(EmailEventType.PAYMENT_FAILED)
+				.tournamentId(reg.getTournament().getId())
+				.variables(variables)
+				.explicitRecipients(List.of(new MailRecipient(reg.getUser().getId(), reg.getUser().getEmail())))
+				.entityKey("PAYMENT-" + payment.getId())
+				.build());
+	}
+
 	/**
 	 * Kiểm tra slot còn trống (pessimistic lock) rồi tự động APPROVED hoặc REJECTED.
 	 * Phải gọi trong @Transactional.

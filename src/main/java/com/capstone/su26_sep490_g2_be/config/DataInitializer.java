@@ -66,7 +66,13 @@ public class DataInitializer implements CommandLineRunner {
 	 * thấy ô nhập, vẫn lưu được, mà không có bất kỳ tác dụng nào.
 	 */
 	private static final List<Map.Entry<String, String>> REMOVED_FORMAT_SCOPED_FIELDS =
-			List.of(Map.entry("DOUBLE_ELIMINATION", "bracket_size"));
+			List.of(
+					Map.entry("DOUBLE_ELIMINATION", "bracket_size"),
+					// "Đánh loại kép tới tận vô địch" không phải cách tổ chức giải thật — bỏ lựa
+					// chọn, DOUBLE_ELIMINATION giờ luôn cắt về loại trực tiếp (generateCutToSEDE).
+					// Giải cũ đã bốc thăm không bị ảnh hưởng: bracket đã sinh ra là dữ liệu độc lập,
+					// không đọc lại config field này.
+					Map.entry("DOUBLE_ELIMINATION", "de_mode"));
 
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;
@@ -122,10 +128,15 @@ public class DataInitializer implements CommandLineRunner {
 	}
 
 	/**
-	 * Seed catalog field. Với field đã tồn tại thì <b>vẫn đồng bộ lại nhãn/mô tả</b> — nếu chỉ
-	 * {@code existsById} rồi bỏ qua, mọi lần sửa nhãn trong {@code DatabaseSeedData} sẽ không bao
-	 * giờ tới được DB đang chạy, và nhãn cũ (sai nghĩa) nằm lại vĩnh viễn. Giá trị/ràng buộc
-	 * (min/max, default) thì <b>không</b> ghi đè vì Admin có thể đã chỉnh cho phù hợp thực tế.
+	 * Seed catalog field. Với field đã tồn tại thì <b>vẫn đồng bộ lại nhãn/mô tả/schema hiển thị</b>
+	 * (label, description, dataType, uiComponent, enumOptions) — nếu chỉ {@code existsById} rồi bỏ
+	 * qua, mọi lần sửa trong {@code DatabaseSeedData} sẽ không bao giờ tới được DB đang chạy, và field
+	 * cũ (sai/thiếu enumOptions, uiComponent lỗi thời...) nằm lại vĩnh viễn — ví dụ thực tế: field
+	 * {@code de_mode} từng được tạo trước khi {@code enumOptions} được thêm vào code, khiến control
+	 * RADIO_GROUP mãi không có lựa chọn để hiển thị dù code nguồn đã đúng từ lâu.
+	 * Ràng buộc/giá trị điều chỉnh được (min/max) thì <b>không</b> ghi đè vì Admin có thể đã chỉnh
+	 * cho phù hợp thực tế — chỉ phần định nghĩa "field này hiển thị bằng control gì, có lựa chọn gì"
+	 * mới luôn đồng bộ theo code.
 	 */
 	private void seedConfigFieldCatalog() {
 		int seeded = 0;
@@ -138,9 +149,15 @@ public class DataInitializer implements CommandLineRunner {
 				continue;
 			}
 			if (!Objects.equals(existing.getLabel(), field.getLabel())
-					|| !Objects.equals(existing.getDescription(), field.getDescription())) {
+					|| !Objects.equals(existing.getDescription(), field.getDescription())
+					|| !Objects.equals(existing.getDataType(), field.getDataType())
+					|| !Objects.equals(existing.getUiComponent(), field.getUiComponent())
+					|| !Objects.equals(existing.getEnumOptions(), field.getEnumOptions())) {
 				existing.setLabel(field.getLabel());
 				existing.setDescription(field.getDescription());
+				existing.setDataType(field.getDataType());
+				existing.setUiComponent(field.getUiComponent());
+				existing.setEnumOptions(field.getEnumOptions());
 				configFieldRepository.save(existing);
 				relabeled++;
 			}
@@ -222,22 +239,36 @@ public class DataInitializer implements CommandLineRunner {
 		}
 	}
 
+	/**
+	 * se_phase_size bắt buộc Owner tự nhập (không có defaultValue để âm thầm dùng thay) — số này
+	 * phải khớp với quy mô thật của giải (xem validateSePhaseSize ở OwnerTournamentServiceImpl),
+	 * nên không có một con số mặc định nào đúng cho mọi giải.
+	 */
 	private void ensureFormatConfigFieldsForDE() {
-		linkFormatConfigField("DOUBLE_ELIMINATION", "de_mode", "FULL_DE", 90);
-		linkFormatConfigField("DOUBLE_ELIMINATION", "se_phase_size", "64", 91);
+		linkFormatConfigField("DOUBLE_ELIMINATION", "se_phase_size", "", true, 91);
 	}
 
 	private void linkFormatConfigField(String formatCode, String fieldKey,
-			String defaultValue, int sortOrder) {
-		if (formatConfigFieldRepository.existsByFormatCodeAndFieldKey(formatCode, fieldKey)) return;
-		formatConfigFieldRepository.save(FormatConfigField.builder()
-				.formatCode(formatCode)
-				.fieldKey(fieldKey)
-				.defaultValue(defaultValue)
-				.isRequired(false)
-				.isVisibleToOwner(true)
-				.sortOrder(sortOrder)
-				.build());
+			String defaultValue, boolean isRequired, int sortOrder) {
+		FormatConfigField existing = formatConfigFieldRepository
+				.findByFormatCodeAndFieldKey(formatCode, fieldKey).orElse(null);
+		if (existing == null) {
+			formatConfigFieldRepository.save(FormatConfigField.builder()
+					.formatCode(formatCode)
+					.fieldKey(fieldKey)
+					.defaultValue(defaultValue)
+					.isRequired(isRequired)
+					.isVisibleToOwner(true)
+					.sortOrder(sortOrder)
+					.build());
+			return;
+		}
+		if (!Objects.equals(existing.getDefaultValue(), defaultValue)
+				|| !Objects.equals(existing.getIsRequired(), isRequired)) {
+			existing.setDefaultValue(defaultValue);
+			existing.setIsRequired(isRequired);
+			formatConfigFieldRepository.save(existing);
+		}
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
