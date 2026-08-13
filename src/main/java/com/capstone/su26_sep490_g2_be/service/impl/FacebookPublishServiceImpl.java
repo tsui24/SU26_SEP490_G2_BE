@@ -18,8 +18,10 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -54,14 +56,52 @@ public class FacebookPublishServiceImpl implements FacebookPublishService {
 		MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 		body.add("message", message);
 		body.add("access_token", getToken());
-		if (link != null && !link.isBlank()) {
+		if (isPublicHttpsUrl(link)) {
 			body.add("link", link);
+		} else if (link != null && !link.isBlank()) {
+			log.warn("Bỏ qua Facebook Graph `link` vì URL không public (localhost/LAN/http): {}", link);
 		}
 
 		JsonNode response = postFormToFacebook("/" + fbProps.getPageId() + "/feed", body);
 		String postId = response.path("id").asText();
 		log.info("Facebook text post created: {}", postId);
 		return postId;
+	}
+
+	/**
+	 * Facebook crawler phải fetch được URL mới gắn preview. localhost / IP nội bộ / http
+	 * đều bị Graph trả OAuthException 1500 ("The url you supplied is invalid").
+	 */
+	private boolean isPublicHttpsUrl(String link) {
+		if (link == null || link.isBlank()) {
+			return false;
+		}
+		try {
+			URI uri = URI.create(link.trim());
+			if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+				return false;
+			}
+			String host = uri.getHost().toLowerCase(Locale.ROOT);
+			if ("localhost".equals(host) || "127.0.0.1".equals(host) || "::1".equals(host)
+					|| host.endsWith(".local") || host.endsWith(".internal")) {
+				return false;
+			}
+			if (host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.")) {
+				return false;
+			}
+			if (host.startsWith("172.")) {
+				String[] parts = host.split("\\.");
+				if (parts.length >= 2) {
+					int second = Integer.parseInt(parts[1]);
+					if (second >= 16 && second <= 31) {
+						return false;
+					}
+				}
+			}
+			return true;
+		} catch (Exception ex) {
+			return false;
+		}
 	}
 
 	@Override

@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.config.StartupMailGuard;
 import com.capstone.su26_sep490_g2_be.dto.response.RenderedEmailResponse;
 import com.capstone.su26_sep490_g2_be.entity.EmailSendLog;
 import com.capstone.su26_sep490_g2_be.entity.User;
@@ -30,10 +31,15 @@ public class MailSendServiceImpl implements MailSendService {
 	private final EmailSendLogRepository emailSendLogRepository;
 	private final UserRepository userRepository;
 	private final ApplicationEventPublisher eventPublisher;
+	private final StartupMailGuard startupMailGuard;
 
 	@Override
 	@Transactional
 	public EmailSendLog queueAndSend(MailSendCommand command) {
+		if (startupMailGuard.isSuppressed()) {
+			log.debug("Skip queueAndSend during seed — to={}", command.recipientEmail());
+			return null;
+		}
 		if (command.idempotencyKey() != null) {
 			Instant window = Instant.now().minus(IDEMPOTENCY_WINDOW_MINUTES, ChronoUnit.MINUTES);
 			var existing = emailSendLogRepository

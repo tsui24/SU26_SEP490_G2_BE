@@ -31,10 +31,9 @@ import java.util.Random;
  * đã đóng đăng ký, đã bốc thăm, đang thi đấu dở, đã hủy) và đăng ký ở đủ trạng thái
  * (chờ thanh toán, thanh toán thất bại, đã duyệt, bị từ chối tự động/thủ công, đã hủy).
  * <p>
- * Vì đi qua service thật, mỗi bước cũng publish {@link com.capstone.su26_sep490_g2_be.service.MailDomainEvent}
- * y hệt luồng thật — nghĩa là email tự động (REGISTRATION_SUBMITTED, PAYMENT_SUCCESS...) sẽ được
- * gửi thật qua SMTP đã cấu hình. Chạy sau {@link EmailTemplateSeedInitializer} (@Order 3) để rule
- * automation đã tồn tại khi các event này fire (AFTER_COMMIT của transaction seed).
+ * Vì đi qua service thật, mỗi bước cũng publish {@link com.capstone.su26_sep490_g2_be.service.MailDomainEvent}.
+ * SMTP/push bị {@link com.capstone.su26_sep490_g2_be.config.StartupMailGuard} chặn suốt lúc seed
+ * để không spam hộp thư mỗi lần restart. Chạy sau {@link EmailTemplateSeedInitializer} (@Order 3).
  * <p>
  * Idempotent theo tên giải đấu — an toàn khi backend restart nhiều lần trên cùng 1 DB.
  */
@@ -164,7 +163,9 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 
 		registrationService.cancel(r9.getId(), r9.getUser().getId()); // CANCELLED (giải phóng lại 1 suất, còn 3/4)
 
-		registrationService.approve(r12.getId(), owner.getId()); // APPROVED thủ công (4/4 — ĐẦY lại)
+		// Không được approve() tay khi chưa thanh toán — giải có phí sẽ ném PAYMENT_006
+		// (làm fail CommandLineRunner → @SpringBootTest/CI không lên context).
+		paySuccess(r12); // APPROVED qua thanh toán (4/4 — ĐẦY lại)
 
 		RejectRegistrationRequest rejectReq = new RejectRegistrationRequest();
 		rejectReq.setReason("Thông tin đăng ký không hợp lệ — vui lòng đăng ký lại.");
