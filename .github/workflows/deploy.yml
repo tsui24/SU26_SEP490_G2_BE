@@ -9,6 +9,30 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    # Su26Sep490G2BeApplicationTests là @SpringBootTest — cần MySQL thật để
+    # context khởi động được. Trước đây job này nối tới RDS `capstone26-test`;
+    # RDS đã tắt (2026-08-12) nên CI tự dựng MySQL dùng một lần ở đây.
+    #
+    # ⚠️  KHÔNG trỏ vào MySQL trên EC2. Host `mysql:3306` chỉ phân giải được
+    # bên trong docker network của compose, còn trỏ bằng IP public thì phải mở
+    # 3306 ra internet và test sẽ chạy ddl-auto + seeder vào dữ liệu thật.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: su26_sep490_g2
+        ports:
+          - 3306:3306
+        # Không có health check thì job chạy tiếp khi MySQL chưa nhận kết nối
+        # (container up trước khi server sẵn sàng vài chục giây).
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -19,8 +43,10 @@ jobs:
       - name: Run tests
         env:
           SPRING_PROFILES_ACTIVE: dev
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          # DB dùng một lần, hủy khi job kết thúc — không cần để trong secrets.
+          DB_URL: jdbc:mysql://127.0.0.1:3306/su26_sep490_g2?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+          DB_USERNAME: root
+          DB_PASSWORD: ci-root
           # MinIO không chạy trong CI — chỉ cần giá trị khác rỗng để MinioClient khởi tạo được,
           # kết nối thật sự thất bại sẽ được bỏ qua (xem MinioConfig#minioBucketInitializer)
           MINIO_ACCESS_KEY: ci-placeholder
