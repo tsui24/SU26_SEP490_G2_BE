@@ -15,6 +15,12 @@ public class MailProperties {
 	private String supportEmail = "support@btms.vn";
 	private String appName = "BTMS";
 	private String frontendBaseUrl = "https://biliardtournament.cloud";
+	/**
+	 * Chặn SMTP/push trong lúc CommandLineRunner seed chạy. Seeder đi qua service thật nên
+	 * publish hàng chục MailDomainEvent — nếu không chặn thì mỗi lần restart spam hộp thư.
+	 * Tắt bằng {@code MAIL_SUPPRESS_DURING_STARTUP=false} khi cố ý test mail lúc seed.
+	 */
+	private boolean suppressDuringStartup = true;
 	private Async async = new Async();
 
 	/** Trang chi tiết giải công khai trên FE — `{frontendBaseUrl}/event/{id}`. */
