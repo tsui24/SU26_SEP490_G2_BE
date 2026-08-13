@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.controller;
 
+import com.capstone.su26_sep490_g2_be.config.MailProperties;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.entity.FacebookPost;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
@@ -42,6 +43,7 @@ public class FacebookController {
 	private final FacebookPostRepository facebookPostRepository;
 	private final TournamentRepository tournamentRepository;
 	private final UserRepository userRepository;
+	private final MailProperties mailProperties;
 
 	// ─── Publish endpoints ──────────────────────────────────────────────
 
@@ -50,8 +52,13 @@ public class FacebookController {
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishTextPost(
 			@AuthenticationPrincipal UserDetails principal,
 			@Valid @RequestBody TextPostRequest request) {
-		String postId = facebookPublishService.publishTextPost(request.getMessage(), request.getLink());
-		savePost(postId, request.getMessage(), "TEXT", request.getTournamentId(), principal);
+		String tournamentUrl = tournamentPublicUrl(request.getTournamentId());
+		String message = appendTournamentLink(request.getMessage(), tournamentUrl);
+		String link = (request.getLink() != null && !request.getLink().isBlank())
+				? request.getLink()
+				: tournamentUrl;
+		String postId = facebookPublishService.publishTextPost(message, link);
+		savePost(postId, message, "TEXT", request.getTournamentId(), principal);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -61,8 +68,9 @@ public class FacebookController {
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishPhotoPost(
 			@AuthenticationPrincipal UserDetails principal,
 			@Valid @RequestBody PhotoPostRequest request) {
-		String postId = facebookPublishService.publishPhotoPost(request.getMessage(), request.getImageUrl());
-		savePost(postId, request.getMessage(), "PHOTO", request.getTournamentId(), principal);
+		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
+		String postId = facebookPublishService.publishPhotoPost(message, request.getImageUrl());
+		savePost(postId, message, "PHOTO", request.getTournamentId(), principal);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (có ảnh) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -72,8 +80,9 @@ public class FacebookController {
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishMultiPhotoPost(
 			@AuthenticationPrincipal UserDetails principal,
 			@Valid @RequestBody MultiPhotoPostRequest request) {
-		String postId = facebookPublishService.publishMultiPhotoPost(request.getMessage(), request.getImageUrls());
-		savePost(postId, request.getMessage(), "MULTI_PHOTO", request.getTournamentId(), principal);
+		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
+		String postId = facebookPublishService.publishMultiPhotoPost(message, request.getImageUrls());
+		savePost(postId, message, "MULTI_PHOTO", request.getTournamentId(), principal);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (nhiều ảnh) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -83,9 +92,10 @@ public class FacebookController {
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishMinioPhoto(
 			@AuthenticationPrincipal UserDetails principal,
 			@Valid @RequestBody MinioPhotoPostRequest request) {
+		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
 		String postId = facebookPublishService.publishPhotoFromMinio(
-				request.getMessage(), request.getMinioObjectKey());
-		savePost(postId, request.getMessage(), "PHOTO", request.getTournamentId(), principal);
+				message, request.getMinioObjectKey());
+		savePost(postId, message, "PHOTO", request.getTournamentId(), principal);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (ảnh MinIO) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -95,9 +105,10 @@ public class FacebookController {
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishMinioPhotos(
 			@AuthenticationPrincipal UserDetails principal,
 			@Valid @RequestBody MinioMultiPhotoPostRequest request) {
+		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
 		String postId = facebookPublishService.publishMultiPhotoFromMinio(
-				request.getMessage(), request.getMinioObjectKeys());
-		savePost(postId, request.getMessage(), "MULTI_PHOTO", request.getTournamentId(), principal);
+				message, request.getMinioObjectKeys());
+		savePost(postId, message, "MULTI_PHOTO", request.getTournamentId(), principal);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (nhiều ảnh MinIO) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -215,6 +226,22 @@ public class FacebookController {
 	}
 
 	// ─── Helpers ────────────────────────────────────────────────────────
+
+	private String tournamentPublicUrl(Long tournamentId) {
+		return mailProperties.tournamentPublicUrl(tournamentId);
+	}
+
+	/** Gắn URL trang giải vào nội dung nếu bài gắn tournament và chưa có sẵn link đó. */
+	private String appendTournamentLink(String message, String tournamentUrl) {
+		if (tournamentUrl == null || tournamentUrl.isBlank()) {
+			return message;
+		}
+		String body = message == null ? "" : message;
+		if (body.contains(tournamentUrl)) {
+			return body;
+		}
+		return body + "\n\n🔗 Xem thông tin giải đấu:\n" + tournamentUrl;
+	}
 
 	private void savePost(String facebookPostId, String content, String postType,
 			Long tournamentId, UserDetails principal) {
