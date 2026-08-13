@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.service.impl;
 
+import com.capstone.su26_sep490_g2_be.config.MailProperties;
 import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.FacebookPost;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
@@ -31,6 +32,7 @@ public class FacebookAutoPostListener {
 	private final FacebookPublishService facebookPublishService;
 	private final MinioStorageService minioStorageService;
 	private final FacebookPostRepository facebookPostRepository;
+	private final MailProperties mailProperties;
 
 	private static final DateTimeFormatter VN_DATE = DateTimeFormatter
 			.ofPattern("dd/MM/yyyy HH:mm")
@@ -54,7 +56,8 @@ public class FacebookAutoPostListener {
 				return;
 			}
 
-			String content = composeFacebookPost(t);
+			String tournamentUrl = mailProperties.tournamentPublicUrl(t.getId());
+			String content = composeFacebookPost(t, tournamentUrl);
 			String thumbnailKey = t.getThumbnailUrl();
 			boolean hasImage = thumbnailKey != null && !thumbnailKey.isBlank() && minioObjectExists(thumbnailKey);
 
@@ -65,7 +68,7 @@ public class FacebookAutoPostListener {
 				postType = "PHOTO";
 				log.info("Facebook auto-post (with image) for tournament {}: postId={}", t.getId(), fbPostId);
 			} else {
-				fbPostId = facebookPublishService.publishTextPost(content, null);
+				fbPostId = facebookPublishService.publishTextPost(content, tournamentUrl);
 				postType = "TEXT";
 				log.info("Facebook auto-post (text only) for tournament {}: postId={}", t.getId(), fbPostId);
 			}
@@ -83,7 +86,7 @@ public class FacebookAutoPostListener {
 		}
 	}
 
-	private String composeFacebookPost(Tournament t) {
+	private String composeFacebookPost(Tournament t, String tournamentUrl) {
 		StringBuilder sb = new StringBuilder();
 
 		sb.append("🏆 THÔNG BÁO GIẢI ĐẤU MỚI!\n");
@@ -158,6 +161,10 @@ public class FacebookAutoPostListener {
 		sb.append("\n━━━━━━━━━━━━━━━━━━━━━━\n");
 		if (Boolean.TRUE.equals(t.getIsRegister())) {
 			sb.append("🔥 ĐĂNG KÝ NGAY — SỐ LƯỢNG CÓ HẠN!\n");
+		}
+		if (tournamentUrl != null && !tournamentUrl.isBlank()) {
+			sb.append("\n🔗 Xem thông tin giải đấu:\n");
+			sb.append(tournamentUrl).append("\n");
 		}
 		sb.append("#BTMS #Billiard #GiaiDau #Pool #BiA");
 

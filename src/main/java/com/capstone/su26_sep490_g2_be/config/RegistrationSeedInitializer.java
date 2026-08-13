@@ -164,7 +164,9 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 
 		registrationService.cancel(r9.getId(), r9.getUser().getId()); // CANCELLED (giải phóng lại 1 suất, còn 3/4)
 
-		registrationService.approve(r12.getId(), owner.getId()); // APPROVED thủ công (4/4 — ĐẦY lại)
+		// Không được approve() tay khi chưa thanh toán — giải có phí sẽ ném PAYMENT_006
+		// (làm fail CommandLineRunner → @SpringBootTest/CI không lên context).
+		paySuccess(r12); // APPROVED qua thanh toán (4/4 — ĐẦY lại)
 
 		RejectRegistrationRequest rejectReq = new RejectRegistrationRequest();
 		rejectReq.setReason("Thông tin đăng ký không hợp lệ — vui lòng đăng ký lại.");

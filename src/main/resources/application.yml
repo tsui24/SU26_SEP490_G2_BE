@@ -45,7 +45,7 @@ app:
     from-name: ${MAIL_FROM_NAME:Giải đấu Bi-a BTMS}
     support-email: ${MAIL_SUPPORT_EMAIL:support@btms.vn}
     app-name: ${MAIL_APP_NAME:BTMS}
-    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+    frontend-base-url: ${FRONTEND_BASE_URL:https://biliardtournament.cloud}
     async:
       core-pool-size: ${MAIL_ASYNC_CORE_POOL_SIZE:2}
       max-pool-size: ${MAIL_ASYNC_MAX_POOL_SIZE:5}

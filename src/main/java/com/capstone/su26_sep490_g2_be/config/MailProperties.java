@@ -14,8 +14,20 @@ public class MailProperties {
 	private String fromName = "Giải đấu Bi-a BTMS";
 	private String supportEmail = "support@btms.vn";
 	private String appName = "BTMS";
-	private String frontendBaseUrl = "http://localhost:3000";
+	private String frontendBaseUrl = "https://biliardtournament.cloud";
 	private Async async = new Async();
+
+	/** Trang chi tiết giải công khai trên FE — `{frontendBaseUrl}/event/{id}`. */
+	public String tournamentPublicUrl(Long tournamentId) {
+		if (tournamentId == null) {
+			return null;
+		}
+		String base = frontendBaseUrl == null ? "" : frontendBaseUrl.trim();
+		while (base.endsWith("/")) {
+			base = base.substring(0, base.length() - 1);
+		}
+		return base + "/event/" + tournamentId;
+	}
 
 	@Getter
 	@Setter
