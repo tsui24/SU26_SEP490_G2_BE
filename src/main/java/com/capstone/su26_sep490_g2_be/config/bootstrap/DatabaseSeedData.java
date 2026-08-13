@@ -36,10 +36,12 @@ public class DatabaseSeedData {
 						null, null, null,
 						"Danh sách số người còn lại SAU mỗi giai đoạn vòng tròn, cách nhau bởi dấu phẩy (vd 10,6,4). "
 								+ "Phần tử cuối là số người vào vòng chung kết loại trực tiếp. "
-								+ "Mọi phần tử phải là số chẵn, giảm dần."),
+								+ "Mọi phần tử phải ≥ 4 và giảm dần nghiêm ngặt — không cần là số chẵn hay lũy thừa 2, "
+								+ "hạng cao được BYE tự động cho vừa khít bracket."),
 				field("final_playoff_size", "Số người vào vòng chung kết", "PROGRESSIVE", "INT", "NUMBER",
 						null, 4, 8,
-						"Số cơ thủ xếp hạng cao nhất được vào vòng chung kết loại trực tiếp (4 hoặc 8)."),
+						"Số cơ thủ xếp hạng cao nhất được vào vòng chung kết loại trực tiếp (4-8, không cần số chẵn — "
+								+ "VD 5 hoặc 6 vẫn hợp lệ, hạng cao nhất sẽ được BYE)."),
 				field("de_mode", "Cách kết thúc giải loại kép", "KNOCKOUT", "ENUM", "RADIO_GROUP",
 						"[\"FULL_DE\",\"CUT_TO_SE\"]", null, null,
 						"Đánh loại kép tới tận ngôi vô địch, hoặc đánh loại kép tới một mốc rồi "
