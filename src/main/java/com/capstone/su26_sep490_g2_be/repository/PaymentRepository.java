@@ -29,4 +29,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
 	List<Payment> findByRegistration_Tournament_IdIn(List<Long> tournamentIds);
 
 	Optional<Payment> findFirstByRegistrationIdAndStatusOrderByPaidAtDesc(Long registrationId, String status);
+
+	List<Payment> findByRegistrationIdInAndStatus(List<Long> registrationIds, String status);
 }

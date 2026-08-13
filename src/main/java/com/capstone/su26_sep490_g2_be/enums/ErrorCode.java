@@ -105,6 +105,8 @@ public enum ErrorCode {
 	PROGRESSIVE_CONFIG_INVALID("TOURNAMENT_010", "Cấu hình vòng tròn loại dần không hợp lệ", HttpStatus.BAD_REQUEST),
 	DRAW_SWAP_BOTH_SLOTS_EMPTY("TOURNAMENT_011", "Không thể đổi chỗ hai ô đều đang trống", HttpStatus.BAD_REQUEST),
 	DRAW_BRACKET_HAS_EMPTY_MATCH("TOURNAMENT_012", "Bracket có trận vòng 1 không còn cơ thủ nào — hãy sắp xếp lại trước khi xác nhận", HttpStatus.CONFLICT),
+	PARTICIPANT_SEED_NOT_CONTIGUOUS("TOURNAMENT_013", "Số hạt giống đang gán không liên tục — phải đủ từ 1 đến hết số người đã seed, không được để trống ở giữa", HttpStatus.CONFLICT),
+	TOURNAMENT_NOT_ENOUGH_PARTICIPANTS("TOURNAMENT_014", "Cần tối thiểu 2 người tham gia mới có thể bốc thăm", HttpStatus.CONFLICT),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),
@@ -112,6 +114,7 @@ public enum ErrorCode {
 	PAYMENT_ALREADY_PAID("PAYMENT_003", "Đăng ký này đã được thanh toán", HttpStatus.CONFLICT),
 	PAYMENT_NOT_REQUIRED("PAYMENT_004", "Giải đấu này miễn phí — không cần thanh toán", HttpStatus.BAD_REQUEST),
 	PAYMENT_INVALID_SIGNATURE("PAYMENT_005", "Chữ ký thanh toán không hợp lệ", HttpStatus.BAD_REQUEST),
+	REGISTRATION_PAYMENT_NOT_CONFIRMED("PAYMENT_006", "Đăng ký này chưa xác nhận thanh toán — không thể duyệt", HttpStatus.CONFLICT),
 
 	// Storage (MinIO)
 	STORAGE_UPLOAD_FAILED("STORAGE_001", "Tải file lên thất bại", HttpStatus.INTERNAL_SERVER_ERROR),

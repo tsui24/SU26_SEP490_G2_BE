@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -222,6 +223,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 		if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
 			throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
 		}
+		assertPaymentConfirmedIfRequired(reg, tournament);
 		long approvedCount = registrationRepository.countByTournamentIdAndStatus(
 				tournament.getId(), RegistrationStatus.APPROVED.getValue());
 		if (tournament.getMaxParticipants() != null && approvedCount >= tournament.getMaxParticipants()) {
@@ -236,6 +238,28 @@ public class RegistrationServiceImpl implements RegistrationService {
 		autoCreateParticipant(reg);
 		publishRegistrationEvent(EmailEventType.REGISTRATION_APPROVED, reg);
 		return toResponse(reg);
+	}
+
+	/**
+	 * Giải có phí (entryFee > 0) bắt buộc đã có 1 payment SUCCESS gắn với đăng ký này mới cho
+	 * duyệt thủ công. Luồng online bình thường (checkout → webhook → {@link #markAsPaid}) đã tự
+	 * động APPROVED ngay khi thanh toán thành công qua {@link #approveOrRejectBySlot}, nên một
+	 * đăng ký còn PENDING_PAYMENT tới lúc BQT bấm "Duyệt" tay nghĩa là CHƯA từng thanh toán —
+	 * duyệt tay lúc này sẽ cho người chơi vào giải miễn phí dù giải có phí. Giải miễn phí
+	 * (entryFee <= 0) không cần kiểm tra vì đã tự động duyệt ngay lúc nộp đơn.
+	 */
+	private void assertPaymentConfirmedIfRequired(Registration reg, Tournament tournament) {
+		BigDecimal fee = tournament.getEntryFee();
+		boolean requiresPayment = fee != null && fee.compareTo(BigDecimal.ZERO) > 0;
+		if (!requiresPayment) {
+			return;
+		}
+		boolean paid = paymentRepository
+				.findFirstByRegistrationIdAndStatusOrderByPaidAtDesc(reg.getId(), PaymentStatus.SUCCESS.getValue())
+				.isPresent();
+		if (!paid) {
+			throw new BusinessException(ErrorCode.REGISTRATION_PAYMENT_NOT_CONFIRMED);
+		}
 	}
 
 	@Override
@@ -318,7 +342,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 	private TournamentRegistrationResponse toResponse(Registration registration) {
 		List<TournamentRegistrationResponse.FieldValueItem> fieldValues = toFieldValueItems(
 				fieldValueRepository.findByRegistrationIdOrderByIdAsc(registration.getId()));
-		return buildRegistrationResponse(registration, fieldValues);
+		boolean paymentConfirmed = paymentRepository
+				.findFirstByRegistrationIdAndStatusOrderByPaidAtDesc(registration.getId(), PaymentStatus.SUCCESS.getValue())
+				.isPresent();
+		return buildRegistrationResponse(registration, fieldValues, paymentConfirmed);
 	}
 
 	/**
@@ -337,8 +364,13 @@ public class RegistrationServiceImpl implements RegistrationService {
 								v -> v.getId().getRegistrationId(),
 								LinkedHashMap::new,
 								Collectors.mapping(this::toFieldValueItem, Collectors.toList())));
+		Set<Long> paidRegistrationIds = paymentRepository
+				.findByRegistrationIdInAndStatus(registrationIds, PaymentStatus.SUCCESS.getValue()).stream()
+				.map(p -> p.getRegistration().getId())
+				.collect(Collectors.toSet());
 		return PageResponse.of(page, registration -> buildRegistrationResponse(
-				registration, fieldValuesByRegistrationId.getOrDefault(registration.getId(), List.of())));
+				registration, fieldValuesByRegistrationId.getOrDefault(registration.getId(), List.of()),
+				paidRegistrationIds.contains(registration.getId())));
 	}
 
 	private List<TournamentRegistrationResponse.FieldValueItem> toFieldValueItems(
@@ -359,7 +391,10 @@ public class RegistrationServiceImpl implements RegistrationService {
 	}
 
 	private TournamentRegistrationResponse buildRegistrationResponse(
-			Registration registration, List<TournamentRegistrationResponse.FieldValueItem> fieldValues) {
+			Registration registration, List<TournamentRegistrationResponse.FieldValueItem> fieldValues,
+			boolean paymentConfirmed) {
+		BigDecimal fee = registration.getTournament().getEntryFee();
+		boolean paymentRequired = fee != null && fee.compareTo(BigDecimal.ZERO) > 0;
 		return TournamentRegistrationResponse.builder()
 				.id(registration.getId())
 				.tournamentId(registration.getTournament().getId())
@@ -371,6 +406,8 @@ public class RegistrationServiceImpl implements RegistrationService {
 				.status(registration.getStatus())
 				.note(registration.getNote())
 				.createdAt(registration.getCreatedAt())
+				.paymentRequired(paymentRequired)
+				.paymentConfirmed(!paymentRequired || paymentConfirmed)
 				.fieldValues(fieldValues)
 				.build();
 	}

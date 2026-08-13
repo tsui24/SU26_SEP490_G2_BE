@@ -60,6 +60,13 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 
     boolean existsByRegistrationId(Long registrationId);
 
+    /** Dùng để chặn trùng seedNo trong cùng giải khi thêm thủ công / import Excel. */
+    boolean existsByTournamentIdAndSeedNoAndStatus(Long tournamentId, Integer seedNo, String status);
+
+    /** Như trên, nhưng loại trừ chính participant đang sửa — dùng khi UPDATE seedNo đã có. */
+    boolean existsByTournamentIdAndSeedNoAndStatusAndIdNot(
+            Long tournamentId, Integer seedNo, String status, Long excludedId);
+
     Optional<Participant> findByRegistrationId(Long registrationId);
 
     @Query("""

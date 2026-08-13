@@ -3,6 +3,7 @@ package com.capstone.su26_sep490_g2_be.exception;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -43,6 +44,28 @@ public class GlobalExceptionHandler {
 						.code(errorCode.getCode())
 						.message(ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage())
 						.build());
+	}
+
+	/**
+	 * Race hiếm gặp: 2 request cùng lúc gán trùng seedNo, cả hai qua được pre-check
+	 * ({@code existsByTournamentIdAndSeedNoAndStatus...}) trước khi request kia commit — ràng buộc
+	 * unique {@code uq_participants_tournament_seed} ở DB chặn lại request thua cuộc. Chỉ nhận diện
+	 * đúng ràng buộc này để trả lỗi thân thiện; các vi phạm ràng buộc khác vẫn rơi về 500 chung
+	 * (chưa từng cần thông báo riêng, giữ nguyên hành vi cũ).
+	 */
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+		String rootMessage = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : null;
+		if (rootMessage != null && rootMessage.contains("uq_participants_tournament_seed")) {
+			log.warn("Seed-no race detected: {}", rootMessage);
+			return ResponseEntity
+					.status(ErrorCode.PARTICIPANT_SEED_DUPLICATE.getHttpStatus())
+					.body(ApiResponse.error(ErrorCode.PARTICIPANT_SEED_DUPLICATE));
+		}
+		log.error("Unhandled data integrity violation: {}", ex.getMessage(), ex);
+		return ResponseEntity
+				.status(ErrorCode.COMMON_INTERNAL_ERROR.getHttpStatus())
+				.body(ApiResponse.error(ErrorCode.COMMON_INTERNAL_ERROR));
 	}
 
 	@ExceptionHandler(OptimisticLockingFailureException.class)

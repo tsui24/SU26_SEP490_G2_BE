@@ -18,6 +18,8 @@ public class ParticipantResponse {
     private String phone;
     /** Hạng cơ thủ (BilliardRank.name()), null/UNKNOWN nếu chưa xếp hạng. */
     private String billiardRank;
+    /** Số hạt giống BQT tự nhập (1 = mạnh nhất), null nếu chưa xếp. */
+    private Integer seedNo;
     private String status;
     private String source;
     private String avtarUrl;

@@ -86,10 +86,14 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         }
 
         List<Participant> participants = participantRepository.findByTournamentIdAndStatus(tournamentId, ParticipantStatus.ACTIVE.getValue());
-        if (participants.size() < 2) throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        if (participants.size() < 2) throw new BusinessException(ErrorCode.TOURNAMENT_NOT_ENOUGH_PARTICIPANTS);
 
         TournamentConfig config = tournamentConfigRepository.findById(tournamentId).orElse(null);
         String seedingMethod = config != null ? config.getSeedingMethod() : SeedingMethod.RANDOM.name();
+
+        if (SeedingMethod.SEED.name().equals(seedingMethod)) {
+            validateSeedNoContiguous(participants);
+        }
 
         participants = resolveSeedRankOrder(seedingMethod, participants);
 
@@ -865,6 +869,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
      *
      * <ul>
      *   <li><b>RANK</b> — xếp theo {@link BilliardRank} của cơ thủ, xem {@link #resolveRankOrder}.</li>
+     *   <li><b>SEED</b> — xếp theo {@code seedNo} BQT tự nhập, xem {@link #resolveSeedNoOrder}.</li>
      *   <li><b>RANDOM</b> (và mọi giá trị lạ) — xáo toàn bộ, bốc thăm thuần.</li>
      * </ul>
      */
@@ -872,9 +877,67 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         if (SeedingMethod.RANK.name().equals(seedingMethod)) {
             return resolveRankOrder(participants);
         }
+        if (SeedingMethod.SEED.name().equals(seedingMethod)) {
+            return resolveSeedNoOrder(participants);
+        }
         List<Participant> shuffled = new ArrayList<>(participants);
         Collections.shuffle(shuffled);
         return shuffled;
+    }
+
+    /**
+     * Xếp thứ tự hạt giống theo {@code seedNo} BQT tự nhập (1 = mạnh nhất, tăng dần).
+     *
+     * <p>Cho phép seed MỘT PHẦN: người có seedNo xếp trước theo đúng số, người KHÔNG có seedNo bị
+     * xáo ngẫu nhiên và xếp SAU toàn bộ nhóm đã seed — giống hệt cách nhóm chưa xếp hạng được xử lý
+     * ở {@link #resolveRankOrder}, xem {@link #appendUnrankedAfterRanked} để biết vì sao không rải
+     * ngẫu nhiên xen kẽ (sẽ phá vỡ việc tách nhánh của các hạt giống đầu).
+     */
+    /**
+     * Chặn bốc thăm nếu nhóm đã gán {@code seedNo} không liên tục 1..K (K = số người đã seed).
+     *
+     * <p><b>Vì sao bắt buộc liên tục:</b> {@link #resolveSeedNoOrder} chỉ dùng seedNo để SẮP THỨ
+     * TỰ (index trong danh sách sau khi sort), KHÔNG dùng trực tiếp giá trị seedNo làm rank —
+     * nên về mặt kỹ thuật seed {1, 7} vẫn chạy được (tương đương seed {1, 2}), không sinh lỗi hệ
+     * thống. Nhưng để trống ở giữa (VD gán 1 và 7, bỏ trống 2-6) gần như luôn là BQT nhập nhầm/
+     * nhập dở dang — im lặng chấp nhận sẽ khiến hạt giống 7 bị xử lý như hạt giống 2 (mạnh hơn
+     * thực tế rất nhiều), sai lệch nghiêm trọng so với ý định. Chặn cứng ở bước bốc thăm thay vì
+     * lúc gán để Owner vẫn seed dần dần trong lúc build roster mà không bị chặn giữa chừng.
+     */
+    private void validateSeedNoContiguous(List<Participant> participants) {
+        Set<Integer> seedNos = participants.stream()
+                .map(Participant::getSeedNo)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (seedNos.isEmpty()) {
+            return; // Chưa ai được seed — coi như bốc thăm ngẫu nhiên hoàn toàn, không lỗi.
+        }
+        List<Integer> missing = new ArrayList<>();
+        for (int i = 1; i <= seedNos.size(); i++) {
+            if (!seedNos.contains(i)) {
+                missing.add(i);
+            }
+        }
+        if (!missing.isEmpty()) {
+            String missingStr = missing.stream().map(String::valueOf).collect(Collectors.joining(", "));
+            String assignedStr = seedNos.stream().map(String::valueOf).collect(Collectors.joining(", "));
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_NOT_CONTIGUOUS,
+                    "Số hạt giống đang gán không liên tục — thiếu số: " + missingStr
+                            + " (đã gán: " + assignedStr + "). Hãy gán đủ từ 1 đến " + seedNos.size()
+                            + ", hoặc sửa/xoá bớt hạt giống cho khớp.");
+        }
+    }
+
+    private List<Participant> resolveSeedNoOrder(List<Participant> participants) {
+        List<Participant> seeded = participants.stream()
+                .filter(p -> p.getSeedNo() != null)
+                .sorted(Comparator.comparingInt(Participant::getSeedNo))
+                .collect(Collectors.toCollection(ArrayList::new));
+        List<Participant> unseeded = participants.stream()
+                .filter(p -> p.getSeedNo() == null)
+                .collect(Collectors.toCollection(ArrayList::new));
+        Collections.shuffle(unseeded);
+        return appendUnrankedAfterRanked(seeded, unseeded);
     }
 
     /**
