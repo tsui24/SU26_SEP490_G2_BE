@@ -7,17 +7,20 @@ import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewRowRe
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
+import com.capstone.su26_sep490_g2_be.entity.TournamentConfig;
 import com.capstone.su26_sep490_g2_be.enums.BilliardRank;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantStatus;
 import com.capstone.su26_sep490_g2_be.enums.ParticipantType;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationStatus;
 import com.capstone.su26_sep490_g2_be.enums.RegistrationType;
+import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantMemberRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
+import com.capstone.su26_sep490_g2_be.repository.TournamentConfigRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.ParticipantExcelService;
 import com.capstone.su26_sep490_g2_be.util.ParticipantMemberFactory;
@@ -39,7 +42,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -51,12 +56,15 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 	private static final String SHEET_NAME = "Người tham gia";
 	/** Nhãn cột hạng — dùng chung cho template XLSX và CSV để hai bản không lệch nhau. */
 	private static final String RANK_COLUMN_HEADER = "Hạng (CN / A-L, bỏ trống nếu chưa rõ)";
-	/** Số cột tối đa cần đọc từ file: DOUBLE = 4 tên/SĐT + hạt giống + hạng. */
-	private static final int MAX_IMPORT_COLUMNS = 5;
+	/** Nhãn cột hạt giống — chỉ xuất hiện khi giải chọn seedingMethod = SEED. */
+	private static final String SEED_COLUMN_HEADER = "Hạt giống (số nguyên dương, 1 = mạnh nhất, bỏ trống nếu không xếp)";
+	/** Số cột tối đa cần đọc từ file: DOUBLE = 4 tên/SĐT + hạng + hạt giống. */
+	private static final int MAX_IMPORT_COLUMNS = 6;
 	private static final DataFormatter DATA_FORMATTER = new DataFormatter();
 	private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
 	private final TournamentRepository tournamentRepository;
+	private final TournamentConfigRepository tournamentConfigRepository;
 	private final RegistrationRepository registrationRepository;
 	private final ParticipantRepository participantRepository;
 	private final ParticipantMemberRepository participantMemberRepository;
@@ -67,9 +75,21 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				.orElse(false);
 	}
 
+	/**
+	 * Chỉ hiện cột "Hạt giống" trong template/preview khi giải đang chọn phương thức xếp hạt
+	 * giống {@link SeedingMethod#SEED} — chọn RANDOM/RANK thì cột này vô nghĩa, ẩn đi cho đỡ rối.
+	 */
+	private boolean hasSeedColumn(Long tournamentId) {
+		return tournamentConfigRepository.findById(tournamentId)
+				.map(TournamentConfig::getSeedingMethod)
+				.map(SeedingMethod.SEED.name()::equals)
+				.orElse(false);
+	}
+
 	@Override
 	public byte[] buildImportTemplate(Long tournamentId) throws IOException {
 		boolean isDouble = isDouble(tournamentId);
+		boolean hasSeed = hasSeedColumn(tournamentId);
 		try (XSSFWorkbook workbook = new XSSFWorkbook();
 			 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 			Sheet sheet = workbook.createSheet(SHEET_NAME);
@@ -102,6 +122,12 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				sheet.setColumnWidth(2, 20 * 256);
 				sheet.setColumnWidth(3, 18 * 256);
 				sheet.setColumnWidth(4, 26 * 256);
+
+				if (hasSeed) {
+					header.createCell(5).setCellValue(SEED_COLUMN_HEADER);
+					sample.createCell(5).setCellValue(1);
+					sheet.setColumnWidth(5, 30 * 256);
+				}
 			} else {
 				header.createCell(0).setCellValue("Tên hiển thị");
 				setPhoneCell(header.createCell(1), textStyle, "Số điện thoại");
@@ -114,6 +140,12 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				sheet.setColumnWidth(0, 20 * 256);
 				sheet.setColumnWidth(1, 18 * 256);
 				sheet.setColumnWidth(2, 26 * 256);
+
+				if (hasSeed) {
+					header.createCell(3).setCellValue(SEED_COLUMN_HEADER);
+					sample.createCell(3).setCellValue(1);
+					sheet.setColumnWidth(3, 30 * 256);
+				}
 			}
 
 			workbook.write(out);
@@ -128,12 +160,20 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 
 	@Override
 	public byte[] buildImportTemplateCsv(Long tournamentId) {
+		boolean isDouble = isDouble(tournamentId);
+		boolean hasSeed = hasSeedColumn(tournamentId);
 		// Công thức Excel ="..." để khi mở CSV, cột SĐT vẫn là text và giữ số 0 đầu
-		String csv = isDouble(tournamentId)
-				? "Tên VĐV 1,SĐT VĐV 1,Tên VĐV 2,SĐT VĐV 2," + RANK_COLUMN_HEADER
-						+ "\nNguyễn Văn A,=\"0901234567\",Trần Văn B,=\"0907654321\",B\n"
-				: "Tên hiển thị,Số điện thoại," + RANK_COLUMN_HEADER
-						+ "\nNguyễn Văn A,=\"0901234567\",B\n";
+		String csv;
+		if (isDouble) {
+			csv = "Tên VĐV 1,SĐT VĐV 1,Tên VĐV 2,SĐT VĐV 2," + RANK_COLUMN_HEADER
+					+ (hasSeed ? "," + SEED_COLUMN_HEADER : "")
+					+ "\nNguyễn Văn A,=\"0901234567\",Trần Văn B,=\"0907654321\",B"
+					+ (hasSeed ? ",1" : "") + "\n";
+		} else {
+			csv = "Tên hiển thị,Số điện thoại," + RANK_COLUMN_HEADER
+					+ (hasSeed ? "," + SEED_COLUMN_HEADER : "")
+					+ "\nNguyễn Văn A,=\"0901234567\",B" + (hasSeed ? ",1" : "") + "\n";
+		}
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		try {
 			out.write(UTF8_BOM);
@@ -208,11 +248,12 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		List<String[]> rows = request.getRows().stream()
 				.map(r -> {
 					String rank = r.getBilliardRank();
+					String seed = r.getSeedNo() != null ? String.valueOf(r.getSeedNo()) : null;
 					// Mảng phải đủ MAX_IMPORT_COLUMNS và ĐÚNG vị trí cột theo SINGLE/DOUBLE,
 					// vì validateRows đọc lại theo chỉ số cột.
 					return isDouble
-							? new String[] {r.getName1(), r.getPhone1(), r.getName2(), r.getPhone2(), rank}
-							: new String[] {r.getName1(), r.getPhone1(), rank, null, null};
+							? new String[] {r.getName1(), r.getPhone1(), r.getName2(), r.getPhone2(), rank, seed}
+							: new String[] {r.getName1(), r.getPhone1(), rank, seed, null, null};
 				})
 				.toList();
 
@@ -230,6 +271,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 						.name2(p.name2)
 						.phone2(p.phone2)
 						.billiardRank(p.billiardRank)
+						.seedNo(p.seedNo)
 						.valid(p.valid)
 						.error(p.error)
 						.build())
@@ -253,28 +295,32 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		final String phone2;
 		/** {@code BilliardRank.name()}; dòng lỗi để null vì không được lưu. */
 		final String billiardRank;
+		/** Số hạt giống (null nếu không xếp hoặc dòng lỗi). */
+		final Integer seedNo;
 		final boolean valid;
 		final String error;
 
 		private ParsedRow(int rowNo, String name1, String phone1, String name2, String phone2,
-				String billiardRank, boolean valid, String error) {
+				String billiardRank, Integer seedNo, boolean valid, String error) {
 			this.rowNo = rowNo;
 			this.name1 = name1;
 			this.phone1 = phone1;
 			this.name2 = name2;
 			this.phone2 = phone2;
 			this.billiardRank = billiardRank;
+			this.seedNo = seedNo;
 			this.valid = valid;
 			this.error = error;
 		}
 
-		static ParsedRow ok(int rowNo, String name1, String phone1, String name2, String phone2, String billiardRank) {
-			return new ParsedRow(rowNo, name1, phone1, name2, phone2, billiardRank, true, null);
+		static ParsedRow ok(int rowNo, String name1, String phone1, String name2, String phone2,
+				String billiardRank, Integer seedNo) {
+			return new ParsedRow(rowNo, name1, phone1, name2, phone2, billiardRank, seedNo, true, null);
 		}
 
-		/** Giữ nguyên chữ ký cũ — dòng lỗi không cần mang hạng, thông báo lỗi đã nêu rõ giá trị sai. */
+		/** Giữ nguyên chữ ký cũ — dòng lỗi không cần mang hạng/hạt giống, thông báo lỗi đã nêu rõ giá trị sai. */
 		static ParsedRow invalid(int rowNo, String name1, String phone1, String name2, String phone2, String error) {
-			return new ParsedRow(rowNo, name1, phone1, name2, phone2, null, false, error);
+			return new ParsedRow(rowNo, name1, phone1, name2, phone2, null, null, false, error);
 		}
 	}
 
@@ -283,10 +329,18 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 		List<ParsedRow> result = new ArrayList<>();
 
 		boolean isDouble = ParticipantType.DOUBLE.name().equals(tournament.getParticipantType());
+		boolean hasSeed = hasSeedColumn(tournament.getId());
 		int rankCol = isDouble ? 4 : 2;
+		int seedCol = isDouble ? 5 : 3;
 
 		List<Participant> activeParticipants = participantRepository
 				.findByTournamentIdAndStatus(tournament.getId(), ParticipantStatus.ACTIVE.getValue());
+
+		// Chặn trùng seedNo: vừa với người đã có trong giải, vừa GIỮA các dòng trong CHÍNH file này
+		// (file tự trùng thì không request nào bắt được ở tầng DB vì chưa ai được lưu).
+		Set<Integer> existingSeedNos = activeParticipants.stream()
+				.map(Participant::getSeedNo).filter(Objects::nonNull).collect(Collectors.toSet());
+		Set<Integer> seenInBatch = new HashSet<>();
 
 		Integer maxParticipants = tournament.getMaxParticipants();
 		int remainingSlots = maxParticipants == null
@@ -358,8 +412,34 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 				billiardRank = BilliardRank.fromNullable(rankRaw).name();
 			}
 
+			// Hạt giống — chỉ đọc/validate khi giải đang chọn seedingMethod = SEED; nếu không thì
+			// cột này (nếu có trong file) bị bỏ qua, tránh gán nhầm giá trị vô nghĩa với PP khác.
+			Integer seedNo = null;
+			if (hasSeed) {
+				String seedRaw = normalizeCell(cols, seedCol);
+				if (seedRaw != null && !seedRaw.isBlank()) {
+					try {
+						seedNo = Integer.parseInt(seedRaw.trim());
+					} catch (NumberFormatException e) {
+						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
+								"Hạt giống \"" + seedRaw.trim() + "\" không hợp lệ — chỉ nhận số nguyên dương"));
+						continue;
+					}
+					if (seedNo < 1) {
+						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
+								"Số hạt giống phải từ 1 trở lên"));
+						continue;
+					}
+					if (existingSeedNos.contains(seedNo) || !seenInBatch.add(seedNo)) {
+						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
+								"Số hạt giống " + seedNo + " đã được gán cho người tham gia khác"));
+						continue;
+					}
+				}
+			}
+
 			remainingSlots--;
-			result.add(ParsedRow.ok(rowNo, name1, phone1, name2, phone2, billiardRank));
+			result.add(ParsedRow.ok(rowNo, name1, phone1, name2, phone2, billiardRank, seedNo));
 		}
 
 		return result;
@@ -399,6 +479,7 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 					.participantType(tournament.getParticipantType())
 					.displayName(displayName)
 					.billiardRank(row.billiardRank)
+					.seedNo(row.seedNo)
 					.status(ParticipantStatus.ACTIVE.getValue())
 					.build());
 

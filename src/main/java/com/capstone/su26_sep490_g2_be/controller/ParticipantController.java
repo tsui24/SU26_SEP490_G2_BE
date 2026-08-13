@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.dto.request.ManualAddParticipantRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.ParticipantImportConfirmRequest;
+import com.capstone.su26_sep490_g2_be.dto.request.UpdateSeedNoRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ImportParticipantResultResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewResponse;
@@ -171,6 +172,25 @@ public class ParticipantController {
         return ResponseEntity.ok(ApiResponse.success(withdraw(participantId)));
     }
 
+    /* ── Sửa lại số hạt giống (VD import/nhập tay bị sai) ── */
+    @Operation(summary = "Sửa số hạt giống của người tham gia (Owner)",
+            description = "Chỉ áp dụng khi roster còn sửa được (chưa bốc thăm). Truyền seedNo=null để bỏ hạt giống.")
+    @PatchMapping("/api/v1/owner/participants/{participantId}/seed-no")
+    @Transactional
+    public ResponseEntity<ApiResponse<ParticipantResponse>> updateSeedNoOwner(
+            @PathVariable Long participantId, @Valid @RequestBody UpdateSeedNoRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(updateSeedNo(participantId, request)));
+    }
+
+    @Operation(summary = "Sửa số hạt giống của người tham gia (Manager)",
+            description = "Chỉ áp dụng khi roster còn sửa được (chưa bốc thăm). Truyền seedNo=null để bỏ hạt giống.")
+    @PatchMapping("/api/v1/manager/participants/{participantId}/seed-no")
+    @Transactional
+    public ResponseEntity<ApiResponse<ParticipantResponse>> updateSeedNoManager(
+            @PathVariable Long participantId, @Valid @RequestBody UpdateSeedNoRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(updateSeedNo(participantId, request)));
+    }
+
     /* ─────────────────── Private helpers ─────────────────── */
 
     private List<ParticipantResponse> getParticipants(Long tournamentId) {
@@ -255,6 +275,11 @@ public class ParticipantController {
         String partnerPhone = request.getPartnerPhone();
         if (partnerPhone != null) partnerPhone = partnerPhone.trim().isEmpty() ? null : partnerPhone.trim();
 
+        if (request.getSeedNo() != null && participantRepository.existsByTournamentIdAndSeedNoAndStatus(
+                tournamentId, request.getSeedNo(), ParticipantStatus.ACTIVE.getValue())) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
+        }
+
         String displayName = request.getDisplayName().trim();
         if (isDouble) {
             displayName = ParticipantMemberFactory.composeDoubleDisplayName(displayName, partnerFullName);
@@ -279,6 +304,7 @@ public class ParticipantController {
                 .participantType(tournament.getParticipantType())
                 .displayName(displayName)
                 .billiardRank(BilliardRank.fromNullable(request.getBilliardRank()).name())
+                .seedNo(request.getSeedNo())
                 .status(ParticipantStatus.ACTIVE.getValue())
                 .build();
         participant = participantRepository.save(participant);
@@ -293,9 +319,37 @@ public class ParticipantController {
     }
 
 
+    /**
+     * Sửa lại seedNo của 1 participant đã tồn tại (VD nhập tay/import Excel gán sai số). Chỉ cho
+     * sửa khi roster còn mở (chưa bốc thăm) — sửa sau khi đã sinh bracket không có tác dụng gì vì
+     * seeding chỉ đọc lúc bốc thăm, để tránh Owner tưởng nhầm là sửa xong bracket sẽ đổi theo.
+     */
+    private ParticipantResponse updateSeedNo(Long participantId, UpdateSeedNoRequest request) {
+        Participant participant = findParticipantWithDetails(participantId);
+        Tournament tournament = participant.getTournament();
+
+        if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
+            throw new BusinessException(ErrorCode.TOURNAMENT_ROSTER_LOCKED);
+        }
+
+        Integer newSeedNo = request.getSeedNo();
+        if (newSeedNo != null && participantRepository.existsByTournamentIdAndSeedNoAndStatusAndIdNot(
+                tournament.getId(), newSeedNo, ParticipantStatus.ACTIVE.getValue(), participantId)) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
+        }
+
+        participant.setSeedNo(newSeedNo);
+        participantRepository.save(participant);
+        return toResponse(participant);
+    }
+
     private ParticipantResponse withdraw(Long participantId) {
         Participant participant = findParticipantWithDetails(participantId);
         participant.setStatus(ParticipantStatus.WITHDRAWN.getValue());
+        // Giải phóng số hạt giống ngay khi rút lui — nếu không, ràng buộc unique
+        // (tournament_id, seed_no) ở DB vẫn giữ chỗ vì nó không phân biệt theo status, khiến
+        // không ai gán lại được số này dù pre-check ở tầng service đã lọc đúng ACTIVE.
+        participant.setSeedNo(null);
         participantRepository.save(participant);
         publishParticipantWithdrawnEvent(participant);
         return toResponse(participant);
@@ -349,6 +403,7 @@ public class ParticipantController {
                 .displayName(p.getDisplayName())
                 .phone(reg != null ? reg.getPlayerPhone() : null)
                 .billiardRank(p.getBilliardRank())
+                .seedNo(p.getSeedNo())
                 .status(p.getStatus())
                 .source(source)
                 .avtarUrl(p.getAvtarUrl())

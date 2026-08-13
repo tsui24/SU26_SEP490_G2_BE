@@ -8,6 +8,12 @@ import lombok.*;
 		name = "participants",
 		indexes = {
 				@Index(name = "idx_participants_tournament_status", columnList = "tournament_id, status")
+		},
+		uniqueConstraints = {
+				// NULL không tính trùng (InnoDB) — chỉ chặn 2 participant CÙNG giải trùng seed_no thật.
+				// Bắt buộc phải có ràng buộc này: bản MANUAL/seedNo cũ đã bị gỡ đúng vì thiếu nó, dữ
+				// liệu seed bị trùng lộn xộn không ai phát hiện ra cho tới khi bốc thăm.
+				@UniqueConstraint(name = "uq_participants_tournament_seed", columnNames = {"tournament_id", "seed_no"})
 		})
 @Getter
 @Setter
@@ -43,6 +49,15 @@ public class Participant {
 	 */
 	@Column(name = "billiard_rank", length = 20)
 	private String billiardRank;
+
+	/**
+	 * Số hạt giống BQT tự nhập (1 = mạnh nhất) — chỉ dùng khi giải chọn
+	 * {@link com.capstone.su26_sep490_g2_be.enums.SeedingMethod#SEED}. Null = chưa xếp hạt giống,
+	 * người này được xáo ngẫu nhiên và xếp SAU toàn bộ nhóm đã có hạt giống lúc bốc thăm — cho
+	 * phép seed một phần (VD chỉ 8/32 người có hạt giống thật).
+	 */
+	@Column(name = "seed_no")
+	private Integer seedNo;
 
 	@Column(length = 30, nullable = false)
 	@Builder.Default

@@ -13,6 +13,8 @@ public class ParticipantImportPreviewRowResponse {
     private String phone2;
     /** Hạng cơ thủ (BilliardRank.name()), null/UNKNOWN nếu chưa xếp hạng. */
     private String billiardRank;
+    /** Số hạt giống (chỉ có khi giải chọn seedingMethod = SEED), null nếu không xếp. */
+    private Integer seedNo;
     private boolean valid;
     private String error;
 }

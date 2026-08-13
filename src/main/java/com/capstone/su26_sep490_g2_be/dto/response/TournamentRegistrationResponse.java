@@ -22,6 +22,10 @@ public class TournamentRegistrationResponse {
 	private String status;
 	private String note;
 	private Instant createdAt;
+	/** Giải có thu phí (entryFee > 0) hay không — quyết định có cần chờ thanh toán trước khi duyệt. */
+	private Boolean paymentRequired;
+	/** Đã có payment SUCCESS gắn với đăng ký này chưa. Luôn true nếu paymentRequired = false. */
+	private Boolean paymentConfirmed;
 	private List<FieldValueItem> fieldValues;
 
 	@Getter
