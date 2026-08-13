@@ -11,13 +11,16 @@ import com.capstone.su26_sep490_g2_be.enums.SeedingMethod;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStageStatus;
 import com.capstone.su26_sep490_g2_be.enums.TournamentStatus;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.config.MinioProperties;
 import com.capstone.su26_sep490_g2_be.repository.*;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
 import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import com.capstone.su26_sep490_g2_be.service.MailDomainEvent;
+import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
+import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
 import com.capstone.su26_sep490_g2_be.util.ProgressiveSurvivorsUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +51,8 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private final MatchSchedulingService matchSchedulingService;
     private final UserRepository userRepository;
     private final BranchAccessService branchAccessService;
+    private final MinioStorageService minioStorageService;
+    private final MinioProperties minioProperties;
 
     /** Owner thao tác được bracket của mọi giải (1 chuỗi); Manager chỉ giải thuộc chi nhánh được cấp quyền. */
     private void assertActorCanAccessTournament(Long actorUserId, Tournament tournament) {
@@ -218,151 +223,14 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
      *    W-R(wr≥2) M(pos) loser → L-R(2*(wr-1)) M(pos) as player2
      * ═══════════════════════════════════════════════════════════ */
 
+    /**
+     * DOUBLE_ELIMINATION luôn cắt về loại trực tiếp khi còn {@code se_phase_size} người (xem
+     * {@link #generateCutToSEDE}) — không còn chế độ "đánh loại kép tới tận vô địch" (2 người cuối
+     * cùng của 2 nhánh gặp nhau ở 1 trận chung kết lớn duy nhất): thực tế không giải nào tổ chức theo
+     * kiểu đó, và bracket-reset của trận chung kết lớn kiểu cũ cũng chưa từng được cài đặt đúng.
+     */
     private BracketResult generateDoubleElimination(Tournament t, List<Participant> participants) {
-        String deMode = readStringConfig(t.getId(), "de_mode", "FULL_DE");
-        if ("CUT_TO_SE".equals(deMode)) {
-            return generateCutToSEDE(t, participants);
-        }
-        return generateFullDoubleElimination(t, participants);
-    }
-
-    private BracketResult generateFullDoubleElimination(Tournament t, List<Participant> participants) {
-        int n = participants.size();
-        int bracketSize = nextPowerOf2(n);
-        int wTotalRounds = log2(bracketSize);
-        int lTotalRounds = 2 * (wTotalRounds - 1);
-
-        TournamentStage wStage = stageRepository.save(TournamentStage.builder()
-                .tournament(t).name("Nhánh thắng").stageType("WINNERS")
-                .orderNo(1).status(TournamentStageStatus.PENDING.getValue()).build());
-        TournamentStage lStage = stageRepository.save(TournamentStage.builder()
-                .tournament(t).name("Nhánh thua").stageType("LOSERS")
-                .orderNo(2).status(TournamentStageStatus.PENDING.getValue()).build());
-        TournamentStage gfStage = stageRepository.save(TournamentStage.builder()
-                .tournament(t).name("Chung kết lớn").stageType("GRAND_FINAL")
-                .orderNo(3).status(TournamentStageStatus.PENDING.getValue()).build());
-
-        // ── Grand Final ───────────────────────────────────────
-        Match grandFinal = matchRepository.save(Match.builder()
-                .tournament(t).stage(gfStage).bracketType("GRAND_FINAL")
-                .roundNo(1).positionNo(1).matchCode("GF")
-                .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "grand_final"))
-                .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
-
-        // ── Winners bracket ───────────────────────────────────
-        // wGrid[round][pos] 1-indexed; max pos = bracketSize/2
-        Match[][] wGrid = new Match[wTotalRounds + 1][(bracketSize >> 1) + 1];
-
-        for (int wr = 1; wr <= wTotalRounds; wr++) {
-            int mc = bracketSize >> wr;
-            for (int pos = 1; pos <= mc; pos++) {
-                wGrid[wr][pos] = matchRepository.save(Match.builder()
-                        .tournament(t).stage(wStage).bracketType("WINNERS")
-                        .roundNo(wr).positionNo(pos)
-                        .matchCode("W-R%d-M%d".formatted(wr, pos))
-                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), resolveWinnersRoundKey(wr, wTotalRounds)))
-                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
-            }
-        }
-
-        // Win links within Winners (same as single elimination)
-        for (int wr = 1; wr < wTotalRounds; wr++) {
-            int mc = bracketSize >> wr;
-            for (int pos = 1; pos <= mc; pos++) {
-                int pp = (pos + 1) / 2;
-                String slot = (pos % 2 == 1) ? "player1" : "player2";
-                wGrid[wr][pos].setNextMatchWin(wGrid[wr + 1][pp]);
-                wGrid[wr][pos].setWinSlot(slot);
-                matchRepository.save(wGrid[wr][pos]);
-            }
-        }
-        // Winners Final → GF player1
-        wGrid[wTotalRounds][1].setNextMatchWin(grandFinal);
-        wGrid[wTotalRounds][1].setWinSlot("player1");
-        matchRepository.save(wGrid[wTotalRounds][1]);
-
-        // ── Losers bracket ────────────────────────────────────
-        // lGrid[lr][pos] 1-indexed; max pos = bracketSize/4
-        int maxLPos = Math.max(1, bracketSize >> 2) + 1;
-        Match[][] lGrid = new Match[lTotalRounds + 1][maxLPos + 1];
-
-        for (int lr = 1; lr <= lTotalRounds; lr++) {
-            int mc = losersMatchCount(bracketSize, lr);
-            String rk = resolveLosersRoundKey(lr, lTotalRounds);
-            for (int pos = 1; pos <= mc; pos++) {
-                lGrid[lr][pos] = matchRepository.save(Match.builder()
-                        .tournament(t).stage(lStage).bracketType("LOSERS")
-                        .roundNo(lr).positionNo(pos)
-                        .matchCode("L-R%d-M%d".formatted(lr, pos))
-                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), rk))
-                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
-            }
-        }
-
-        // Win links within Losers
-        for (int lr = 1; lr < lTotalRounds; lr++) {
-            int mc = losersMatchCount(bracketSize, lr);
-            for (int pos = 1; pos <= mc; pos++) {
-                if (lr % 2 == 1) {
-                    // Odd → Even: same position, player1 (player2 comes from W drop later)
-                    lGrid[lr][pos].setNextMatchWin(lGrid[lr + 1][pos]);
-                    lGrid[lr][pos].setWinSlot("player1");
-                } else {
-                    // Even → Odd: compression ⌈pos/2⌉
-                    int pp = (pos + 1) / 2;
-                    String slot = (pos % 2 == 1) ? "player1" : "player2";
-                    lGrid[lr][pos].setNextMatchWin(lGrid[lr + 1][pp]);
-                    lGrid[lr][pos].setWinSlot(slot);
-                }
-                matchRepository.save(lGrid[lr][pos]);
-            }
-        }
-        // Losers Final → GF player2
-        lGrid[lTotalRounds][1].setNextMatchWin(grandFinal);
-        lGrid[lTotalRounds][1].setWinSlot("player2");
-        matchRepository.save(lGrid[lTotalRounds][1]);
-
-        // ── Assign participants to W-R1 (seeding chuẩn — xem assignSeededRound1) ──
-        assignSeededRound1(wGrid[1], participants, bracketSize);
-
-        // ── Wire Winners → Losers drops ───────────────────────
-
-        // W-R1 (B/2 matches) → L-R1 (B/4 matches)
-        // 2 adjacent W-R1 losers share one L-R1 match: (2k-1)→P1, (2k)→P2
-        int lr1Mc = losersMatchCount(bracketSize, 1);
-        for (int lPos = 1; lPos <= lr1Mc; lPos++) {
-            int wP1 = 2 * lPos - 1;
-            int wP2 = 2 * lPos;
-            if (wGrid[1][wP1] != null && !Boolean.TRUE.equals(wGrid[1][wP1].getIsBye())) {
-                wGrid[1][wP1].setNextMatchLose(lGrid[1][lPos]);
-                wGrid[1][wP1].setLoseSlot("player1");
-                matchRepository.save(wGrid[1][wP1]);
-            }
-            if (wGrid[1][wP2] != null && !Boolean.TRUE.equals(wGrid[1][wP2].getIsBye())) {
-                wGrid[1][wP2].setNextMatchLose(lGrid[1][lPos]);
-                wGrid[1][wP2].setLoseSlot("player2");
-                matchRepository.save(wGrid[1][wP2]);
-            }
-        }
-
-        // W-R(wr≥2) M(pos) loser → L-R(2*(wr-1)) M(pos) as player2
-        for (int wr = 2; wr <= wTotalRounds; wr++) {
-            int lRound = 2 * (wr - 1);
-            int mc = bracketSize >> wr;
-            for (int pos = 1; pos <= mc; pos++) {
-                if (wGrid[wr][pos] != null && lGrid[lRound][pos] != null) {
-                    wGrid[wr][pos].setNextMatchLose(lGrid[lRound][pos]);
-                    wGrid[wr][pos].setLoseSlot("player2");
-                    matchRepository.save(wGrid[wr][pos]);
-                }
-            }
-        }
-
-        List<TournamentStage> allStages = List.of(wStage, lStage, gfStage);
-        List<Match> allMatches = new ArrayList<>();
-        allStages.forEach(s -> allMatches.addAll(
-                matchRepository.findByStageIdOrderByRoundNoAscPositionNoAsc(s.getId())));
-        return new BracketResult(allStages, allMatches);
+        return generateCutToSEDE(t, participants);
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -948,7 +816,9 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         if (p == null) return null;
         return ParticipantBriefResponse.builder()
                 .id(p.getId()).displayName(p.getDisplayName())
-                .avatarUrl(p.getAvtarUrl()).build();
+                .avatarUrl(AvatarUrlResolver.resolveForList(
+                        p.getAvtarUrl(), minioStorageService, minioProperties.getBucket()))
+                .build();
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -1254,21 +1124,22 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     private BracketResult generateCutToSEDE(Tournament t, List<Participant> participants) {
         int n          = participants.size();
         int bracketSize = nextPowerOf2(n);
-        int wAllRounds  = log2(bracketSize);
 
-        int seSize = nextPowerOf2(Math.max(2, readIntConfig(t.getId(), "se_phase_size", 64)));
+        int seSize = nextPowerOf2(Math.max(2, readIntConfig(t.getId(), "se_phase_size", 8)));
+
+        // Kẹp seSize vào khoảng hợp lệ thay vì từ chối config — luôn phải còn ít nhất 1 vòng W
+        // trước khi cắt (seSize <= bracketSize/2), nên số người cấu hình lớn hơn thực tế (vd default
+        // cho giải nhỏ) không làm bốc thăm thất bại, chỉ tự động thu hẹp về mức khả thi lớn nhất.
+        int maxValidSeSize = Math.max(2, bracketSize / 2);
+        if (seSize > maxValidSeSize) {
+            log.info("CUT_TO_SE: se_phase_size={} vượt quá bracketSize={}, kẹp về {}",
+                    seSize, bracketSize, maxValidSeSize);
+            seSize = maxValidSeSize;
+        }
 
         // cutoffRound: số vòng W bracket trước khi chuyển sang SE
         // seSize = bracketSize / 2^(cutoffRound-1)  →  cutoffRound = log2(bracketSize/seSize)+1
-        int cutoffRound = log2(bracketSize / Math.max(seSize, 2)) + 1;
-
-        // Validate — fallback về FULL_DE nếu config không hợp lệ
-        if (cutoffRound < 2 || seSize < 4 || seSize >= bracketSize || cutoffRound > wAllRounds) {
-            log.warn("CUT_TO_SE invalid config (cutoffRound={}, seSize={}, bracketSize={}), fallback FULL_DE",
-                     cutoffRound, seSize, bracketSize);
-            return generateFullDoubleElimination(t, participants);
-        }
-
+        int cutoffRound = log2(bracketSize / seSize) + 1;
         int lCutoffRounds = 2 * (cutoffRound - 1); // số vòng L bracket
 
         // ── Stages ───────────────────────────────────────────────────
