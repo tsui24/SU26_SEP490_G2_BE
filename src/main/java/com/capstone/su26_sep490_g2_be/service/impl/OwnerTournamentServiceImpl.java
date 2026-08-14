@@ -562,6 +562,18 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Map<String, String> valuesToSave = new LinkedHashMap<>();
 		for (FormatConfigField formatField : allFormatFields) {
 			String fieldKey = formatField.getFieldKey();
+
+			// bracket_size là giá trị DẪN XUẤT — server luôn tự tính lại từ số người ACTIVE thực tế
+			// lúc bốc thăm, Owner không nhập nó. FE vẫn hiển thị field này (read-only, xem
+			// resolveFieldValue) nên vẫn gửi kèm trong payload lưu config; nếu để lọt xuống bước
+			// validate minValue bên dưới thì MỌI giải mới (0 người, dưới minValue=8) đều bị chặn
+			// lưu config ngay từ đầu — bracket_size không bao giờ được validate/bắt buộc/lưu ở đây,
+			// thay vì lưu tạm rồi xoá sau khi đã lỡ validate (xem lịch sử: từng có validate trước,
+			// remove(BRACKET_SIZE_FIELD_KEY) sau, nhưng validate ném lỗi trước khi tới được dòng đó).
+			if (BRACKET_SIZE_FIELD_KEY.equals(fieldKey)) {
+				continue;
+			}
+
 			String value = requestValues.get(fieldKey);
 			if (value == null || value.isBlank()) {
 				if (Boolean.TRUE.equals(formatField.getIsRequired())) {
@@ -590,11 +602,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (!errors.isEmpty()) {
 			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, errors);
 		}
-
-		// bracket_size là giá trị dẫn xuất từ số người thực tế — không lưu, và tuyệt đối không ghi
-		// ngược vào maxParticipants. Trước đây chiều ghi ngược đó khiến giải 4 người bị đổi thành
-		// 8 chỉ vì Owner bấm Lưu ở màn config.
-		valuesToSave.remove(BRACKET_SIZE_FIELD_KEY);
 
 		configValueService.saveAll(tournamentId, valuesToSave);
 
@@ -1116,6 +1123,13 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		List<FormatConfigField> formatFields = formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(formatCode);
 		for (FormatConfigField formatField : formatFields) {
+			// Cùng lý do như trong saveConfig(): bracket_size là giá trị dẫn xuất từ số người
+			// ACTIVE hiện tại, không phải Owner nhập — validate nó ở đây sẽ luôn báo "dưới mức tối
+			// thiểu" cho mọi giải chưa đủ 8 người thật (kể cả lúc mở đăng ký, khi số người còn là 0),
+			// khiến patchStatus(OPEN_FOR_REGISTRATION) không bao giờ qua được collectConfigErrors.
+			if (BRACKET_SIZE_FIELD_KEY.equals(formatField.getFieldKey())) {
+				continue;
+			}
 			if (!Boolean.TRUE.equals(formatField.getIsRequired())) {
 				continue;
 			}
