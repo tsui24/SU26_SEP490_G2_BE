@@ -26,9 +26,10 @@ public class DatabaseSeedData {
 				field("scoring_unit", "Đơn vị tính điểm", "COMMON", "ENUM", "SELECT",
 						"[\"GAME\",\"FRAME\"]", null, null,
 						"Đơn vị dùng để tính thắng thua một trận: ván (game) hoặc hiệp (frame)."),
-				field("bracket_size", "Số người tối đa", "KNOCKOUT", "INT", "NUMBER",
-						null, 8, 64, "Đồng bộ hai chiều với số người tối đa của giải. "
-								+ "Nhánh đấu thật luôn tự tính theo số người dự thi thực tế."),
+				field("bracket_size", "Số người thực tế đang có", "KNOCKOUT", "INT", "NUMBER",
+						null, 8, 64, "Số cơ thủ đang thực sự có mặt trong giải ngay lúc này — khác với "
+								+ "\"Số người tối đa\" (sức chứa giải, chỉnh ở Bước 1). Nhánh đấu thật luôn tự "
+								+ "tính theo số này khi bốc thăm, không đọc số tối đa."),
 				field("third_place_match", "Trận tranh hạng 3", "KNOCKOUT", "BOOLEAN", "CHECKBOX",
 						null, null, null,
 						"Tổ chức thêm trận giữa hai cơ thủ thua bán kết để xác định hạng 3."),
