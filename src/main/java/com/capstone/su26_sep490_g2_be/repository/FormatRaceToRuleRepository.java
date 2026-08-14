@@ -15,4 +15,7 @@ public interface FormatRaceToRuleRepository extends JpaRepository<FormatRaceToRu
 	Optional<FormatRaceToRule> findByFormatCodeAndBracketPhaseOrderByIdAsc(String formatCode, String bracketPhase);
 
 	long countByFormatCode(String formatCode);
+
+	/** Xoá toàn bộ race-to rule gắn với 1 thể thức — dùng khi gỡ hẳn thể thức đó khỏi hệ thống. */
+	void deleteByFormatCode(String formatCode);
 }
