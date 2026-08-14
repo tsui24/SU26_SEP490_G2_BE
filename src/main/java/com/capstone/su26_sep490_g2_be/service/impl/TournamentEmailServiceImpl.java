@@ -191,7 +191,7 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 		if (rule.getTournament() != null && !rule.getTournament().getId().equals(tournamentId)) {
 			throw new BusinessException(ErrorCode.EMAIL_RULE_NOT_FOUND);
 		}
-		return mailAutomationService.setEnabled(ruleId, enabled);
+		return mailAutomationService.setEnabledForTournament(tournamentId, ruleId, enabled);
 	}
 
 	@Override

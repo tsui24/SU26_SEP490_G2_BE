@@ -19,7 +19,15 @@ public interface MailAutomationService {
 
 	EmailAutomationRuleResponse updateRule(Long id, EmailAutomationRuleRequest request);
 
+	/** Bật/tắt rule GLOBAL thật sự (trang Admin) — không dùng cho toggle theo từng giải. */
 	EmailAutomationRuleResponse setEnabled(Long id, boolean enabled);
+
+	/**
+	 * Bật/tắt 1 rule CHO ĐÚNG 1 GIẢI. Nếu rule đang trỏ tới là rule GLOBAL, tự tạo (hoặc tái dùng)
+	 * 1 bản sao riêng cho giải này rồi bật/tắt bản sao đó — không bao giờ sửa trực tiếp rule GLOBAL,
+	 * tránh ảnh hưởng tới mọi giải khác đang dùng chung rule đó.
+	 */
+	EmailAutomationRuleResponse setEnabledForTournament(Long tournamentId, Long ruleId, boolean enabled);
 
 	/** Rule riêng của giải nếu có, nếu không thì fallback rule global — dùng bởi event listener. */
 	List<EmailAutomationRule> resolveActiveRulesForEvent(EmailEventType eventType, Long tournamentId);
