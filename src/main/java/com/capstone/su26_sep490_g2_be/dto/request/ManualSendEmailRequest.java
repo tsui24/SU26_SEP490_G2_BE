@@ -32,6 +32,9 @@ public class ManualSendEmailRequest {
 	@Schema(description = "Bắt buộc khi recipientType = CUSTOM_LIST")
 	private List<String> recipientEmails;
 
+	@Schema(description = "Bắt buộc khi recipientType = REGISTRATION_USER — id của đăng ký cụ thể cần gửi tới")
+	private Long registrationId;
+
 	@Schema(description = "Biến tự nhập bổ sung, ví dụ {\"custom\": {\"message\": \"...\"}}")
 	private Map<String, Object> variables;
 }

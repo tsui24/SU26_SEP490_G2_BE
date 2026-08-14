@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
 public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	private static final List<String> SEEDING_OPTIONS = List.of(
-			SeedingMethod.RANDOM.name(), SeedingMethod.RANK.name());
+			SeedingMethod.RANDOM.name(), SeedingMethod.RANK.name(), SeedingMethod.SEED.name());
 
 	/** Đồng bộ maxParticipants <-> bracket_size chỉ áp dụng cho thể thức Loại trực tiếp (1 lần thua). */
 	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
