@@ -44,6 +44,13 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long>,
     /** Có giải nào dùng format này mà không còn ở trạng thái có thể sửa tự do (DRAFT/CANCELLED) không? */
     boolean existsByFormatAndStatusNotIn(String format, List<String> statuses);
 
+    /** Có giải nào (bất kỳ trạng thái nào) dùng format này không — dùng trước khi gỡ hẳn 1 thể thức. */
+    boolean existsByFormat(String format);
+
+    /** Liệt kê giải đang dùng format sắp gỡ — chỉ dùng để log cảnh báo, không phục vụ nghiệp vụ. */
+    @Query("SELECT t.id FROM Tournament t WHERE t.format = :format")
+    List<Long> findIdsByFormat(@Param("format") String format);
+
     /** Projection nhẹ cho dashboard admin — tránh load cả entity (branch/createdBy) chỉ để đếm. */
     @Query("SELECT t.status, t.format, t.gameType, t.registrationFormTemplateId, t.createdAt FROM Tournament t")
     List<Object[]> findDashboardProjection();

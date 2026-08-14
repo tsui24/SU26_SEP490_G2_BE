@@ -6,6 +6,7 @@ import com.capstone.su26_sep490_g2_be.entity.Payment;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
+import com.capstone.su26_sep490_g2_be.repository.PaymentRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class MailContextBuilder {
 	private final MailProperties mailProperties;
 	private final TournamentRepository tournamentRepository;
 	private final RegistrationRepository registrationRepository;
+	private final PaymentRepository paymentRepository;
 
 	public Map<String, Object> systemContext() {
 		Map<String, Object> ctx = new HashMap<>();
@@ -107,6 +109,9 @@ public class MailContextBuilder {
 
 		if (sampleRegistrationId != null) {
 			registrationRepository.findById(sampleRegistrationId).ifPresent(r -> putRegistration(ctx, r));
+			paymentRepository.findByRegistrationId(sampleRegistrationId).stream()
+					.max(java.util.Comparator.comparing(Payment::getCreatedAt))
+					.ifPresent(p -> putPayment(ctx, p));
 		} else if (tournamentId != null) {
 			tournamentRepository.findById(tournamentId).ifPresent(t -> putTournament(ctx, t));
 		}

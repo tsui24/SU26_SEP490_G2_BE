@@ -19,8 +19,14 @@ public interface EmailAutomationRuleRepository extends JpaRepository<EmailAutoma
 	@EntityGraph(attributePaths = { "template", "tournament" })
 	List<EmailAutomationRule> findByEventTypeAndIsEnabledTrueAndTournamentId(String eventType, Long tournamentId);
 
+	/** Không lọc isEnabled — cần biết giải có override cho sự kiện này hay không, kể cả khi đang tắt. */
+	@EntityGraph(attributePaths = { "template", "tournament" })
+	List<EmailAutomationRule> findByEventTypeAndTournamentId(String eventType, Long tournamentId);
+
 	@EntityGraph(attributePaths = { "template", "tournament" })
 	List<EmailAutomationRule> findByTournamentId(Long tournamentId);
+
+	Optional<EmailAutomationRule> findByCodeAndTournamentId(String code, Long tournamentId);
 
 	@EntityGraph(attributePaths = { "template", "tournament" })
 	List<EmailAutomationRule> findByScope(String scope);

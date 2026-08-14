@@ -58,6 +58,8 @@ public enum ErrorCode {
 	CONFIG_INCOMPLETE("FORMAT_009", "Cấu hình giải chưa đầy đủ", HttpStatus.UNPROCESSABLE_ENTITY),
 	INVALID_STATUS_TRANSITION("FORMAT_010", "Chuyển trạng thái giải không hợp lệ", HttpStatus.UNPROCESSABLE_ENTITY),
 	GAME_TYPE_NOT_FOUND("FORMAT_011", "Không tìm thấy loại bi", HttpStatus.NOT_FOUND),
+	FORMAT_NOT_SUPPORTED_FOR_DRAW("FORMAT_012",
+			"Thể thức này chưa được hỗ trợ bốc thăm — liên hệ quản trị viên", HttpStatus.UNPROCESSABLE_ENTITY),
 
 	// Employee Management
 	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Không tìm thấy nhân viên", HttpStatus.NOT_FOUND),
@@ -91,6 +93,7 @@ public enum ErrorCode {
 	REFEREE_TIME_CONFLICT("MATCH_013", "Trọng tài đã được phân công một trận khác trùng khung giờ", HttpStatus.CONFLICT),
 	MATCH_TABLE_TIME_CONFLICT("MATCH_009", "Bàn này đã có trận khác thi đấu trong khung giờ đó — hãy chọn bàn/giờ khác", HttpStatus.CONFLICT),
 	MATCH_EARLY_END_NOT_CONFIRMED("MATCH_014", "Chưa ai đạt điểm race-to — cần xác nhận kết thúc sớm (bỏ cuộc/chấn thương)", HttpStatus.CONFLICT),
+	MATCH_SCORE_BOTH_REACHED_TARGET("MATCH_015", "Không thể cả hai cơ thủ cùng đạt điểm race-to — chỉ một người thắng ván cuối. Sửa lại tỷ số, hoặc dùng Walkover nếu có cơ thủ bỏ cuộc", HttpStatus.CONFLICT),
 
 	// Tournament participation
 	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),
@@ -106,7 +109,9 @@ public enum ErrorCode {
 	DRAW_SWAP_BOTH_SLOTS_EMPTY("TOURNAMENT_011", "Không thể đổi chỗ hai ô đều đang trống", HttpStatus.BAD_REQUEST),
 	DRAW_BRACKET_HAS_EMPTY_MATCH("TOURNAMENT_012", "Bracket có trận vòng 1 không còn cơ thủ nào — hãy sắp xếp lại trước khi xác nhận", HttpStatus.CONFLICT),
 	PARTICIPANT_SEED_NOT_CONTIGUOUS("TOURNAMENT_013", "Số hạt giống đang gán không liên tục — phải đủ từ 1 đến hết số người đã seed, không được để trống ở giữa", HttpStatus.CONFLICT),
+	PARTICIPANT_SEED_OUT_OF_RANGE("TOURNAMENT_016", "Số hạt giống vượt quá số người tối đa của giải", HttpStatus.BAD_REQUEST),
 	TOURNAMENT_NOT_ENOUGH_PARTICIPANTS("TOURNAMENT_014", "Cần tối thiểu 2 người tham gia mới có thể bốc thăm", HttpStatus.CONFLICT),
+	DRAW_SWAP_INVALID_SLOT("TOURNAMENT_015", "Tên ô không hợp lệ — chỉ nhận player1 hoặc player2", HttpStatus.BAD_REQUEST),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),
@@ -143,7 +148,8 @@ public enum ErrorCode {
 	EMAIL_SEND_FAILED("EMAIL_007", "Gửi email thất bại", HttpStatus.INTERNAL_SERVER_ERROR),
 	EMAIL_RECIPIENT_EMPTY("EMAIL_008", "Danh sách người nhận trống", HttpStatus.BAD_REQUEST),
 	EMAIL_AUTOMATION_DISABLED("EMAIL_009", "Quy tắc tự động đang tắt", HttpStatus.UNPROCESSABLE_ENTITY),
-	EMAIL_LOG_NOT_FOUND("EMAIL_010", "Không tìm thấy nhật ký gửi email", HttpStatus.NOT_FOUND);
+	EMAIL_LOG_NOT_FOUND("EMAIL_010", "Không tìm thấy nhật ký gửi email", HttpStatus.NOT_FOUND),
+	EMAIL_REGISTRATION_ID_REQUIRED("EMAIL_011", "Cần chọn 1 đăng ký cụ thể khi gửi tới Người đăng ký", HttpStatus.BAD_REQUEST);
 
 	private final String code;
 	private final String message;

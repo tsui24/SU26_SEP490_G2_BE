@@ -275,6 +275,11 @@ public class ParticipantController {
         String partnerPhone = request.getPartnerPhone();
         if (partnerPhone != null) partnerPhone = partnerPhone.trim().isEmpty() ? null : partnerPhone.trim();
 
+        if (request.getSeedNo() != null && tournament.getMaxParticipants() != null
+                && request.getSeedNo() > tournament.getMaxParticipants()) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_OUT_OF_RANGE);
+        }
+
         if (request.getSeedNo() != null && participantRepository.existsByTournamentIdAndSeedNoAndStatus(
                 tournamentId, request.getSeedNo(), ParticipantStatus.ACTIVE.getValue())) {
             throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
@@ -333,6 +338,10 @@ public class ParticipantController {
         }
 
         Integer newSeedNo = request.getSeedNo();
+        if (newSeedNo != null && tournament.getMaxParticipants() != null
+                && newSeedNo > tournament.getMaxParticipants()) {
+            throw new BusinessException(ErrorCode.PARTICIPANT_SEED_OUT_OF_RANGE);
+        }
         if (newSeedNo != null && participantRepository.existsByTournamentIdAndSeedNoAndStatusAndIdNot(
                 tournament.getId(), newSeedNo, ParticipantStatus.ACTIVE.getValue(), participantId)) {
             throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
