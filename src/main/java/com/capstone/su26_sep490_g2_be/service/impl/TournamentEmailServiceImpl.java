@@ -98,8 +98,9 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 		}
 
 		EmailRecipientType recipientType = EmailRecipientType.valueOf(request.getRecipientType());
-		List<MailRecipient> recipients = mailRecipientResolver
-				.resolve(recipientType, tournament.getId(), request.getRecipientEmails());
+		List<MailRecipient> recipients = EmailRecipientType.REGISTRATION_USER.equals(recipientType)
+				? resolveSingleRegistrationUser(tournament.getId(), request.getRegistrationId())
+				: mailRecipientResolver.resolve(recipientType, tournament.getId(), request.getRecipientEmails());
 		if (recipients.isEmpty()) {
 			throw new BusinessException(ErrorCode.EMAIL_RECIPIENT_EMPTY);
 		}
@@ -141,6 +142,26 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 		return ManualSendResultResponse.builder().queuedCount(recipients.size()).build();
 	}
 
+	/**
+	 * {@code REGISTRATION_USER} trong gửi thủ công nghĩa là "đúng 1 người đăng ký cụ thể" — khác với
+	 * automation rule (nơi type này luôn đi kèm {@code event.explicitRecipients()} do đúng registration
+	 * vừa phát sinh sự kiện cung cấp sẵn). Gửi thủ công không có sự kiện nào để lấy registration đó từ
+	 * đâu ra, nên Owner phải tự chọn — thiếu {@code registrationId} thì không có gì để gửi.
+	 */
+	private List<MailRecipient> resolveSingleRegistrationUser(Long tournamentId, Long registrationId) {
+		if (registrationId == null) {
+			throw new BusinessException(ErrorCode.EMAIL_REGISTRATION_ID_REQUIRED);
+		}
+		Registration registration = registrationRepository.findById(registrationId)
+				.filter(r -> r.getTournament() != null && r.getTournament().getId().equals(tournamentId))
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		User user = registration.getUser();
+		if (user == null || user.getEmail() == null) {
+			return List.of();
+		}
+		return List.of(new MailRecipient(user.getId(), user.getEmail(), registration.getId()));
+	}
+
 	/** Điền {{registration.*}}/{{user.*}}/{{payment.*}} khi người nhận có gắn 1 registration thật trong giải này. */
 	private void enrichWithRegistration(Map<String, Object> variables, Long registrationId) {
 		if (registrationId == null) return;
@@ -170,7 +191,7 @@ public class TournamentEmailServiceImpl implements TournamentEmailService {
 		if (rule.getTournament() != null && !rule.getTournament().getId().equals(tournamentId)) {
 			throw new BusinessException(ErrorCode.EMAIL_RULE_NOT_FOUND);
 		}
-		return mailAutomationService.setEnabled(ruleId, enabled);
+		return mailAutomationService.setEnabledForTournament(tournamentId, ruleId, enabled);
 	}
 
 	@Override

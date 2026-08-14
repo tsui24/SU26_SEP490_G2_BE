@@ -29,7 +29,9 @@ public class DataInitializer implements CommandLineRunner {
 	 * {@code config_field_definitions}, {@code format_config_fields} và
 	 * {@code tournament_config_values} để DB cũ không còn dữ liệu mồ côi.
 	 *
-	 * <p>Nhóm thứ hai thuộc thể thức GROUP_PLAYOFF (chia vòng bảng) đã được gỡ hoàn toàn.
+	 * <p>Nhóm thứ hai thuộc thể thức GROUP_PLAYOFF (chia vòng bảng) — bản thân field đã gỡ ở đây
+	 * từ trước, nhưng {@code tournament_format_definitions.GROUP_PLAYOFF} thì không; xem
+	 * {@link #REMOVED_FORMAT_CODES} / {@link #cleanupRemovedFormats()} cho phần gỡ hẳn thể thức.
 	 *
 	 * <p>Nhóm thứ ba là các field <b>không nơi nào đọc</b> — Owner chỉnh được trên wizard nhưng
 	 * giải chạy ra khác hẳn, gây hiểu nhầm nghiêm trọng hơn là không có field:
@@ -74,6 +76,21 @@ public class DataInitializer implements CommandLineRunner {
 					// không đọc lại config field này.
 					Map.entry("DOUBLE_ELIMINATION", "de_mode"));
 
+	/**
+	 * Thể thức đã bị gỡ khỏi {@link DatabaseSeedData#tournamentFormats()} nhưng
+	 * {@link #seedTournamentFormats()} chỉ INSERT-nếu-chưa-có, không bao giờ tự xoá — hàng cũ do
+	 * bản {@code DataInitializer} trước đây (hoặc do Admin tự tạo tay qua wizard format) vẫn nằm
+	 * lại trong DB, {@code isActive=true}, kèm đủ config field + race-to rule, nên Owner vẫn tạo
+	 * được giải GROUP_PLAYOFF và bốc thăm ra một bracket Loại trực tiếp trá hình (bracket generator
+	 * không nhận diện được format lạ nên rơi vào nhánh mặc định).
+	 *
+	 * <p>{@link #cleanupRemovedFormats()} gỡ nốt phần này: xoá hẳn hàng
+	 * {@code tournament_format_definitions} + field/race-to rule đính kèm nếu chưa giải nào từng
+	 * dùng; nếu đã có giải dùng rồi (dữ liệu test cũ) thì chỉ tắt {@code isActive} — không xoá, để
+	 * không phá vỡ khoá ngoại {@code tournaments.format} lẫn màn xem lại của giải đó.
+	 */
+	private static final List<String> REMOVED_FORMAT_CODES = List.of("GROUP_PLAYOFF");
+
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;
 	private final ConfigFieldDefinitionRepository configFieldRepository;
@@ -85,6 +102,7 @@ public class DataInitializer implements CommandLineRunner {
 	private final FormatConfigFieldRepository formatConfigFieldRepository;
 	private final FormatRaceToRuleRepository formatRaceToRuleRepository;
 	private final TournamentConfigValueRepository tournamentConfigValueRepository;
+	private final TournamentRepository tournamentRepository;
 	private final BranchRepository branchRepository;
 	private final BranchManagerRepository branchManagerRepository;
 	private final PasswordEncoder passwordEncoder;
@@ -99,6 +117,7 @@ public class DataInitializer implements CommandLineRunner {
 		seedFormatConfigFields();
 		seedFormatRaceToRules();
 		cleanupRemovedConfigFields();
+		cleanupRemovedFormats();
 		ensureFormatConfigFieldsForDE();
 
 		seedAccounts();
@@ -236,6 +255,37 @@ public class DataInitializer implements CommandLineRunner {
 			String fieldKey = scoped.getValue();
 			tournamentConfigValueRepository.deleteByFieldKeyForFormat(fieldKey, formatCode);
 			formatConfigFieldRepository.deleteByFormatCodeAndFieldKey(formatCode, fieldKey);
+		}
+	}
+
+	/**
+	 * Gỡ hẳn thể thức không còn trong {@link DatabaseSeedData#tournamentFormats()} (xem
+	 * {@link #REMOVED_FORMAT_CODES}). {@code tournaments.format} có khoá ngoại tới
+	 * {@code tournament_format_definitions.code} nên chỉ xoá hàng định nghĩa khi chắc chắn không
+	 * còn giải nào tham chiếu tới — có giải dùng rồi thì chỉ tắt {@code isActive} (Owner không tạo
+	 * mới được nữa, giải cũ vẫn xem lại được bình thường) và log rõ id để xử lý tay nếu cần.
+	 */
+	private void cleanupRemovedFormats() {
+		for (String formatCode : REMOVED_FORMAT_CODES) {
+			if (!formatRepository.existsById(formatCode)) {
+				continue;
+			}
+			if (tournamentRepository.existsByFormat(formatCode)) {
+				List<Long> stillUsedBy = tournamentRepository.findIdsByFormat(formatCode);
+				formatRepository.findById(formatCode).ifPresent(f -> {
+					f.setIsActive(false);
+					formatRepository.save(f);
+				});
+				log.warn("Thể thức {} đã bị gỡ khỏi seed nhưng vẫn còn {} giải tham chiếu (id: {}) — "
+								+ "đã tắt isActive để chặn tạo giải mới, KHÔNG xoá định nghĩa/field/race-to rule.",
+						formatCode, stillUsedBy.size(), stillUsedBy);
+				continue;
+			}
+			formatRaceToRuleRepository.deleteByFormatCode(formatCode);
+			formatConfigFieldRepository.deleteByFormatCode(formatCode);
+			formatRepository.deleteById(formatCode);
+			log.info("Đã gỡ hẳn thể thức {} (không còn giải nào dùng): xoá format definition + "
+					+ "config field + race-to rule đính kèm.", formatCode);
 		}
 	}
 

@@ -430,6 +430,13 @@ public class MatchServiceImpl implements MatchService {
         if (player1Score > raceTo || player2Score > raceTo) {
             throw new BusinessException(ErrorCode.MATCH_SCORE_OUT_OF_RANGE);
         }
+        // Race-to nghĩa là ai chạm mốc trước thắng luôn — hai người cùng chạm mốc trong
+        // cùng 1 lần lưu là trạng thái không thể xảy ra thật ngoài đời (VD 7-7 khi race-to=7).
+        // incrementScore() (nhập +1/-1) đã tự chặn việc này vì khoá cộng điểm ngay khi 1 người
+        // chạm mốc; updateScore() nhập tay nguyên tỷ số nên phải chặn tường minh ở đây.
+        if (player1Score >= raceTo && player2Score >= raceTo) {
+            throw new BusinessException(ErrorCode.MATCH_SCORE_BOTH_REACHED_TARGET);
+        }
 
         match.setPlayer1Score(player1Score);
         match.setPlayer2Score(player2Score);
@@ -641,7 +648,9 @@ public class MatchServiceImpl implements MatchService {
 
     /**
      * Khi đã có người đạt raceTo, chỉ cho chốt thắng đúng người đó
-     * (nếu cả hai đạt thì cho người điểm cao hơn; hòa bỏ qua check này).
+     * (nếu cả hai đạt thì cho người điểm cao hơn; cả hai đạt VÀ bằng điểm nhau là trạng thái
+     * không hợp lệ — {@code updateScore()} chặn từ lúc lưu tỷ số, nhưng vẫn chặn lại ở đây làm
+     * lớp phòng thủ thứ hai cho dữ liệu cũ/đường khác lỡ ghi được tỷ số kiểu này).
      * Khi CHƯA ai đạt raceTo (kết thúc sớm do bỏ cuộc/chấn thương…), bắt buộc phải xác nhận
      * qua {@code confirmEarlyEnd} — tránh trọng tài lỡ tay chốt trận 0-0 hoặc dở dang.
      */
@@ -669,7 +678,7 @@ public class MatchServiceImpl implements MatchService {
         } else if (p2 > p1) {
             requiredId = match.getPlayer2().getId();
         } else {
-            return; // cả hai đạt & điểm bằng nhau — trọng tài chọn
+            throw new BusinessException(ErrorCode.MATCH_SCORE_BOTH_REACHED_TARGET);
         }
 
         if (!winner.getId().equals(requiredId)) {

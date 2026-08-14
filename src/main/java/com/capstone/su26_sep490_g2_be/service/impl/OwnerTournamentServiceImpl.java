@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
 public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	private static final List<String> SEEDING_OPTIONS = List.of(
-			SeedingMethod.RANDOM.name(), SeedingMethod.RANK.name());
+			SeedingMethod.RANDOM.name(), SeedingMethod.RANK.name(), SeedingMethod.SEED.name());
 
 	/** Đồng bộ maxParticipants <-> bracket_size chỉ áp dụng cho thể thức Loại trực tiếp (1 lần thua). */
 	private static final String SINGLE_ELIMINATION_FORMAT_CODE = "SINGLE_ELIMINATION";
@@ -562,6 +562,18 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Map<String, String> valuesToSave = new LinkedHashMap<>();
 		for (FormatConfigField formatField : allFormatFields) {
 			String fieldKey = formatField.getFieldKey();
+
+			// bracket_size là giá trị DẪN XUẤT — server luôn tự tính lại từ số người ACTIVE thực tế
+			// lúc bốc thăm, Owner không nhập nó. FE vẫn hiển thị field này (read-only, xem
+			// resolveFieldValue) nên vẫn gửi kèm trong payload lưu config; nếu để lọt xuống bước
+			// validate minValue bên dưới thì MỌI giải mới (0 người, dưới minValue=8) đều bị chặn
+			// lưu config ngay từ đầu — bracket_size không bao giờ được validate/bắt buộc/lưu ở đây,
+			// thay vì lưu tạm rồi xoá sau khi đã lỡ validate (xem lịch sử: từng có validate trước,
+			// remove(BRACKET_SIZE_FIELD_KEY) sau, nhưng validate ném lỗi trước khi tới được dòng đó).
+			if (BRACKET_SIZE_FIELD_KEY.equals(fieldKey)) {
+				continue;
+			}
+
 			String value = requestValues.get(fieldKey);
 			if (value == null || value.isBlank()) {
 				if (Boolean.TRUE.equals(formatField.getIsRequired())) {
@@ -590,11 +602,6 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (!errors.isEmpty()) {
 			throw new ConfigValidationException(ErrorCode.CONFIG_VALIDATION_FAILED, errors);
 		}
-
-		// bracket_size là giá trị dẫn xuất từ số người thực tế — không lưu, và tuyệt đối không ghi
-		// ngược vào maxParticipants. Trước đây chiều ghi ngược đó khiến giải 4 người bị đổi thành
-		// 8 chỉ vì Owner bấm Lưu ở màn config.
-		valuesToSave.remove(BRACKET_SIZE_FIELD_KEY);
 
 		configValueService.saveAll(tournamentId, valuesToSave);
 
@@ -792,10 +799,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public List<TournamentStatusHistoryResponse> getStatusHistory(Long tournamentId) {
-		if (!tournamentRepository.existsById(tournamentId)) {
-			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-		}
+	public List<TournamentStatusHistoryResponse> getStatusHistory(Long userId, Long tournamentId,
+			boolean enforceOwnership) {
+		loadTournament(userId, tournamentId, enforceOwnership);
 		return tournamentAuditService.getHistory(tournamentId);
 	}
 
@@ -992,10 +998,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	/**
-	 * Hệ thống chỉ có 1 chuỗi (nhiều chi nhánh, không phải nhiều chuỗi độc lập) nên Owner được xem
-	 * toàn bộ tournament của cả chuỗi — không isolate Owner với nhau. Chỉ Manager mới bị giới hạn
-	 * theo chi nhánh họ được cấp quyền qua {@link BranchAccessService} (đây mới là phân quyền thật
-	 * cần enforce: "chi nhánh nào được gán thì chỉ nhìn thấy chi nhánh đó").
+	 * Owner chỉ thao tác được tournament thuộc (các) chi nhánh do chính mình sở hữu
+	 * ({@code Branch.owner}); Manager bị giới hạn theo chi nhánh được cấp quyền qua
+	 * {@link BranchAccessService}. Cả hai đều đi qua {@link BranchAccessService#canActorAccessBranch}
+	 * — sửa logic phân quyền thì sửa ở đó, không nhân bản ở đây.
 	 */
 	private void assertBranchAccess(Long userId, Tournament tournament) {
 		if (userId == null) {
@@ -1010,13 +1016,17 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 	}
 
-	/** Danh sách branchId giới hạn tầm nhìn — null nghĩa là "không lọc" (Owner xem cả chuỗi). */
+	/**
+	 * Danh sách branchId giới hạn tầm nhìn. Owner chỉ thấy (các) chi nhánh do chính mình sở hữu
+	 * ({@code Branch.owner == actor}) — trước đây trả về {@code null} (không lọc) khiến Owner nhìn
+	 * thấy giải đấu của mọi Owner khác trong hệ thống, không chỉ chuỗi của riêng mình.
+	 */
 	private List<Long> resolveAccessibleBranchIds(Long userId) {
 		User actor = userRepository.findById(userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		String roleCode = actor.getRole().getCode();
 		if ("OWNER".equals(roleCode)) {
-			return null;
+			return branchRepository.findByOwnerId(userId).stream().map(Branch::getId).toList();
 		}
 		if ("MANAGER".equals(roleCode)) {
 			return branchAccessService.getAccessibleBranchIds(actor);
@@ -1116,6 +1126,13 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 		List<FormatConfigField> formatFields = formatConfigFieldRepository.findByFormatCodeOrderByIdAsc(formatCode);
 		for (FormatConfigField formatField : formatFields) {
+			// Cùng lý do như trong saveConfig(): bracket_size là giá trị dẫn xuất từ số người
+			// ACTIVE hiện tại, không phải Owner nhập — validate nó ở đây sẽ luôn báo "dưới mức tối
+			// thiểu" cho mọi giải chưa đủ 8 người thật (kể cả lúc mở đăng ký, khi số người còn là 0),
+			// khiến patchStatus(OPEN_FOR_REGISTRATION) không bao giờ qua được collectConfigErrors.
+			if (BRACKET_SIZE_FIELD_KEY.equals(formatField.getFieldKey())) {
+				continue;
+			}
 			if (!Boolean.TRUE.equals(formatField.getIsRequired())) {
 				continue;
 			}

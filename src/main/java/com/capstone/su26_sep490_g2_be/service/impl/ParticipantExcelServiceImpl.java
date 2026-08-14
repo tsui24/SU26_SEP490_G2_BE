@@ -430,6 +430,11 @@ public class ParticipantExcelServiceImpl implements ParticipantExcelService {
 								"Số hạt giống phải từ 1 trở lên"));
 						continue;
 					}
+					if (maxParticipants != null && seedNo > maxParticipants) {
+						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
+								"Số hạt giống " + seedNo + " vượt quá số người tối đa của giải (" + maxParticipants + ")"));
+						continue;
+					}
 					if (existingSeedNos.contains(seedNo) || !seenInBatch.add(seedNo)) {
 						result.add(ParsedRow.invalid(rowNo, name1, phone1, name2, phone2,
 								"Số hạt giống " + seedNo + " đã được gán cho người tham gia khác"));

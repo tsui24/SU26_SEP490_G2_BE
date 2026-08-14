@@ -2,6 +2,7 @@ package com.capstone.su26_sep490_g2_be.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -18,7 +19,7 @@ public class SaveTournamentConfigRequest {
 
 	@NotBlank(message = "Phương thức xếp hạt giống không được để trống")
 	@Schema(description = "Phương thức xếp hạt giống", example = "RANK",
-			allowableValues = {"RANDOM", "RANK"})
+			allowableValues = {"RANDOM", "RANK", "SEED"})
 	private String seedingMethod;
 
 	@NotEmpty(message = "Danh sách field cấu hình không được để trống")
@@ -48,6 +49,7 @@ public class SaveTournamentConfigRequest {
 
 		@NotNull(message = "Race-to không được để trống")
 		@Min(value = 1, message = "Race-to phải lớn hơn 0")
+		@Max(value = 99, message = "Race-to không được vượt quá 99")
 		private Integer raceTo;
 	}
 }

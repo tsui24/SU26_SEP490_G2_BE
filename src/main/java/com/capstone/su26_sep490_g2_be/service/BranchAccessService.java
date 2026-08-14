@@ -28,9 +28,10 @@ public interface BranchAccessService {
 
 	/**
 	 * Kiểm tra quyền chung cho mọi actor (Owner hoặc Manager) đối với 1 chi nhánh — dùng ở mọi nơi
-	 * cần enforce "chi nhánh nào được cấp quyền thì chỉ thao tác/nhìn thấy chi nhánh đó". Hệ thống
-	 * chỉ có 1 chuỗi (nhiều chi nhánh, không phải nhiều chuỗi độc lập) nên Owner luôn được phép trên
-	 * toàn chuỗi; chỉ Manager mới bị giới hạn theo {@link #canManagerAccessBranch}.
+	 * cần enforce "chi nhánh nào được cấp quyền thì chỉ thao tác/nhìn thấy chi nhánh đó". Mỗi chi
+	 * nhánh thuộc đúng 1 Owner ({@code Branch.owner}) — Owner chỉ được phép trên (các) chi nhánh do
+	 * chính mình sở hữu, không phải toàn hệ thống; Manager bị giới hạn theo
+	 * {@link #canManagerAccessBranch}.
 	 */
 	boolean canActorAccessBranch(User actor, Long branchId);
 

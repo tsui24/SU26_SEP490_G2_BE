@@ -30,6 +30,9 @@ public interface FormatConfigFieldRepository extends JpaRepository<FormatConfigF
 
 	void deleteByFieldKeyIn(List<String> fieldKeys);
 
+	/** Xoá toàn bộ field gắn với 1 thể thức — dùng khi gỡ hẳn thể thức đó khỏi hệ thống. */
+	void deleteByFormatCode(String formatCode);
+
 	/**
 	 * Gỡ liên kết field khỏi <b>một thể thức duy nhất</b>, giữ nguyên ở các thể thức khác.
 	 * Khác với {@link #deleteByFieldKeyIn} (xoá field khỏi mọi thể thức) — dùng cho trường hợp
