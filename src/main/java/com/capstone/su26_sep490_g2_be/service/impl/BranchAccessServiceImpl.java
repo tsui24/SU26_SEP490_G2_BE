@@ -61,7 +61,15 @@ public class BranchAccessServiceImpl implements BranchAccessService {
 	public boolean canActorAccessBranch(User actor, Long branchId) {
 		String roleCode = actor.getRole().getCode();
 		if ("OWNER".equals(roleCode)) {
-			return true;
+			// Mỗi chi nhánh thuộc đúng 1 Owner (Branch.owner) — trước đây hàm này trả về true vô
+			// điều kiện cho mọi Owner, coi như "chỉ có 1 chuỗi" trong khi thực tế mỗi Owner có
+			// chuỗi chi nhánh riêng. Owner chỉ được thao tác trên chi nhánh do chính mình sở hữu.
+			if (branchId == null) {
+				return false;
+			}
+			return branchRepository.findById(branchId)
+					.map(branch -> branch.getOwner() != null && branch.getOwner().getId().equals(actor.getId()))
+					.orElse(false);
 		}
 		if ("MANAGER".equals(roleCode)) {
 			return canManagerAccessBranch(actor, branchId);
