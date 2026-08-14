@@ -25,22 +25,27 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Tạo 1 giải đấu hoàn chỉnh (đã thi đấu xong) cho mỗi thể thức:
+ * Bổ sung phần còn thiếu sau {@link TournamentSeedInitializer} (RANDOM, đủ 3 thể thức, COMPLETED)
+ * và {@link RegistrationSeedInitializer} (SINGLE_ELIMINATION, đủ vòng đời trừ 2 trạng thái):
  * <ol>
- *   <li>SINGLE_ELIMINATION — 8 cơ thủ, 9-Ball</li>
- *   <li>DOUBLE_ELIMINATION — 8 cơ thủ, 8-Ball</li>
- *   <li>PROGRESSIVE_ROUND_ROBIN — 8 cơ thủ, 9-Ball</li>
+ *   <li>3 giải mời xếp hạt giống ({@code SeedingMethod.SEED}) — 1 giải / thể thức, để demo bốc thăm
+ *   theo hạt giống khác hẳn bốc thăm ngẫu nhiên (thứ hạng cao gặp thứ hạng thấp ở vòng đầu).</li>
+ *   <li>{@code DRAW_PREVIEW} — đã bốc thăm nháp, BTC chưa xác nhận (chỉ gọi {@code generate()}, chưa
+ *   {@code confirmDraw()}).</li>
+ *   <li>{@code FINAL_BRACKET_READY} — giải loại kép đã đấu xong nhánh thắng/nhánh thua, bracket loại
+ *   trực tiếp chung kết (cut-to-SE) đã điền người nhưng chưa đấu trận nào.</li>
  * </ol>
- *
- * Mỗi giải: tạo tournament → participants → generate bracket → simulate matches → COMPLETED → results.
- * Idempotent — kiểm tra tên giải trước khi tạo.
- * Chạy sau DataInitializer (@Order 1).
+ * Cùng với 2 file kia, bộ 3 seeder phủ đủ 9 giá trị {@link TournamentStatus} và cả 2 phương án bốc
+ * thăm ({@code RANDOM}/{@code SEED}) cho cả 3 thể thức giải đấu.
+ * <p>
+ * Idempotent theo tên giải đấu — an toàn khi backend restart nhiều lần trên cùng 1 DB.
+ * Chạy sau {@link NewsSeedInitializer} (@Order 5).
  */
 @Slf4j
 @Component
-@Order(2)
+@Order(6)
 @RequiredArgsConstructor
-public class TournamentSeedInitializer implements CommandLineRunner {
+public class TournamentLifecycleSeedInitializer implements CommandLineRunner {
 
 	private static final Random RND = new Random(2026L);
 
@@ -51,12 +56,12 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 	private final TournamentConfigValueRepository configValueRepository;
 	private final ConfigFieldDefinitionRepository configFieldRepository;
 	private final ParticipantRepository participantRepository;
+	private final RegistrationRepository registrationRepository;
+	private final PaymentRepository paymentRepository;
 	private final TournamentStageRepository stageRepository;
 	private final MatchRepository matchRepository;
 	private final TournamentResultRepository resultRepository;
 	private final BranchRepository branchRepository;
-	private final RegistrationRepository registrationRepository;
-	private final PaymentRepository paymentRepository;
 	private final BracketGenerationService bracketGenerationService;
 	private final MatchService matchService;
 	private final TournamentResultService tournamentResultService;
@@ -66,125 +71,105 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 	public void run(String... args) {
 		User owner = userRepository.findByEmail("owner@gmail.com").orElse(null);
 		if (owner == null) {
-			log.warn("TournamentSeedInitializer: owner@gmail.com chưa tồn tại — bỏ qua.");
+			log.warn("TournamentLifecycleSeedInitializer: owner@gmail.com chưa tồn tại — bỏ qua.");
 			return;
 		}
-
 		Branch branch = branchRepository.findByOwnerId(owner.getId()).stream().findFirst().orElse(null);
 
-		seedSingleElimination(owner, branch);
-		seedDoubleElimination(owner, branch);
-		seedProgressiveRoundRobin(owner, branch);
+		seedSingleEliminationSeeded(owner, branch);
+		seedDoubleEliminationSeeded(owner, branch);
+		seedProgressiveRoundRobinSeeded(owner, branch);
+		seedDrawPreview(owner, branch);
+		seedFinalBracketReady(owner, branch);
 
-		log.info("TournamentSeedInitializer hoàn thành — 4 giải đấu mẫu (1 per format)");
+		log.info("TournamentLifecycleSeedInitializer hoàn thành — 3 giải xếp hạt giống (SEED) + "
+				+ "2 giải bù trạng thái DRAW_PREVIEW/FINAL_BRACKET_READY");
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  1. SINGLE ELIMINATION — 8 cơ thủ, 9-Ball
+	//  1. SINGLE_ELIMINATION — xếp hạt giống, 8 cơ thủ, 10-Ball, COMPLETED
 	// ══════════════════════════════════════════════════════════════════════
 
-	private void seedSingleElimination(User owner, Branch branch) {
-		final String name = "Giải Vô Địch 9-Ball Golden Break Cup 2026";
+	private void seedSingleEliminationSeeded(User owner, Branch branch) {
+		final String name = "Giải Mời Cơ Thủ Hạng A – Xuân 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
-				"Giải đấu 9-Ball loại trực tiếp — 8 cơ thủ, race-to-7. Thua 1 trận là bị loại.",
-				"9_BALL", "SINGLE_ELIMINATION", 8,
-				BigDecimal.valueOf(200000), BigDecimal.valueOf(4000000),
-				"Vô địch 2.000.000đ · Á quân 1.200.000đ · Hạng 3-4 400.000đ",
+				"Giải mời dành riêng cho các cơ thủ hạng A trở lên — xếp hạt giống theo thành tích "
+						+ "mùa trước, hạt giống số 1 sẽ gặp hạt giống yếu nhất ở vòng đầu.",
+				"10_BALL", "SINGLE_ELIMINATION", 8,
+				BigDecimal.valueOf(250000), BigDecimal.valueOf(5000000),
+				"Vô địch 2.500.000đ · Á quân 1.500.000đ · Hạng 3-4 500.000đ",
 				owner, branch);
 
-		createConfig(t, SeedingMethod.RANDOM.name());
-		addStandardSingleEliminationConfig(t);
-
-		addRaceToRule(t, "quarter_final", "KNOCKOUT", 5);
-		addRaceToRule(t, "semi_final", "KNOCKOUT", 7);
-		addRaceToRule(t, "third_place", "KNOCKOUT", 7);
-		addRaceToRule(t, "final", "KNOCKOUT", 9);
+		createConfig(t, SeedingMethod.SEED.name());
+		addSingleEliminationRaceToRules(t);
 
 		List<String> emails = List.of(
-				"player1@gmail.com", "player2@gmail.com", "player3@gmail.com", "player4@gmail.com",
-				"player5@gmail.com", "player6@gmail.com", "player7@gmail.com", "player8@gmail.com");
-		Map<Long, Integer> power = createParticipantsWithRegistrations(t, emails);
+				"player28@gmail.com", "player1@gmail.com", "player9@gmail.com", "player19@gmail.com",
+				"player24@gmail.com", "player2@gmail.com", "player17@gmail.com", "player3@gmail.com");
+		Map<Long, Integer> power = createSeededParticipants(t, emails, true);
 
-		generateAndComplete(t, owner, power, null);
-		log.info("Seeded SINGLE_ELIMINATION: {} (8 cơ thủ, COMPLETED)", name);
+		generateConfirmAndPlaySE(t, owner, power);
+		finishTournament(t);
+		seedResults(t, owner);
+		log.info("Seeded SINGLE_ELIMINATION (SEED): {} (8 cơ thủ, COMPLETED)", name);
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  2. DOUBLE ELIMINATION — 8 cơ thủ, 8-Ball
+	//  2. DOUBLE_ELIMINATION — xếp hạt giống, 8 cơ thủ, 8-Ball, COMPLETED
 	// ══════════════════════════════════════════════════════════════════════
 
-	private void seedDoubleElimination(User owner, Branch branch) {
-		final String name = "Cúp 8-Ball Song Kiếm Hợp Bích 2026";
+	private void seedDoubleEliminationSeeded(User owner, Branch branch) {
+		final String name = "Cúp Mời Song Đấu Các Câu Lạc Bộ 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
-				"Giải đấu 8-Ball loại kép — 8 cơ thủ. Nhánh thắng + nhánh thua → chung kết lớn.",
+				"Giải mời giao lưu giữa các câu lạc bộ — xếp hạt giống theo hạng bi-a đã khai trên "
+						+ "hồ sơ. Thể thức loại kép: thua nhánh thắng vẫn còn cơ hội ở nhánh thua.",
 				"8_BALL", "DOUBLE_ELIMINATION", 8,
-				BigDecimal.valueOf(150000), BigDecimal.valueOf(4000000),
-				"Vô địch 2.000.000đ · Á quân 1.200.000đ · Hạng 3 800.000đ",
+				BigDecimal.valueOf(180000), BigDecimal.valueOf(4500000),
+				"Vô địch 2.200.000đ · Á quân 1.300.000đ · Hạng 3 700.000đ",
 				owner, branch);
 
-		createConfig(t, SeedingMethod.RANDOM.name());
-		addStandardDoubleEliminationConfig(t, 4);
-
-		addRaceToRule(t, "winners_qf", "WINNERS", 5);
-		addRaceToRule(t, "winners_sf", "WINNERS", 7);
-		addRaceToRule(t, "winners_final", "WINNERS", 7);
-		addRaceToRule(t, "losers_r1", "LOSERS", 5);
-		addRaceToRule(t, "losers_r2", "LOSERS", 5);
-		addRaceToRule(t, "losers_r3", "LOSERS", 7);
-		addRaceToRule(t, "losers_final", "LOSERS", 7);
-		addRaceToRule(t, "grand_final", "GRAND_FINAL", 9);
+		createConfig(t, SeedingMethod.SEED.name());
+		addDoubleEliminationRaceToRules(t, 4);
 
 		List<String> emails = List.of(
-				"player9@gmail.com", "player10@gmail.com", "player11@gmail.com", "player12@gmail.com",
-				"player13@gmail.com", "player14@gmail.com", "player15@gmail.com", "player16@gmail.com");
-		Map<Long, Integer> power = createParticipantsWithRegistrations(t, emails);
+				"player11@gmail.com", "player4@gmail.com", "player12@gmail.com", "player20@gmail.com",
+				"player25@gmail.com", "player5@gmail.com", "player18@gmail.com", "player6@gmail.com");
+		Map<Long, Integer> power = createSeededParticipants(t, emails, true);
 
-		generateAndComplete(t, owner, power, null);
-		log.info("Seeded DOUBLE_ELIMINATION: {} (8 cơ thủ, COMPLETED)", name);
+		bracketGenerationService.generate(t.getId(), owner.getId());
+		bracketGenerationService.confirmDraw(t.getId(), owner.getId()); // → DRAW_DONE
+
+		// DE cho phép hoàn thành trận ngay ở DRAW_DONE (nhánh thắng/nhánh thua) — không cần IN_PROGRESS.
+		simulateAllMatches(t, owner, power);
+		bracketGenerationService.populateFinalBracket(t.getId(), owner.getId()); // → FINAL_BRACKET_READY
+		simulateAllMatches(t, owner, power); // đấu nốt bracket loại trực tiếp chung kết (Last-4)
+
+		finishTournament(t);
+		seedResults(t, owner);
+		log.info("Seeded DOUBLE_ELIMINATION (SEED): {} (8 cơ thủ, COMPLETED)", name);
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  4. PROGRESSIVE_ROUND_ROBIN — 8 cơ thủ, 9-Ball
+	//  3. PROGRESSIVE_ROUND_ROBIN — xếp hạt giống, 8 cơ thủ, 9-Ball, COMPLETED
 	// ══════════════════════════════════════════════════════════════════════
 
-	private void seedProgressiveRoundRobin(User owner, Branch branch) {
-		final String name = "Giải Bi-a Cây Cơ Vàng Mở Rộng 2026";
+	private void seedProgressiveRoundRobinSeeded(User owner, Branch branch) {
+		final String name = "Giải Vô Địch Vòng Tròn Cây Cơ Bạc 2026";
 		if (tournamentExists(name)) return;
 
-		Instant now = Instant.now();
-		Tournament t = tournamentRepository.save(Tournament.builder()
-				.name(name)
-				.description("Giải 9-Ball vòng tròn loại dần — 8 cơ thủ, GĐ1(8→6) → GĐ2(6→4) → Playoff(BK+CK).")
-				.thumbnailUrl(SeedImages.thumbnailFor(name))
-				.bannerUrl(SeedImages.bannerFor(name))
-				.gameType("9_BALL")
-				.format("PROGRESSIVE_ROUND_ROBIN")
-				.participantType(ParticipantType.SINGLE.getValue())
-				.status(TournamentStatus.REGISTRATION_CLOSED.getValue())
-				.maxParticipants(8)
-				.tableCount(2)
-				.entryFee(BigDecimal.ZERO)
-				.prizePool(BigDecimal.valueOf(4000000))
-				.prizeDescription("Vô địch 2.000.000đ · Á quân 1.200.000đ · Hạng 3-4 400.000đ")
-				.registrationDeadline(now.minus(10, ChronoUnit.DAYS))
-				.startAt(now.minus(7, ChronoUnit.DAYS))
-				.endAt(now.minus(1, ChronoUnit.DAYS))
-				.isShowTournament(true)
-				.isPublicRatio(true)
-				.isRegister(true)
-				.createdBy(owner)
-				.branch(branch)
-				.venueName(branch != null ? branch.getName() : null)
-				.venueAddress(branch != null ? branch.getAddress() : null)
-				.build());
+		Tournament t = createTournament(name,
+				"Giải phong trào thể thức vòng tròn loại dần — GĐ1 (8→6) rồi GĐ2 (6→4) trước khi vào "
+						+ "Playoff bán kết + chung kết. Xếp hạt giống để tránh 2 cơ thủ mạnh nhất gặp nhau sớm.",
+				"9_BALL", "PROGRESSIVE_ROUND_ROBIN", 8,
+				BigDecimal.ZERO, BigDecimal.valueOf(3000000),
+				"Vô địch 1.800.000đ · Á quân 1.000.000đ · Hạng 3-4 200.000đ",
+				owner, branch);
 
-		tournamentConfigRepository.save(TournamentConfig.builder()
-				.tournament(t).formatCode(t.getFormat()).seedingMethod(SeedingMethod.RANDOM.name()).build());
-
+		createConfig(t, SeedingMethod.SEED.name());
 		addConfigValue(t, "pe_survivors_per_stage", "6,4");
 		addConfigValue(t, "final_playoff_size", "4");
 		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
@@ -192,9 +177,9 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 		addConfigValue(t, "scoring_unit", "GAME");
 
 		List<String> emails = List.of(
-				"player17@gmail.com", "player18@gmail.com", "player19@gmail.com", "player20@gmail.com",
-				"player21@gmail.com", "player22@gmail.com", "player23@gmail.com", "player24@gmail.com");
-		Map<Long, Integer> power = createParticipantsWithRegistrations(t, emails);
+				"player13@gmail.com", "player21@gmail.com", "player7@gmail.com", "player22@gmail.com",
+				"player14@gmail.com", "player8@gmail.com", "player23@gmail.com", "player15@gmail.com");
+		Map<Long, Integer> power = createSeededParticipants(t, emails, true);
 
 		bracketGenerationService.generate(t.getId(), owner.getId());
 		bracketGenerationService.confirmDraw(t.getId(), owner.getId());
@@ -209,11 +194,101 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 
 		finishTournament(t);
 		seedResults(t, owner);
-		log.info("Seeded PROGRESSIVE_ROUND_ROBIN: {} (8 cơ thủ, COMPLETED)", name);
+		log.info("Seeded PROGRESSIVE_ROUND_ROBIN (SEED): {} (8 cơ thủ, COMPLETED)", name);
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  Shared helpers
+	//  4. DRAW_PREVIEW — đã bốc thăm nháp, BTC chưa xác nhận
+	// ══════════════════════════════════════════════════════════════════════
+
+	private void seedDrawPreview(User owner, Branch branch) {
+		final String name = "Giải Bi-a Chào Xuân Golden Break 2026";
+		if (tournamentExists(name)) return;
+
+		Instant now = Instant.now();
+		Tournament t = tournamentRepository.save(Tournament.builder()
+				.name(name)
+				.description("Giải chào xuân miễn phí dành cho hội viên — vừa đóng đăng ký và bốc thăm "
+						+ "nháp xong, ban tổ chức đang chờ xác nhận bảng đấu trước khi công bố chính thức.")
+				.thumbnailUrl(SeedImages.thumbnailFor(name))
+				.bannerUrl(SeedImages.bannerFor(name))
+				.gameType("9_BALL")
+				.format("SINGLE_ELIMINATION")
+				.participantType(ParticipantType.SINGLE.getValue())
+				.status(TournamentStatus.OPEN_FOR_REGISTRATION.getValue())
+				.maxParticipants(8)
+				.entryFee(BigDecimal.ZERO)
+				.prizePool(BigDecimal.valueOf(2000000))
+				.prizeDescription("Vô địch 1.200.000đ · Á quân 800.000đ")
+				.registrationDeadline(now.minus(2, ChronoUnit.DAYS))
+				.startAt(now.plus(3, ChronoUnit.DAYS))
+				.endAt(now.plus(4, ChronoUnit.DAYS))
+				.isShowTournament(true)
+				.isPublicRatio(true)
+				.isRegister(true)
+				.createdBy(owner)
+				.branch(branch)
+				.venueName(branch != null ? branch.getName() : null)
+				.venueAddress(branch != null ? branch.getAddress() : null)
+				.build());
+
+		createConfig(t, SeedingMethod.RANDOM.name());
+		addSingleEliminationRaceToRules(t);
+
+		List<String> emails = List.of(
+				"player16@gmail.com", "player26@gmail.com", "player27@gmail.com", "player29@gmail.com",
+				"player30@gmail.com", "player10@gmail.com", "player6@gmail.com", "player7@gmail.com");
+		createSeededParticipants(t, emails, false);
+
+		t.setStatus(TournamentStatus.REGISTRATION_CLOSED.getValue());
+		tournamentRepository.save(t);
+
+		bracketGenerationService.generate(t.getId(), owner.getId()); // → DRAW_PREVIEW, dừng ở đây
+		log.info("Seeded DRAW_PREVIEW: {} (8 cơ thủ, chờ BTC xác nhận bốc thăm)", name);
+	}
+
+	// ══════════════════════════════════════════════════════════════════════
+	//  5. FINAL_BRACKET_READY — loại kép, đã đấu xong 2 nhánh, chờ đấu chung kết
+	// ══════════════════════════════════════════════════════════════════════
+
+	private void seedFinalBracketReady(User owner, Branch branch) {
+		final String name = "Cúp Tân Niên Song Đấu 2026";
+		if (tournamentExists(name)) return;
+
+		Tournament t = createTournament(name,
+				"Cúp mừng năm mới thể thức loại kép — nhánh thắng và nhánh thua đã thi đấu xong, "
+						+ "bracket loại trực tiếp chung kết vừa được điền người, chờ ngày thi đấu quyết định.",
+				"8_BALL", "DOUBLE_ELIMINATION", 8,
+				BigDecimal.valueOf(120000), BigDecimal.valueOf(3000000),
+				"Vô địch 1.500.000đ · Á quân 900.000đ · Hạng 3 600.000đ",
+				owner, branch);
+		// Giải đang thi đấu dở — ghi đè lại mốc thời gian cho khớp (createTournament() mặc định set
+		// khoảng thời gian đã kết thúc trong quá khứ).
+		t.setStartAt(Instant.now().minus(3, ChronoUnit.DAYS));
+		t.setEndAt(Instant.now().plus(2, ChronoUnit.DAYS));
+		t.setRegistrationDeadline(Instant.now().minus(10, ChronoUnit.DAYS));
+		tournamentRepository.save(t);
+
+		createConfig(t, SeedingMethod.RANDOM.name());
+		addDoubleEliminationRaceToRules(t, 4);
+
+		List<String> emails = List.of(
+				"player18@gmail.com", "player28@gmail.com", "player2@gmail.com", "player12@gmail.com",
+				"player22@gmail.com", "player9@gmail.com", "player30@gmail.com", "player4@gmail.com");
+		Map<Long, Integer> power = createSeededParticipants(t, emails, false);
+
+		bracketGenerationService.generate(t.getId(), owner.getId());
+		bracketGenerationService.confirmDraw(t.getId(), owner.getId()); // → DRAW_DONE
+
+		simulateAllMatches(t, owner, power); // đấu xong nhánh thắng + nhánh thua
+		bracketGenerationService.populateFinalBracket(t.getId(), owner.getId()); // → FINAL_BRACKET_READY, dừng ở đây
+
+		log.info("Seeded FINAL_BRACKET_READY: {} (8 cơ thủ, chờ đấu chung kết Last-4)", name);
+	}
+
+	// ══════════════════════════════════════════════════════════════════════
+	//  Shared helpers (bản sao rút gọn từ TournamentSeedInitializer — mỗi seeder tự chứa, không
+	//  chia sẻ method riêng tư giữa các CommandLineRunner độc lập)
 	// ══════════════════════════════════════════════════════════════════════
 
 	private Tournament createTournament(String name, String description,
@@ -250,20 +325,55 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 	private void createConfig(Tournament t, String seedingMethod) {
 		if (tournamentConfigRepository.existsById(t.getId())) return;
 		tournamentConfigRepository.save(TournamentConfig.builder()
-				.tournament(t)
-				.formatCode(t.getFormat())
-				.seedingMethod(seedingMethod)
-				.build());
+				.tournament(t).formatCode(t.getFormat()).seedingMethod(seedingMethod).build());
+	}
+
+	private void addSingleEliminationRaceToRules(Tournament t) {
+		addStandardSingleEliminationConfig(t);
+		addRaceToRule(t, "quarter_final", "KNOCKOUT", 5);
+		addRaceToRule(t, "semi_final", "KNOCKOUT", 7);
+		addRaceToRule(t, "third_place", "KNOCKOUT", 7);
+		addRaceToRule(t, "final", "KNOCKOUT", 9);
+	}
+
+	/**
+	 * roundKey PHẢI khớp {@code resolveWinnersRoundKey}/{@code resolveLosersRoundKey}
+	 * (BracketGenerationServiceImpl) — nhánh thắng đặt tên theo "còn cách chung kết mấy vòng"
+	 * (winners_qf/sf/final), KHÔNG phải winners_r1/r2/r3 (key đó không bao giờ được tra tới, seed
+	 * cũ dùng nhầm khiến override vô tác dụng, luôn rơi về default catalog).
+	 */
+	private void addDoubleEliminationRaceToRules(Tournament t, int sePhaseSize) {
+		addStandardDoubleEliminationConfig(t, sePhaseSize);
+		addRaceToRule(t, "winners_qf", "WINNERS", 5);
+		addRaceToRule(t, "winners_sf", "WINNERS", 7);
+		addRaceToRule(t, "winners_final", "WINNERS", 7);
+		addRaceToRule(t, "losers_r1", "LOSERS", 5);
+		addRaceToRule(t, "losers_r2", "LOSERS", 5);
+		addRaceToRule(t, "losers_r3", "LOSERS", 7);
+		addRaceToRule(t, "losers_final", "LOSERS", 7);
+		addRaceToRule(t, "grand_final", "GRAND_FINAL", 9);
 	}
 
 	private void addRaceToRule(Tournament t, String roundKey, String bracketPhase, int raceTo) {
 		if (raceToRuleRepository.findByTournamentIdAndRoundKey(t.getId(), roundKey).isPresent()) return;
 		raceToRuleRepository.save(TournamentRaceToRule.builder()
-				.tournament(t)
-				.roundKey(roundKey)
-				.bracketPhase(bracketPhase)
-				.raceTo(raceTo)
-				.build());
+				.tournament(t).roundKey(roundKey).bracketPhase(bracketPhase).raceTo(raceTo).build());
+	}
+
+	/** Field bắt buộc của SINGLE_ELIMINATION — thiếu thì Owner thấy "Cấu hình chưa hoàn tất". */
+	private void addStandardSingleEliminationConfig(Tournament t) {
+		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
+		addConfigValue(t, "lag_for_break", "true");
+		addConfigValue(t, "third_place_match", "true");
+		addConfigValue(t, "scoring_unit", "GAME");
+	}
+
+	/** Field bắt buộc của DOUBLE_ELIMINATION, gồm {@code se_phase_size} (số người vào Last X). */
+	private void addStandardDoubleEliminationConfig(Tournament t, int sePhaseSize) {
+		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
+		addConfigValue(t, "lag_for_break", "true");
+		addConfigValue(t, "scoring_unit", "GAME");
+		addConfigValue(t, "se_phase_size", String.valueOf(sePhaseSize));
 	}
 
 	private void addConfigValue(Tournament t, String key, String value) {
@@ -278,33 +388,14 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 				.id(id).tournament(t).fieldDefinition(fieldDef).value(value).build());
 	}
 
-	/** Field bắt buộc của SINGLE_ELIMINATION — thiếu thì Owner thấy "Cấu hình chưa hoàn tất". */
-	private void addStandardSingleEliminationConfig(Tournament t) {
-		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
-		addConfigValue(t, "lag_for_break", "true");
-		addConfigValue(t, "third_place_match", "true");
-		addConfigValue(t, "scoring_unit", "GAME");
-	}
-
-	/**
-	 * Field bắt buộc của DOUBLE_ELIMINATION, gồm {@code se_phase_size} — số người vào bracket loại
-	 * trực tiếp chung kết (Last X) sau khi cắt nhánh thắng/nhánh thua. Không set thì UI hiện "—" và
-	 * generator âm thầm dùng fallback 8 (bị kẹp về bracketSize/2 với giải nhỏ) — set tường minh để
-	 * khớp với những gì thật sự diễn ra trên bracket.
-	 */
-	private void addStandardDoubleEliminationConfig(Tournament t, int sePhaseSize) {
-		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
-		addConfigValue(t, "lag_for_break", "true");
-		addConfigValue(t, "scoring_unit", "GAME");
-		addConfigValue(t, "se_phase_size", String.valueOf(sePhaseSize));
-	}
-
 	/**
 	 * Tạo Participant kèm Registration (APPROVED) + Payment (SUCCESS nếu giải có phí) cho từng cơ
-	 * thủ — đảm bảo giải mẫu có đủ dấu vết đăng ký/giao dịch để demo, không chỉ trơ mỗi bracket.
-	 * Thứ tự trong {@code emails} = độ mạnh giả lập dùng để mô phỏng kết quả (index nhỏ hơn = thắng).
+	 * thủ trong {@code emails}. {@code assignSeed=true} thì gán {@code seedNo} = thứ tự trong danh
+	 * sách (1 = hạt giống mạnh nhất) — dùng cho giải {@code SeedingMethod.SEED}.
+	 * Thứ tự trong {@code emails} luôn đóng vai trò "độ mạnh" giả lập để mô phỏng kết quả trận đấu,
+	 * bất kể có gán seedNo hay không.
 	 */
-	private Map<Long, Integer> createParticipantsWithRegistrations(Tournament t, List<String> emails) {
+	private Map<Long, Integer> createSeededParticipants(Tournament t, List<String> emails, boolean assignSeed) {
 		long existing = participantRepository.countByTournamentIdAndStatus(
 				t.getId(), ParticipantStatus.ACTIVE.getValue());
 		if (existing >= emails.size()) return Map.of();
@@ -350,6 +441,7 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 					.participantType(ParticipantType.SINGLE.getValue())
 					.displayName(displayName)
 					.billiardRank(rank)
+					.seedNo(assignSeed ? i + 1 : null)
 					.status(ParticipantStatus.ACTIVE.getValue())
 					.build());
 			power.put(p.getId(), i);
@@ -357,21 +449,13 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 		return power;
 	}
 
-	/**
-	 * Generate bracket → simulate all matches → finish.
-	 * Works for SINGLE_ELIMINATION, DOUBLE_ELIMINATION.
-	 */
-	private void generateAndComplete(Tournament t, User owner, Map<Long, Integer> power,
-			String stageTypeFilter) {
+	/** SINGLE_ELIMINATION: generate → confirm → IN_PROGRESS → đấu hết. */
+	private void generateConfirmAndPlaySE(Tournament t, User owner, Map<Long, Integer> power) {
 		bracketGenerationService.generate(t.getId(), owner.getId());
 		bracketGenerationService.confirmDraw(t.getId(), owner.getId());
-
 		t.setStatus(TournamentStatus.IN_PROGRESS.getValue());
 		tournamentRepository.save(t);
-
 		simulateAllMatches(t, owner, power);
-		finishTournament(t);
-		seedResults(t, owner);
 	}
 
 	private void simulateAllMatches(Tournament t, User owner, Map<Long, Integer> power) {
@@ -517,7 +601,6 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 		return pool.multiply(BigDecimal.valueOf(groupPct / groupSize))
 				.setScale(0, RoundingMode.HALF_UP);
 	}
-
 
 	private boolean tournamentExists(String name) {
 		return tournamentRepository.findAll().stream()
