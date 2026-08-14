@@ -84,11 +84,11 @@ public class NewsSeedInitializer implements CommandLineRunner {
 
 		int created = 0;
 
-		created += seedPost(giaiDau, "Giải Billiards CAPSTONE Mùa 2026 chính thức khởi tranh",
+		created += seedPost(giaiDau, "Giải Billiards BTMS Mùa 2026 chính thức khởi tranh",
 				"giai-billiards-capstone-mua-2026-khoi-tranh", IMG_PLAYER,
 				"2026-07-28T09:00:00Z", author, Set.of(tagGiaiDau, tag9Ball),
 				"""
-				<p>Sau hơn một tháng nhận đăng ký, Giải Billiards CAPSTONE Mùa 2026 đã chính thức
+				<p>Sau hơn một tháng nhận đăng ký, Giải Billiards BTMS Mùa 2026 đã chính thức
 				khởi tranh với sự góp mặt của các cơ thủ đến từ nhiều chi nhánh trong hệ thống.</p>
 				<h2>Thể thức thi đấu</h2>
 				<p>Giải áp dụng thể thức loại trực tiếp, các vòng đầu đánh race-to-5, bán kết
@@ -137,7 +137,7 @@ public class NewsSeedInitializer implements CommandLineRunner {
 				<p>Bạn có thể theo dõi trạng thái đơn trong mục "Đăng ký của tôi" bất cứ lúc nào.</p>
 				""");
 
-		created += seedPost(tinHeThong, "Hệ thống CAPSTONE mở rộng thêm cụm bàn thi đấu tiêu chuẩn",
+		created += seedPost(tinHeThong, "Hệ thống BTMS mở rộng thêm cụm bàn thi đấu tiêu chuẩn",
 				"mo-rong-cum-ban-thi-dau-tieu-chuan", IMG_POOL_6,
 				"2026-07-19T11:00:00Z", author, Set.of(tagHeThong),
 				"""
