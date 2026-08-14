@@ -3,7 +3,7 @@ spring:
     # RDS test `capstone26-test` đã tắt (2026-08-12) nên dev không còn DB dùng
     # chung. Mặc định trỏ localhost để chạy máy cá nhân không cần cấu hình gì;
     # CI ghi đè DB_URL để trỏ vào MySQL service container của job.
-    url: ${DB_URL:jdbc:mysql://localhost:3306/su26_sep490_g2?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/su26_sep490_g2?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
