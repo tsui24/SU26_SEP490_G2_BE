@@ -1,11 +1,13 @@
 package com.capstone.su26_sep490_g2_be.config;
 
 import com.capstone.su26_sep490_g2_be.config.bootstrap.DatabaseSeedData;
+import com.capstone.su26_sep490_g2_be.config.bootstrap.SeedImages;
 import com.capstone.su26_sep490_g2_be.entity.*;
 import com.capstone.su26_sep490_g2_be.enums.BranchStatus;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.repository.*;
+import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -322,48 +324,71 @@ public class DataInitializer implements CommandLineRunner {
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  Accounts: Admin, Owner, Manager, Staff, Players (16)
+	//  Accounts: Admin, Owner, 2 Manager (1/chi nhánh), 4 Staff (2/chi nhánh), 30 cơ thủ
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedAccounts() {
-		seedUser("admin@gmail.com", "admin1", RoleCode.ADMIN, "System Administrator", null);
-		seedUser("owner@gmail.com", "owner123", RoleCode.OWNER, "CLB Bi-a FPT", null);
+		seedUser("admin@gmail.com", "admin1", RoleCode.ADMIN, "Nguyễn Bảo Toàn", "0900000001", null);
+		seedUser("owner@gmail.com", "owner123", RoleCode.OWNER, "Nguyễn Thành Đạt", "0901000001", null);
 
 		User owner = userRepository.findByEmail("owner@gmail.com").orElse(null);
 
-		seedUser("manager@gmail.com", "manager123", RoleCode.MANAGER, "Nguyễn Minh Quản", owner);
-		seedUser("staff1@gmail.com", "staff123", RoleCode.STAFF, "Trần Văn Trọng", owner);
-		seedUser("staff2@gmail.com", "staff123", RoleCode.STAFF, "Lê Thị Mai", owner);
+		// 1 quản lý / chi nhánh — gán chi nhánh cụ thể ở seedBranches()
+		seedUser("manager@gmail.com", "manager123", RoleCode.MANAGER, "Trần Quốc Bảo", "0902000001", owner);
+		seedUser("manager2@gmail.com", "manager123", RoleCode.MANAGER, "Phạm Thị Ngọc Hà", "0902000002", owner);
 
+		// 2 nhân viên / chi nhánh (lễ tân kiêm trọng tài)
+		seedUser("staff1@gmail.com", "staff123", RoleCode.STAFF, "Trần Văn Trọng", "0903000001", owner);
+		seedUser("staff2@gmail.com", "staff123", RoleCode.STAFF, "Lê Thị Mai", "0903000002", owner);
+		seedUser("staff3@gmail.com", "staff123", RoleCode.STAFF, "Đinh Văn Sang", "0903000003", owner);
+		seedUser("staff4@gmail.com", "staff123", RoleCode.STAFF, "Ngô Thị Bích Ngọc", "0903000004", owner);
+
+		// {email, họ tên, sđt, hạng bi-a (BilliardRank)} — 30 cơ thủ đủ để làm participant/seed cho
+		// mọi thể thức giải đấu (SINGLE/DOUBLE_ELIMINATION 8-32 người, PROGRESSIVE_ROUND_ROBIN...).
 		String[][] players = {
-				{"player1@gmail.com", "Nguyễn Văn Hùng", "0912000001"},
-				{"player2@gmail.com", "Trần Minh Tuấn", "0912000002"},
-				{"player3@gmail.com", "Lê Hoàng Nam", "0912000003"},
-				{"player4@gmail.com", "Phạm Đức Anh", "0912000004"},
-				{"player5@gmail.com", "Hoàng Quốc Việt", "0912000005"},
-				{"player6@gmail.com", "Vũ Thanh Bình", "0912000006"},
-				{"player7@gmail.com", "Phan Trọng Khôi", "0912000007"},
-				{"player8@gmail.com", "Trương Xuân Long", "0912000008"},
-				{"player9@gmail.com", "Bùi Hữu Phúc", "0912000009"},
-				{"player10@gmail.com", "Đặng Đình Khoa", "0912000010"},
-				{"player11@gmail.com", "Đỗ Công Danh", "0912000011"},
-				{"player12@gmail.com", "Hồ Quang Minh", "0912000012"},
-				{"player13@gmail.com", "Ngô Thành Trung", "0912000013"},
-				{"player14@gmail.com", "Dương Bảo Khánh", "0912000014"},
-				{"player15@gmail.com", "Nguyễn Nhật Huy", "0912000015"},
-				{"player16@gmail.com", "Trần Tiến Đạt", "0912000016"},
+				{"player1@gmail.com", "Nguyễn Văn Hùng", "0912000001", "A"},
+				{"player2@gmail.com", "Trần Minh Tuấn", "0912000002", "A"},
+				{"player3@gmail.com", "Lê Hoàng Nam", "0912000003", "B"},
+				{"player4@gmail.com", "Phạm Đức Anh", "0912000004", "B"},
+				{"player5@gmail.com", "Hoàng Quốc Việt", "0912000005", "C"},
+				{"player6@gmail.com", "Vũ Thanh Bình", "0912000006", "C"},
+				{"player7@gmail.com", "Phan Trọng Khôi", "0912000007", "D"},
+				{"player8@gmail.com", "Trương Xuân Long", "0912000008", "D"},
+				{"player9@gmail.com", "Bùi Hữu Phúc", "0912000009", "A"},
+				{"player10@gmail.com", "Đặng Đình Khoa", "0912000010", "B"},
+				{"player11@gmail.com", "Đỗ Công Danh", "0912000011", "B"},
+				{"player12@gmail.com", "Hồ Quang Minh", "0912000012", "C"},
+				{"player13@gmail.com", "Ngô Thành Trung", "0912000013", "C"},
+				{"player14@gmail.com", "Dương Bảo Khánh", "0912000014", "D"},
+				{"player15@gmail.com", "Nguyễn Nhật Huy", "0912000015", "D"},
+				{"player16@gmail.com", "Trần Tiến Đạt", "0912000016", "B"},
+				{"player17@gmail.com", "Lý Gia Bảo", "0912000017", "B"},
+				{"player18@gmail.com", "Huỳnh Tấn Phát", "0912000018", "C"},
+				{"player19@gmail.com", "Vương Đình Phong", "0912000019", "A"},
+				{"player20@gmail.com", "Đoàn Minh Quân", "0912000020", "C"},
+				{"player21@gmail.com", "Tô Ngọc Sơn", "0912000021", "D"},
+				{"player22@gmail.com", "Lâm Chí Cường", "0912000022", "B"},
+				{"player23@gmail.com", "Mai Xuân Kiên", "0912000023", "C"},
+				{"player24@gmail.com", "Chu Bảo Long", "0912000024", "A"},
+				{"player25@gmail.com", "Phùng Đăng Khoa", "0912000025", "D"},
+				{"player26@gmail.com", "Kiều Anh Dũng", "0912000026", "B"},
+				{"player27@gmail.com", "Thái Gia Huy", "0912000027", "C"},
+				{"player28@gmail.com", "Đậu Quang Vinh", "0912000028", "CHAMPION"},
+				{"player29@gmail.com", "Nguyễn Thị Thu Hằng", "0912000029", "B"},
+				{"player30@gmail.com", "Phạm Thị Kim Ngân", "0912000030", "C"},
 		};
 		for (String[] p : players) {
-			seedPlayerUser(p[0], "player123", p[1], p[2]);
+			seedPlayerUser(p[0], "player123", p[1], p[2], p[3]);
 		}
 	}
 
-	private void seedUser(String email, String rawPassword, RoleCode roleCode, String fullName, User owner) {
+	private void seedUser(String email, String rawPassword, RoleCode roleCode, String fullName, String phone, User owner) {
 		if (userRepository.existsByEmail(email)) return;
 		Role role = roleRepository.findByCode(roleCode.getCode())
 				.orElseThrow(() -> new IllegalStateException("Role not found: " + roleCode));
 		User user = User.builder()
 				.email(email)
+				.phone(phone)
 				.passwordHash(passwordEncoder.encode(rawPassword))
 				.role(role)
 				.status(UserStatus.ACTIVE)
@@ -372,13 +397,14 @@ public class DataInitializer implements CommandLineRunner {
 		UserProfile profile = UserProfile.builder()
 				.user(user)
 				.fullName(fullName)
+				.displayName(fullName)
 				.build();
 		user.setProfile(profile);
 		userRepository.save(user);
 		log.info("Seeded account: {} / {} ({})", email, rawPassword, roleCode.getCode());
 	}
 
-	private void seedPlayerUser(String email, String rawPassword, String fullName, String phone) {
+	private void seedPlayerUser(String email, String rawPassword, String fullName, String phone, String billiardRank) {
 		if (userRepository.existsByEmail(email)) return;
 		Role role = roleRepository.findByCode(RoleCode.PLAYER.getCode())
 				.orElseThrow(() -> new IllegalStateException("PLAYER role not found"));
@@ -393,13 +419,14 @@ public class DataInitializer implements CommandLineRunner {
 				.user(player)
 				.fullName(fullName)
 				.displayName(fullName)
+				.billiardRank(billiardRank)
 				.build();
 		player.setProfile(profile);
 		userRepository.save(player);
 	}
 
 	// ══════════════════════════════════════════════════════════════════════
-	//  Branches: 2 chi nhánh cho owner, gán manager + staff
+	//  Branches: 2 chi nhánh đầy đủ thông tin, mỗi chi nhánh 1 manager + 2 staff riêng
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedBranches() {
@@ -407,33 +434,40 @@ public class DataInitializer implements CommandLineRunner {
 		if (owner == null) return;
 
 		Branch branch1 = seedBranch(owner,
-				"CLB Bi-a FPT — Cơ sở 1",
-				"Lô E2a-7, Đường D1, TP. Thủ Đức, TP.HCM",
-				"0901000001",
-				"Chi nhánh chính — 10 bàn Pool.");
+				"Golden Break Billiards — CN Thủ Đức",
+				"Số 68 Đường Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP. Hồ Chí Minh",
+				"028 3722 5588",
+				"Chi nhánh trung tâm của hệ thống Golden Break Billiards tại TP.HCM — 12 bàn Pool "
+						+ "thi đấu chuẩn Rasson/Diamond, hệ thống đèn LED chuyên dụng cho truyền hình trực "
+						+ "tiếp, khu khán đài 80 chỗ và màn hình lớn phục vụ các giải đấu quy mô CLB/liên CLB. "
+						+ "Mở cửa 08:00 – 24:00 tất cả các ngày trong tuần, có bãi giữ xe riêng và quầy "
+						+ "phục vụ đồ uống.");
 
 		Branch branch2 = seedBranch(owner,
-				"CLB Bi-a FPT — Cơ sở 2",
-				"Phố Trịnh Văn Bô, Nam Từ Liêm, Hà Nội",
-				"0901000002",
-				"Chi nhánh Hà Nội — 8 bàn Pool.");
+				"Golden Break Billiards — CN Cầu Giấy",
+				"Số 15 Phố Trần Thái Tông, Phường Dịch Vọng Hậu, Quận Cầu Giấy, TP. Hà Nội",
+				"024 3795 6677",
+				"Chi nhánh Hà Nội của hệ thống Golden Break Billiards — 10 bàn Pool thi đấu chuẩn WPA, "
+						+ "phòng VIP cách âm cho khách đoàn, quầy check-in đăng ký giải và màn hình trực "
+						+ "tiếp tỉ số thi đấu. Mở cửa 09:00 – 23:30 tất cả các ngày trong tuần.");
 
-		User manager = userRepository.findByEmail("manager@gmail.com").orElse(null);
-		if (manager != null) {
-			assignManagerToBranch(branch1, manager, owner);
-			assignManagerToBranch(branch2, manager, owner);
-		}
+		User manager1 = userRepository.findByEmail("manager@gmail.com").orElse(null);
+		if (manager1 != null) assignManagerToBranch(branch1, manager1, owner);
 
-		User staff1 = userRepository.findByEmail("staff1@gmail.com").orElse(null);
-		if (staff1 != null && staff1.getBranch() == null) {
-			staff1.setBranch(branch1);
-			userRepository.save(staff1);
-		}
+		User manager2 = userRepository.findByEmail("manager2@gmail.com").orElse(null);
+		if (manager2 != null) assignManagerToBranch(branch2, manager2, owner);
 
-		User staff2 = userRepository.findByEmail("staff2@gmail.com").orElse(null);
-		if (staff2 != null && staff2.getBranch() == null) {
-			staff2.setBranch(branch2);
-			userRepository.save(staff2);
+		assignStaffToBranch("staff1@gmail.com", branch1);
+		assignStaffToBranch("staff2@gmail.com", branch2);
+		assignStaffToBranch("staff3@gmail.com", branch1);
+		assignStaffToBranch("staff4@gmail.com", branch2);
+	}
+
+	private void assignStaffToBranch(String email, Branch branch) {
+		User staff = userRepository.findByEmail(email).orElse(null);
+		if (staff != null && staff.getBranch() == null) {
+			staff.setBranch(branch);
+			userRepository.save(staff);
 		}
 	}
 
@@ -442,6 +476,9 @@ public class DataInitializer implements CommandLineRunner {
 		for (Branch b : existing) {
 			if (name.equals(b.getName())) return b;
 		}
+		List<String> imageKeys = List.of(
+				SeedImages.branchImageKey(name, 0),
+				SeedImages.branchImageKey(name, 1));
 		Branch branch = branchRepository.save(Branch.builder()
 				.name(name)
 				.address(address)
@@ -449,6 +486,7 @@ public class DataInitializer implements CommandLineRunner {
 				.description(description)
 				.status(BranchStatus.ACTIVE)
 				.owner(owner)
+				.imageKeys(JsonParseUtil.toJson(imageKeys))
 				.build());
 		log.info("Seeded branch: {}", name);
 		return branch;

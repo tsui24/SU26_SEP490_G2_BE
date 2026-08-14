@@ -21,6 +21,7 @@ import com.capstone.su26_sep490_g2_be.service.MinioStorageService;
 import com.capstone.su26_sep490_g2_be.service.TournamentAuditService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
+import com.capstone.su26_sep490_g2_be.util.DoubleEliminationBracketMath;
 import com.capstone.su26_sep490_g2_be.util.ProgressiveSurvivorsUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -1126,12 +1127,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
      * tra không ra và âm thầm rơi về race-to=7 hardcode — xem {@code safeResolveRaceTo}.
      */
     private String resolveWinnersRoundKey(int wr, int wTotalRounds) {
-        return switch (wTotalRounds - wr) {
-            case 0 -> "winners_final";
-            case 1 -> "winners_sf";
-            case 2 -> "winners_qf";
-            default -> "winners_r1";
-        };
+        return DoubleEliminationBracketMath.resolveWinnersRoundKey(wr, wTotalRounds);
     }
 
     /**
@@ -1141,8 +1137,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
      * âm thầm rơi về race-to=7 hardcode).
      */
     private String resolveLosersRoundKey(int lr, int lTotalRounds) {
-        if (lr == lTotalRounds) return "losers_final";
-        return "losers_r" + Math.min(lr, 3);
+        return DoubleEliminationBracketMath.resolveLosersRoundKey(lr, lTotalRounds);
     }
 
     private int safeResolveRaceTo(Long tid, String format, String roundKey) {
@@ -1232,6 +1227,15 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         int cutoffRound = log2(bracketSize / seSize) + 1;
         int lCutoffRounds = 2 * (cutoffRound - 1); // số vòng L bracket
 
+        // Nhãn vòng đấu (winners_qf/sf/final, losers_r1/r2/r3/final) PHẢI tính theo tổng số vòng
+        // TỰ NHIÊN của bracketSize đầy đủ, KHÔNG phải theo cutoffRound/lCutoffRounds (số vòng thật
+        // sự được sinh ra sau khi cắt sớm) — nếu không, cắt sớm (se_phase_size nhỏ) sẽ luôn gọi vòng
+        // áp chót là "Bán kết"/"NTh Chung kết nhánh" dù vòng đó có tới 4+ trận (thực chất là Tứ kết/
+        // Vòng 2), vì resolveWinnersRoundKey/resolveLosersRoundKey chỉ đếm "còn cách chung kết mấy
+        // vòng" chứ không biết kích thước bracket gốc.
+        int wNaturalRounds = log2(bracketSize);
+        int lNaturalRounds = 2 * (wNaturalRounds - 1);
+
         // ── Stages ───────────────────────────────────────────────────
         TournamentStage wStage = stageRepository.save(TournamentStage.builder()
                 .tournament(t).name("Nhánh thắng").stageType("WINNERS")
@@ -1256,7 +1260,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
                         .tournament(t).stage(wStage).bracketType("WINNERS")
                         .roundNo(wr).positionNo(pos)
                         .matchCode("W-R%d-M%d".formatted(wr, pos))
-                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), resolveWinnersRoundKey(wr, cutoffRound)))
+                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), resolveWinnersRoundKey(wr, wNaturalRounds)))
                         .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             }
         }
@@ -1278,7 +1282,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         for (int lr = 1; lr <= lCutoffRounds; lr++) {
             int mc  = losersMatchCount(bracketSize, lr);
-            String rk = resolveLosersRoundKey(lr, lCutoffRounds);
+            String rk = resolveLosersRoundKey(lr, lNaturalRounds);
             for (int pos = 1; pos <= mc; pos++) {
                 lGrid[lr][pos] = matchRepository.save(Match.builder()
                         .tournament(t).stage(lStage).bracketType("LOSERS")
@@ -1466,12 +1470,7 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
      * được cho mọi kích thước bracket.
      */
     private String resolveSeRoundKey(int round, int totalRounds) {
-        return switch (totalRounds - round) {
-            case 0 -> "se_final";
-            case 1 -> "se_semi_final";
-            case 2 -> "se_quarter_final";
-            default -> "se_round_1";
-        };
+        return DoubleEliminationBracketMath.resolveSeRoundKey(round, totalRounds);
     }
 
     /** Wire W→L drop — bỏ qua nếu W match là BYE. */

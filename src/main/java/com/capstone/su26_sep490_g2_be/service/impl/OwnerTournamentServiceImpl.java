@@ -31,6 +31,7 @@ import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
 import com.capstone.su26_sep490_g2_be.service.TournamentConfigValueService;
 import com.capstone.su26_sep490_g2_be.service.TournamentRaceToRuleService;
 import com.capstone.su26_sep490_g2_be.util.AvatarUrlResolver;
+import com.capstone.su26_sep490_g2_be.util.DoubleEliminationBracketMath;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -491,8 +492,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		TournamentConfig config = getConfig(tournamentId);
 		List<FormatConfigField> formatFields = formatConfigFieldRepository
 				.findByFormatCodeAndIsVisibleToOwnerTrueOrderByIdAsc(tournament.getFormat());
-		List<FormatRaceToRule> formatRules = formatRaceToRuleRepository
-				.findByFormatCodeOrderByIdAsc(tournament.getFormat());
+		List<FormatRaceToRule> formatRules = filterRealizedRaceToRules(tournament,
+				formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(tournament.getFormat()));
 
 		List<TournamentConfigFormResponse.ConfigFieldItem> fields = formatFields.stream()
 				.map(ff -> toConfigFieldItem(tournamentId, ff))
@@ -651,8 +652,8 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		TournamentConfig config = getConfig(tournamentId);
 		// lấy ra các field đã lưu config và các field default từ format, merge lại thành 1 map
 		Map<String, Object> fields = buildResolvedFields(tournamentId, tournament.getFormat());
-		List<FormatRaceToRule> formatRules = formatRaceToRuleRepository
-				.findByFormatCodeOrderByIdAsc(tournament.getFormat());
+		List<FormatRaceToRule> formatRules = filterRealizedRaceToRules(tournament,
+				formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(tournament.getFormat()));
 		Map<String, Integer> raceToMap = new LinkedHashMap<>();
 		List<String> overriddenRounds = new ArrayList<>();
 
@@ -1359,6 +1360,36 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	private long countActiveParticipants(Long tournamentId) {
 		return participantRepository.countByTournamentIdAndStatus(
 				tournamentId, ParticipantStatus.ACTIVE.getValue());
+	}
+
+	/**
+	 * DOUBLE_ELIMINATION: catalog {@code format_race_to_rules} có tới 13 dòng để hỗ trợ MỌI cỡ
+	 * bracket (8 → 32+ người) — hiện nguyên cả 13 dòng trên màn cấu hình/chi tiết của MỘT giải cụ
+	 * thể (vd 8 người, se_phase_size=4, thật ra chỉ đấu 6 vòng) khiến Owner tưởng giải có nhiều vòng
+	 * hơn thực tế. Lọc xuống đúng những round-key SẼ được sinh ra cho giải này — xem
+	 * {@link DoubleEliminationBracketMath#realizedRoundKeys}. Thể thức khác không cắt sớm nên giữ
+	 * nguyên catalog gốc.
+	 */
+	private List<FormatRaceToRule> filterRealizedRaceToRules(Tournament tournament, List<FormatRaceToRule> formatRules) {
+		if (!"DOUBLE_ELIMINATION".equals(tournament.getFormat())) {
+			return formatRules;
+		}
+		int participantCount = (int) countActiveParticipants(tournament.getId());
+		if (participantCount <= 0) {
+			participantCount = tournament.getMaxParticipants() != null ? tournament.getMaxParticipants() : 8;
+		}
+		int sePhaseSize = configValueService.getByTournamentAndField(tournament.getId(), "se_phase_size")
+				.map(TournamentConfigValue::getValue)
+				.map(v -> {
+					try {
+						return Integer.parseInt(v);
+					} catch (NumberFormatException e) {
+						return 8;
+					}
+				})
+				.orElse(8);
+		Set<String> realized = DoubleEliminationBracketMath.realizedRoundKeys(participantCount, sePhaseSize);
+		return formatRules.stream().filter(r -> realized.contains(r.getRoundKey())).toList();
 	}
 
 	/**

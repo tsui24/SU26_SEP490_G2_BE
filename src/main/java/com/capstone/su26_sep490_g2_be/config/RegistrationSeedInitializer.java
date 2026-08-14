@@ -1,5 +1,6 @@
 package com.capstone.su26_sep490_g2_be.config;
 
+import com.capstone.su26_sep490_g2_be.config.bootstrap.SeedImages;
 import com.capstone.su26_sep490_g2_be.dto.request.RejectRegistrationRequest;
 import com.capstone.su26_sep490_g2_be.dto.request.SubmitTournamentRegistrationRequest;
 import com.capstone.su26_sep490_g2_be.entity.*;
@@ -50,6 +51,8 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	private final TournamentRepository tournamentRepository;
 	private final TournamentConfigRepository tournamentConfigRepository;
 	private final TournamentRaceToRuleRepository raceToRuleRepository;
+	private final TournamentConfigValueRepository configValueRepository;
+	private final ConfigFieldDefinitionRepository configFieldRepository;
 	private final RegistrationFormTemplateRepository formTemplateRepository;
 	private final RegistrationRepository registrationRepository;
 	private final PaymentRepository paymentRepository;
@@ -93,7 +96,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedDraft(User owner, Branch branch) {
-		final String name = "Giải 9-Ball Sơ Thảo (Chưa Công Bố) 2026";
+		final String name = "Giải Bi-a Tân Binh Golden Break 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Giải đang được soạn thảo, chưa công bố cho người chơi thấy.",
@@ -109,7 +112,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedOpenFreeDoubles(User owner, Branch branch, Long doublesTemplateId) {
-		final String name = "Giải 8-Ball Đôi Miễn Phí — Đang Mở Đăng Ký 2026";
+		final String name = "Giải Đôi 8-Ball Kết Đoàn 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Giải đôi miễn phí, đang mở đăng ký — còn chỗ trống để test luồng đăng ký.",
@@ -118,6 +121,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 				BigDecimal.ZERO, BigDecimal.valueOf(2000000), "Vô địch 1.200.000đ · Á quân 800.000đ",
 				doublesTemplateId, true, true, owner, branch);
 		createConfig(t);
+		addStandardSingleEliminationConfig(t);
 
 		submitDouble(t, "player1@gmail.com", "Đối tác của Hùng", "0988000001");
 		submitDouble(t, "player2@gmail.com", "Đối tác của Tuấn", "0988000002");
@@ -130,7 +134,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedOpenPaidVariety(User owner, Branch branch, Long basicTemplateId) {
-		final String name = "Giải 9-Ball Trả Phí — Đang Mở Đăng Ký 2026";
+		final String name = "Giải Vô Địch 9-Ball Mùa Hè 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Giải trả phí 150.000đ, chỉ 4 suất — dữ liệu mẫu đủ mọi trạng thái đăng ký/thanh toán.",
@@ -139,6 +143,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 				BigDecimal.valueOf(150000), BigDecimal.valueOf(1000000), "Vô địch 600.000đ · Á quân 400.000đ",
 				basicTemplateId, true, true, owner, branch);
 		createConfig(t);
+		addStandardSingleEliminationConfig(t);
 
 		// submitRegistration() tự chặn ngay từ bước nộp đơn nếu approvedCount >= maxParticipants,
 		// nên phải nộp đơn cho TẤT CẢ người chơi trước (lúc chưa ai APPROVED), rồi mới thanh
@@ -181,7 +186,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedRegistrationClosed(User owner, Branch branch, Long basicTemplateId) {
-		final String name = "Giải 10-Ball Đã Đóng Đăng Ký — Chờ Bốc Thăm 2026";
+		final String name = "Cúp 10-Ball Tinh Anh 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Đã đủ 8 người, ban tổ chức vừa đóng đăng ký — sắp bốc thăm.",
@@ -190,6 +195,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 				BigDecimal.valueOf(100000), BigDecimal.valueOf(3000000), "Vô địch 1.800.000đ · Á quân 1.000.000đ",
 				basicTemplateId, true, true, owner, branch);
 		createConfig(t);
+		addStandardSingleEliminationConfig(t);
 
 		for (int i = 1; i <= 8; i++) {
 			Registration r = submitSingle(t, "player" + i + "@gmail.com");
@@ -206,7 +212,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedDrawDone(User owner, Branch branch, Long basicTemplateId) {
-		final String name = "Giải 9-Ball Đã Bốc Thăm — Chưa Thi Đấu 2026";
+		final String name = "Giải Bi-a Trẻ Golden Break 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Giải miễn phí, đã bốc thăm xong nhưng chưa trận nào diễn ra.",
@@ -233,7 +239,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedInProgressPartial(User owner, Branch branch, Long basicTemplateId) {
-		final String name = "Giải 9-Ball Đang Thi Đấu (Vòng 1) 2026";
+		final String name = "Giải Vô Địch 9-Ball Mùa Thu 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Giải miễn phí, đang thi đấu dở — mới hoàn thành vòng 1.",
@@ -265,7 +271,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedCancelled(User owner, Branch branch, Long basicTemplateId) {
-		final String name = "Giải 9-Ball Đã Hủy — Không Đủ Người 2026";
+		final String name = "Giải Giao Hữu 9-Ball Liên CLB 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = baseTournament(name, "Chỉ có 2 người đăng ký sau nhiều ngày mở — ban tổ chức quyết định hủy giải.",
@@ -274,6 +280,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 				BigDecimal.ZERO, null, null,
 				basicTemplateId, true, true, owner, branch);
 		createConfig(t);
+		addStandardSingleEliminationConfig(t);
 
 		submitSingle(t, "player15@gmail.com");
 		submitSingle(t, "player16@gmail.com");
@@ -296,6 +303,8 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 		return tournamentRepository.save(Tournament.builder()
 				.name(name)
 				.description(description)
+				.thumbnailUrl(SeedImages.thumbnailFor(name))
+				.bannerUrl(SeedImages.bannerFor(name))
 				.gameType(gameType)
 				.format(format)
 				.participantType(participantType)
@@ -326,6 +335,7 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 
 	private void addSingleEliminationRaceToRules(Tournament t) {
 		createConfig(t);
+		addStandardSingleEliminationConfig(t);
 		addRaceToRule(t, "quarter_final", "KNOCKOUT", 5);
 		addRaceToRule(t, "semi_final", "KNOCKOUT", 7);
 		addRaceToRule(t, "third_place", "KNOCKOUT", 7);
@@ -336,6 +346,31 @@ public class RegistrationSeedInitializer implements CommandLineRunner {
 		if (raceToRuleRepository.findByTournamentIdAndRoundKey(t.getId(), roundKey).isPresent()) return;
 		raceToRuleRepository.save(TournamentRaceToRule.builder()
 				.tournament(t).roundKey(roundKey).bracketPhase(bracketPhase).raceTo(raceTo).build());
+	}
+
+	/**
+	 * Field bắt buộc của SINGLE_ELIMINATION (break_rule, lag_for_break, third_place_match) —
+	 * thiếu field nào thì Owner sẽ thấy "Cấu hình chưa hoàn tất" dù giải đã bốc thăm/thi đấu xong.
+	 * KHÔNG gọi cho giải DRAFT ({@link #seedDraft}) — cố ý để "chưa hoàn tất" vì giải đó đúng là
+	 * đang soạn thảo dở, chưa cấu hình xong.
+	 */
+	private void addStandardSingleEliminationConfig(Tournament t) {
+		addConfigValue(t, "break_rule", "ALTERNATE_BREAK");
+		addConfigValue(t, "lag_for_break", "true");
+		addConfigValue(t, "third_place_match", "true");
+		addConfigValue(t, "scoring_unit", "GAME");
+	}
+
+	private void addConfigValue(Tournament t, String key, String value) {
+		TournamentConfigValueId id = new TournamentConfigValueId(t.getId(), key);
+		if (configValueRepository.existsById(id)) return;
+		ConfigFieldDefinition fieldDef = configFieldRepository.findById(key).orElse(null);
+		if (fieldDef == null) {
+			log.warn("ConfigFieldDefinition '{}' chưa tồn tại, bỏ qua.", key);
+			return;
+		}
+		configValueRepository.save(TournamentConfigValue.builder()
+				.id(id).tournament(t).fieldDefinition(fieldDef).value(value).build());
 	}
 
 	/** Đăng ký đơn qua RegistrationService thật, trả về entity Registration (không phải response DTO). */
