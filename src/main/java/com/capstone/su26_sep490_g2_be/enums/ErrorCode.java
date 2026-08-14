@@ -58,6 +58,8 @@ public enum ErrorCode {
 	CONFIG_INCOMPLETE("FORMAT_009", "Cấu hình giải chưa đầy đủ", HttpStatus.UNPROCESSABLE_ENTITY),
 	INVALID_STATUS_TRANSITION("FORMAT_010", "Chuyển trạng thái giải không hợp lệ", HttpStatus.UNPROCESSABLE_ENTITY),
 	GAME_TYPE_NOT_FOUND("FORMAT_011", "Không tìm thấy loại bi", HttpStatus.NOT_FOUND),
+	FORMAT_NOT_SUPPORTED_FOR_DRAW("FORMAT_012",
+			"Thể thức này chưa được hỗ trợ bốc thăm — liên hệ quản trị viên", HttpStatus.UNPROCESSABLE_ENTITY),
 
 	// Employee Management
 	EMPLOYEE_NOT_FOUND("EMPLOYEE_001", "Không tìm thấy nhân viên", HttpStatus.NOT_FOUND),

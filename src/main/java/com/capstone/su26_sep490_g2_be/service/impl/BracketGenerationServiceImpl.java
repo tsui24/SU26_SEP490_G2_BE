@@ -105,11 +105,16 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
 
         participants = resolveSeedRankOrder(seedingMethod, participants);
 
+        // Liệt kê tường minh từng thể thức có sinh bracket thật — không dùng default rơi về Loại
+        // trực tiếp cho MỌI format lạ, kể cả GROUP_PLAYOFF hay bất kỳ mã format nào chưa từng được
+        // cài đặt logic sinh bracket. Trước đây default fallback khiến Owner tưởng đang chạy đúng
+        // thể thức đã chọn nhưng thực ra luôn ra bracket Loại trực tiếp — sai âm thầm, không lỗi.
         String format = tournament.getFormat();
         BracketResult result = switch (format) {
+            case "SINGLE_ELIMINATION"       -> generateSingleElimination(tournament, participants);
             case "DOUBLE_ELIMINATION"       -> generateDoubleElimination(tournament, participants);
             case "PROGRESSIVE_ROUND_ROBIN"  -> generateProgressiveRoundRobin(tournament, participants);
-            default                         -> generateSingleElimination(tournament, participants);
+            default                         -> throw new BusinessException(ErrorCode.FORMAT_NOT_SUPPORTED_FOR_DRAW);
         };
 
         tournament.setStatus(TournamentStatus.DRAW_PREVIEW.getValue());
