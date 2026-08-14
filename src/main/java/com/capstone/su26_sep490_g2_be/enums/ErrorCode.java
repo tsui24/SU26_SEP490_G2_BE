@@ -91,6 +91,7 @@ public enum ErrorCode {
 	REFEREE_TIME_CONFLICT("MATCH_013", "Trọng tài đã được phân công một trận khác trùng khung giờ", HttpStatus.CONFLICT),
 	MATCH_TABLE_TIME_CONFLICT("MATCH_009", "Bàn này đã có trận khác thi đấu trong khung giờ đó — hãy chọn bàn/giờ khác", HttpStatus.CONFLICT),
 	MATCH_EARLY_END_NOT_CONFIRMED("MATCH_014", "Chưa ai đạt điểm race-to — cần xác nhận kết thúc sớm (bỏ cuộc/chấn thương)", HttpStatus.CONFLICT),
+	MATCH_SCORE_BOTH_REACHED_TARGET("MATCH_015", "Không thể cả hai cơ thủ cùng đạt điểm race-to — chỉ một người thắng ván cuối. Sửa lại tỷ số, hoặc dùng Walkover nếu có cơ thủ bỏ cuộc", HttpStatus.CONFLICT),
 
 	// Tournament participation
 	TOURNAMENT_FULL("TOURNAMENT_001", "Giải đấu đã đủ số người tham gia", HttpStatus.CONFLICT),
