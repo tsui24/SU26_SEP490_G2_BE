@@ -799,10 +799,9 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public List<TournamentStatusHistoryResponse> getStatusHistory(Long tournamentId) {
-		if (!tournamentRepository.existsById(tournamentId)) {
-			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-		}
+	public List<TournamentStatusHistoryResponse> getStatusHistory(Long userId, Long tournamentId,
+			boolean enforceOwnership) {
+		loadTournament(userId, tournamentId, enforceOwnership);
 		return tournamentAuditService.getHistory(tournamentId);
 	}
 
@@ -999,10 +998,10 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	}
 
 	/**
-	 * Hệ thống chỉ có 1 chuỗi (nhiều chi nhánh, không phải nhiều chuỗi độc lập) nên Owner được xem
-	 * toàn bộ tournament của cả chuỗi — không isolate Owner với nhau. Chỉ Manager mới bị giới hạn
-	 * theo chi nhánh họ được cấp quyền qua {@link BranchAccessService} (đây mới là phân quyền thật
-	 * cần enforce: "chi nhánh nào được gán thì chỉ nhìn thấy chi nhánh đó").
+	 * Owner chỉ thao tác được tournament thuộc (các) chi nhánh do chính mình sở hữu
+	 * ({@code Branch.owner}); Manager bị giới hạn theo chi nhánh được cấp quyền qua
+	 * {@link BranchAccessService}. Cả hai đều đi qua {@link BranchAccessService#canActorAccessBranch}
+	 * — sửa logic phân quyền thì sửa ở đó, không nhân bản ở đây.
 	 */
 	private void assertBranchAccess(Long userId, Tournament tournament) {
 		if (userId == null) {
@@ -1017,13 +1016,17 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		}
 	}
 
-	/** Danh sách branchId giới hạn tầm nhìn — null nghĩa là "không lọc" (Owner xem cả chuỗi). */
+	/**
+	 * Danh sách branchId giới hạn tầm nhìn. Owner chỉ thấy (các) chi nhánh do chính mình sở hữu
+	 * ({@code Branch.owner == actor}) — trước đây trả về {@code null} (không lọc) khiến Owner nhìn
+	 * thấy giải đấu của mọi Owner khác trong hệ thống, không chỉ chuỗi của riêng mình.
+	 */
 	private List<Long> resolveAccessibleBranchIds(Long userId) {
 		User actor = userRepository.findById(userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
 		String roleCode = actor.getRole().getCode();
 		if ("OWNER".equals(roleCode)) {
-			return null;
+			return branchRepository.findByOwnerId(userId).stream().map(Branch::getId).toList();
 		}
 		if ("MANAGER".equals(roleCode)) {
 			return branchAccessService.getAccessibleBranchIds(actor);

@@ -49,7 +49,7 @@ public interface OwnerTournamentService {
 	PatchTournamentVisibilityResponse updateVisibility(Long userId, Long tournamentId,
 	                                          PatchTournamentVisibilityRequest request, boolean enforceOwnership);
 
-	List<TournamentStatusHistoryResponse> getStatusHistory(Long tournamentId);
+	List<TournamentStatusHistoryResponse> getStatusHistory(Long userId, Long tournamentId, boolean enforceOwnership);
 
 	RegistrationFormPreviewResponse getTournamentRegistrationForm(
 			Long userId, Long tournamentId, boolean enforceOwnership);

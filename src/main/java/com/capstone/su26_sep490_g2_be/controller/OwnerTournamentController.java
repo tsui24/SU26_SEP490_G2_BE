@@ -151,8 +151,9 @@ public class OwnerTournamentController {
 	@Operation(summary = "Lịch sử đổi trạng thái giải", description = "Audit trail — cả thao tác thủ công và tự động")
 	@GetMapping("/tournaments/{id}/audit-logs")
 	public ResponseEntity<ApiResponse<List<TournamentStatusHistoryResponse>>> getAuditLogs(
-			@PathVariable Long id) {
-		return ResponseEntity.ok(ApiResponse.success(ownerTournamentService.getStatusHistory(id)));
+			Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(ApiResponse.success(
+				ownerTournamentService.getStatusHistory(extractUserId(authentication), id, true)));
 	}
 
 	private Long extractUserId(Authentication authentication) {
