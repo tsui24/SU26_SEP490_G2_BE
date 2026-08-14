@@ -72,7 +72,10 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     @Override
     @Transactional
     public DrawResultResponse generate(Long tournamentId, Long actorUserId) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
+        // PESSIMISTIC_WRITE — hai request "Bốc thăm" bắn gần như đồng thời phải xếp hàng thay vì
+        // cùng đọc "chưa có stage" rồi cùng insert, gây race condition ở check-then-act bên dưới:
+        // request thua trước đây rơi vào exception DB-level không map được, trả 500 thay vì 409 sạch.
+        Tournament tournament = tournamentRepository.findByIdWithLock(tournamentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         assertActorCanAccessTournament(actorUserId, tournament);
 
@@ -1045,8 +1048,27 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         }
     }
 
-    private Participant getSlot(Match m, String slot) { return "player1".equals(slot) ? m.getPlayer1() : m.getPlayer2(); }
-    private void setSlot(Match m, String slot, Participant p) { if ("player1".equals(slot)) m.setPlayer1(p); else m.setPlayer2(p); }
+    /**
+     * Kiểm tra tường minh tại tầng service thay vì coi mọi giá trị khác {@code "player1"} là
+     * {@code "player2"} — hiện tại {@link com.capstone.su26_sep490_g2_be.dto.request.SwapPlayersRequest}
+     * đã chặn giá trị rác bằng {@code @Pattern}, nhưng service không nên phụ thuộc hoàn toàn vào một
+     * validation ở tầng DTO; một caller khác trong tương lai bỏ qua DTO đó vẫn phải được chặn ở đây.
+     */
+    private void assertValidSlot(String slot) {
+        if (!"player1".equals(slot) && !"player2".equals(slot)) {
+            throw new BusinessException(ErrorCode.DRAW_SWAP_INVALID_SLOT);
+        }
+    }
+
+    private Participant getSlot(Match m, String slot) {
+        assertValidSlot(slot);
+        return "player1".equals(slot) ? m.getPlayer1() : m.getPlayer2();
+    }
+
+    private void setSlot(Match m, String slot, Participant p) {
+        assertValidSlot(slot);
+        if ("player1".equals(slot)) m.setPlayer1(p); else m.setPlayer2(p);
+    }
 
     /**
      * Tính lại trạng thái BYE sau khi {@link #swapPlayers} đổi chỗ — nhận diện BYE ở CẢ HAI phía

@@ -106,7 +106,9 @@ public enum ErrorCode {
 	DRAW_SWAP_BOTH_SLOTS_EMPTY("TOURNAMENT_011", "Không thể đổi chỗ hai ô đều đang trống", HttpStatus.BAD_REQUEST),
 	DRAW_BRACKET_HAS_EMPTY_MATCH("TOURNAMENT_012", "Bracket có trận vòng 1 không còn cơ thủ nào — hãy sắp xếp lại trước khi xác nhận", HttpStatus.CONFLICT),
 	PARTICIPANT_SEED_NOT_CONTIGUOUS("TOURNAMENT_013", "Số hạt giống đang gán không liên tục — phải đủ từ 1 đến hết số người đã seed, không được để trống ở giữa", HttpStatus.CONFLICT),
+	PARTICIPANT_SEED_OUT_OF_RANGE("TOURNAMENT_016", "Số hạt giống vượt quá số người tối đa của giải", HttpStatus.BAD_REQUEST),
 	TOURNAMENT_NOT_ENOUGH_PARTICIPANTS("TOURNAMENT_014", "Cần tối thiểu 2 người tham gia mới có thể bốc thăm", HttpStatus.CONFLICT),
+	DRAW_SWAP_INVALID_SLOT("TOURNAMENT_015", "Tên ô không hợp lệ — chỉ nhận player1 hoặc player2", HttpStatus.BAD_REQUEST),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),
@@ -143,7 +145,8 @@ public enum ErrorCode {
 	EMAIL_SEND_FAILED("EMAIL_007", "Gửi email thất bại", HttpStatus.INTERNAL_SERVER_ERROR),
 	EMAIL_RECIPIENT_EMPTY("EMAIL_008", "Danh sách người nhận trống", HttpStatus.BAD_REQUEST),
 	EMAIL_AUTOMATION_DISABLED("EMAIL_009", "Quy tắc tự động đang tắt", HttpStatus.UNPROCESSABLE_ENTITY),
-	EMAIL_LOG_NOT_FOUND("EMAIL_010", "Không tìm thấy nhật ký gửi email", HttpStatus.NOT_FOUND);
+	EMAIL_LOG_NOT_FOUND("EMAIL_010", "Không tìm thấy nhật ký gửi email", HttpStatus.NOT_FOUND),
+	EMAIL_REGISTRATION_ID_REQUIRED("EMAIL_011", "Cần chọn 1 đăng ký cụ thể khi gửi tới Người đăng ký", HttpStatus.BAD_REQUEST);
 
 	private final String code;
 	private final String message;
