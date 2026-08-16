@@ -27,7 +27,7 @@ public class AdminController {
 	private final AccountService accountService;
 	private final LeaderboardService leaderboardService;
 
-	@Operation(summary = "Create Owner account", description = "Admin tạo tài khoản Owner (chủ chuỗi quán)")
+	@Operation(summary = "Create Owner account", description = "Admin tạo tài khoản Owner (chủ của tất cả các chi nhánh và quản lí tất cả các manager)")
 	@ApiResponses({
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Tạo Owner thành công"),
 			@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền"),
