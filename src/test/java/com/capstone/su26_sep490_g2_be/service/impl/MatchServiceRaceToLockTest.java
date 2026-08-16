@@ -15,6 +15,7 @@ import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.MatchSchedulingService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("L1 · MatchService — UC-41 race-to score lock")
 class MatchServiceRaceToLockTest {
 
 	@Mock MatchRepository matchRepository;
@@ -82,7 +84,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void increment_whenAlreadyAtRaceTo_rejects409() {
+	@DisplayName("TC-064 · Adding a point after the race target is already reached is refused")
+	void TC064_incrementScore_whenAlreadyAtRaceTo_rejected() {
 		match.setPlayer1Score(5);
 		match.setPlayer2Score(2);
 		stubLoadOnly();
@@ -96,7 +99,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void increment_belowZero_rejects400() {
+	@DisplayName("TC-065 · A score may not be driven below zero")
+	void TC065_incrementScore_belowZero_rejected() {
 		match.setPlayer1Score(0);
 		match.setPlayer2Score(0);
 		stubLoadOnly();
@@ -108,7 +112,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void increment_toExactlyRaceTo_ok() {
+	@DisplayName("TC-066 · The point that reaches the race target exactly is accepted")
+	void TC066_incrementScore_toExactlyRaceTo_accepted() {
 		match.setPlayer1Score(4);
 		match.setPlayer2Score(2);
 		stubForUpdate();
@@ -119,7 +124,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void increment_afterReachingRaceTo_secondAddRejected409() {
+	@DisplayName("TC-067 · The next point after the race target is refused and the score is unchanged")
+	void TC067_incrementScore_afterReachingRaceTo_secondAddRejected() {
 		match.setPlayer1Score(4);
 		match.setPlayer2Score(2);
 		stubForUpdate();
@@ -133,7 +139,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void decrement_whenAtRaceTo_allowed() {
+	@DisplayName("TC-068 · A score sitting at the race target may still be corrected downwards")
+	void TC068_incrementScore_decrementAtRaceTo_allowed() {
 		match.setPlayer1Score(5);
 		match.setPlayer2Score(2);
 		stubForUpdate();
@@ -143,7 +150,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void increment_whenPending_rejects409() {
+	@DisplayName("TC-069 · Scoring on a match that has not started is refused")
+	void TC069_incrementScore_whenPending_rejected() {
 		match.setStatus(MatchStatus.PENDING.getValue());
 		when(matchRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(match));
 
@@ -154,7 +162,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void complete_whenRaceReached_wrongWinner_rejected() {
+	@DisplayName("TC-070 · Completing with a winner who did not reach the race target is refused")
+	void TC070_completeMatch_winnerIsNotRaceLeader_rejected() {
 		match.setPlayer1Score(5);
 		match.setPlayer2Score(2);
 		when(matchRepository.findById(42L)).thenReturn(Optional.of(match));
@@ -167,7 +176,8 @@ class MatchServiceRaceToLockTest {
 	}
 
 	@Test
-	void complete_whenRaceReached_correctWinner_ok() {
+	@DisplayName("TC-071 · Completing with the player who reached the race target is accepted")
+	void TC071_completeMatch_winnerIsRaceLeader_accepted() {
 		match.setPlayer1Score(5);
 		match.setPlayer2Score(2);
 		when(matchRepository.findById(42L)).thenReturn(Optional.of(match));
@@ -186,7 +196,8 @@ class MatchServiceRaceToLockTest {
 	 * chỉ một thành công lên 5, cái sau bị 409.
 	 */
 	@Test
-	void concurrentIncrement_fromFour_onlyOneSucceeds() throws Exception {
+	@DisplayName("TC-072 · Two simultaneous points at match point — only one is recorded")
+	void TC072_incrementScore_concurrentAtMatchPoint_onlyOneSucceeds() throws Exception {
 		match.setPlayer1Score(4);
 		match.setPlayer2Score(0);
 
