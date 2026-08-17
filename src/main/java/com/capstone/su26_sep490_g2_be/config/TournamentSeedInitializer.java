@@ -366,8 +366,24 @@ public class TournamentSeedInitializer implements CommandLineRunner {
 		bracketGenerationService.generate(t.getId(), owner.getId());
 		bracketGenerationService.confirmDraw(t.getId(), owner.getId());
 
-		t.setStatus(TournamentStatus.IN_PROGRESS.getValue());
-		tournamentRepository.save(t);
+		boolean hasFinalBracket = stageRepository.findByTournamentIdOrderByOrderNoAsc(t.getId())
+				.stream().anyMatch(s -> "FINAL_BRACKET".equals(s.getStageType()));
+
+		if (hasFinalBracket) {
+			// CUT_TO_SE (DOUBLE_ELIMINATION cắt về loại trực tiếp): match ở nhánh thắng/thua
+			// vẫn chơi được lúc còn DRAW_DONE (DE được phép — xem assertMatchPlayable), nhưng
+			// populateFinalBracket() CHỈ nhận trạng thái DRAW_DONE để điền người vào Last X.
+			// Trước đây code set IN_PROGRESS ngay từ đầu rồi simulate 1 lần duy nhất → Last X
+			// không bao giờ được populate (match trơ, không player) nên simulate bỏ qua luôn,
+			// còn finishTournament() lại ép COMPLETED bất kể — giải "Hoàn thành" mà Last X vẫn
+			// TBD/chưa đấu. Fix: simulate nhánh thắng/thua trước, populate Last X, rồi simulate
+			// tiếp phần còn lại trước khi đóng giải.
+			simulateAllMatches(t, owner, power);
+			bracketGenerationService.populateFinalBracket(t.getId(), owner.getId());
+		} else {
+			t.setStatus(TournamentStatus.IN_PROGRESS.getValue());
+			tournamentRepository.save(t);
+		}
 
 		simulateAllMatches(t, owner, power);
 		finishTournament(t);
