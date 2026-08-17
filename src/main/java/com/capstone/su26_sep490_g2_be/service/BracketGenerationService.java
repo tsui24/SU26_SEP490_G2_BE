@@ -11,6 +11,18 @@ public interface BracketGenerationService {
 
     void confirmDraw(Long tournamentId, Long actorUserId);
 
+    /**
+     * Huỷ bốc thăm — xoá bracket nháp và trả giải về REGISTRATION_CLOSED.
+     *
+     * <p>Sinh ra cho lễ bốc thăm công khai: bracket được sinh ngay khi bấm bốc, nên nếu người
+     * dẫn dừng giữa buổi thì mọi cặp đấu đã nằm sẵn trong DB dù chưa công bố hết. Huỷ để buổi
+     * bốc thăm sau bắt đầu lại từ đầu với thứ tự ngẫu nhiên mới.
+     *
+     * <p>Chỉ áp dụng cho DRAW_PREVIEW. Từ DRAW_DONE trở đi bracket đã công bố cho cơ thủ,
+     * xoá lúc đó là mất dữ liệu thi đấu chứ không còn là "huỷ bốc thăm".
+     */
+    void cancelDraw(Long tournamentId, Long actorUserId);
+
     void swapPlayers(Long tournamentId, Long matchId1, String slot1, Long matchId2, String slot2);
 
     /**

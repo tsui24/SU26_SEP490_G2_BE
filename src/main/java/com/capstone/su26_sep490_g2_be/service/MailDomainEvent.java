@@ -19,5 +19,13 @@ public record MailDomainEvent(
 		/** Null/rỗng để listener tự resolve theo recipientType của rule (broadcast). */
 		List<MailRecipient> explicitRecipients,
 		/** Định danh entity gây ra sự kiện (registration id, match id, ...) — dùng để chống gửi trùng. */
-		String entityKey) {
+		String entityKey,
+		/**
+		 * Trận liên quan, nếu có. Đây là dữ liệu ĐIỀU HƯỚNG cho thông báo đẩy (bấm vào thì mở
+		 * đúng trận), không phải nội dung email — nên tách riêng khỏi {@code variables}.
+		 *
+		 * Cần thiết vì một trọng tài có thể được phân công nhiều trận cùng lúc: thiếu id này
+		 * thì mọi thông báo chỉ mở về màn giải đấu, người nhận vẫn phải tự dò lại trận nào.
+		 */
+		Long matchId) {
 }

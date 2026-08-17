@@ -58,6 +58,22 @@ public class MatchController {
                 .body(ApiResponse.success("Bốc thăm thành công", bracketGenerationService.generate(id, extractUserId(auth))));
     }
 
+    @Operation(summary = "Huỷ bốc thăm — xoá bracket nháp, DRAW_PREVIEW → REGISTRATION_CLOSED (Owner)")
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/owner/tournaments/{id}/draw")
+    public ResponseEntity<ApiResponse<Void>> cancelDrawOwner(Authentication auth, @PathVariable Long id) {
+        bracketGenerationService.cancelDraw(id, extractUserId(auth));
+        return ResponseEntity.ok(ApiResponse.success("Đã huỷ bốc thăm", null));
+    }
+
+    @Operation(summary = "Huỷ bốc thăm — xoá bracket nháp, DRAW_PREVIEW → REGISTRATION_CLOSED (Manager)")
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/manager/tournaments/{id}/draw")
+    public ResponseEntity<ApiResponse<Void>> cancelDrawManager(Authentication auth, @PathVariable Long id) {
+        bracketGenerationService.cancelDraw(id, extractUserId(auth));
+        return ResponseEntity.ok(ApiResponse.success("Đã huỷ bốc thăm", null));
+    }
+
     @Operation(summary = "Xác nhận bracket — DRAW_PREVIEW → DRAW_DONE (Owner)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/owner/tournaments/{id}/draw/confirm")

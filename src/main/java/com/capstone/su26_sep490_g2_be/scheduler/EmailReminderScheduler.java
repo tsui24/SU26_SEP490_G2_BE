@@ -116,6 +116,7 @@ public class EmailReminderScheduler {
 						.variables(variables)
 						.explicitRecipients(recipients)
 						.entityKey("MATCH-REMINDER-" + match.getId())
+						.matchId(match.getId())
 						.build());
 				log.info("Queued match-starting-soon reminder for match id={}", match.getId());
 			}

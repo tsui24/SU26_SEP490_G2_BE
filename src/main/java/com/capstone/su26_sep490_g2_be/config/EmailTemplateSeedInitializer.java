@@ -133,17 +133,32 @@ public class EmailTemplateSeedInitializer implements CommandLineRunner {
 				""",
 				"[\"user.fullName\", \"match.roundNo\", \"match.player1Name\", \"match.player2Name\", \"tournament.name\"]");
 
+		/* Tiêu đề và nội dung phải nêu rõ MÃ TRẬN, BÀN và GIỜ.
+		 * Một trọng tài được phân công nhiều trận cùng lúc sẽ nhận nhiều thông báo; nếu
+		 * chúng chỉ khác nhau ở tên hai cơ thủ thì họ không biết đứng bàn nào, lúc nào —
+		 * vẫn phải mở app tra lại từng trận, đúng thứ mà thông báo lẽ ra phải tránh. */
 		EmailTemplate refereeAssigned = seedTemplate(admin, "MATCH_REFEREE_ASSIGNED", "Phân công điều hành trận",
 				EmailTemplateCategory.TRANSACTIONAL,
-				"Bạn được phân công điều hành một trận đấu — {{tournament.name}}",
+				"Phân công điều hành trận {{match.code}} — bàn {{match.tableNo}}, {{match.scheduledAt}}",
 				"""
 				<p>Xin chào,</p>
 				<p>Bạn vừa được phân công làm <b>trọng tài</b> điều hành một trận đấu thuộc giải
 				<b>{{tournament.name}}</b>.</p>
-				<p>Cặp đấu: <b>{{match.player1Name}}</b> vs <b>{{match.player2Name}}</b> (Vòng {{match.roundNo}}).</p>
-				<p>Vui lòng đăng nhập ứng dụng, vào mục <b>"Trận của tôi"</b> để theo dõi và điều hành trận đấu.</p>
+				<table style="border-collapse:collapse;margin:14px 0;">
+				  <tr><td style="padding:4px 14px 4px 0;color:#666;">Mã trận</td>
+				      <td style="padding:4px 0;"><b>{{match.code}}</b> (Vòng {{match.roundNo}})</td></tr>
+				  <tr><td style="padding:4px 14px 4px 0;color:#666;">Cặp đấu</td>
+				      <td style="padding:4px 0;"><b>{{match.player1Name}}</b> vs <b>{{match.player2Name}}</b></td></tr>
+				  <tr><td style="padding:4px 14px 4px 0;color:#666;">Bàn</td>
+				      <td style="padding:4px 0;"><b>{{match.tableNo}}</b></td></tr>
+				  <tr><td style="padding:4px 14px 4px 0;color:#666;">Giờ thi đấu</td>
+				      <td style="padding:4px 0;"><b>{{match.scheduledAt}}</b></td></tr>
+				</table>
+				<p>Bạn có thể được phân công nhiều trận cùng lúc — mỗi trận có một thông báo riêng.
+				Vào mục <b>"Trận của tôi"</b> trong ứng dụng để theo dõi và ghi tỉ số cho từng trận.</p>
 				""",
-				"[\"tournament.name\", \"match.player1Name\", \"match.player2Name\", \"match.roundNo\"]");
+				"[\"tournament.name\", \"match.code\", \"match.tableNo\", \"match.scheduledAt\", "
+						+ "\"match.player1Name\", \"match.player2Name\", \"match.roundNo\"]");
 
 		seedTemplate(admin, "MANUAL_BROADCAST", "Thông báo thủ công",
 				EmailTemplateCategory.MARKETING,
