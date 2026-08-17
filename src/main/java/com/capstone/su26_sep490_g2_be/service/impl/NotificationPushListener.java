@@ -2,7 +2,6 @@ package com.capstone.su26_sep490_g2_be.service.impl;
 
 import com.capstone.su26_sep490_g2_be.config.StartupMailGuard;
 import com.capstone.su26_sep490_g2_be.entity.EmailAutomationRule;
-import com.capstone.su26_sep490_g2_be.enums.EmailEventType;
 import com.capstone.su26_sep490_g2_be.enums.EmailRecipientType;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.service.ExpoPushService;
@@ -17,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -90,7 +90,7 @@ public class NotificationPushListener {
 		expoPushService.sendToUsers(
 				List.copyOf(userIds),
 				event.eventType().getDisplayName(),
-				buildBody(event.eventType(), tournamentName),
+				buildBody(event, tournamentName),
 				buildData(event));
 	}
 
@@ -121,13 +121,51 @@ public class NotificationPushListener {
 				.orElse(null);
 	}
 
-	private String buildBody(EmailEventType eventType, String tournamentName) {
-		if (tournamentName != null && !tournamentName.isBlank()) {
+	private String buildBody(MailDomainEvent event, String tournamentName) {
+		String matchLine = buildMatchLine(event);
+		boolean hasTournament = tournamentName != null && !tournamentName.isBlank();
+
+		if (matchLine != null) {
+			return hasTournament ? tournamentName + "\n" + matchLine : matchLine;
+		}
+		if (hasTournament) {
 			return tournamentName;
 		}
-		return eventType.isTournamentScoped()
+		return event.eventType().isTournamentScoped()
 				? "Mở ứng dụng để xem chi tiết"
 				: "Có cập nhật mới về tài khoản của bạn";
+	}
+
+	/**
+	 * Dòng nhận dạng trận: {@code "R1-M3 · Bàn 4 · 20/08/2026 14:30"}. Null nếu sự kiện
+	 * không gắn với trận nào.
+	 *
+	 * Bắt buộc phải có với các sự kiện cấp trận. Một trọng tài được phân công nhiều trận
+	 * cùng lúc, mà tiêu đề thông báo thì cố định theo loại sự kiện — nếu phần thân cũng chỉ
+	 * có tên giải thì 5 lần phân công ra 5 thông báo giống nhau từng ký tự, không phân biệt
+	 * được trận nào. Đó đúng là thứ mà việc tách thông báo theo từng trận nhằm tránh.
+	 *
+	 * Đọc từ {@code variables.match} do {@code MailContextBuilder#putMatch} dựng, để phần
+	 * thân thông báo và phần thân email luôn nói cùng một chuyện.
+	 */
+	private String buildMatchLine(MailDomainEvent event) {
+		Map<String, Object> variables = event.variables();
+		if (variables == null || !(variables.get("match") instanceof Map<?, ?> match)) {
+			return null;
+		}
+		List<String> parts = new ArrayList<>();
+		String code = text(match.get("code"));
+		if (!code.isEmpty()) parts.add(code);
+		String tableNo = text(match.get("tableNo"));
+		// putMatch trả về số bàn, hoặc chữ "chưa gán" khi trận còn chưa có bàn.
+		if (!tableNo.isEmpty()) parts.add(tableNo.matches("\\d+") ? "Bàn " + tableNo : tableNo);
+		String scheduledAt = text(match.get("scheduledAt"));
+		if (!scheduledAt.isEmpty()) parts.add(scheduledAt);
+		return parts.isEmpty() ? null : String.join(" · ", parts);
+	}
+
+	private static String text(Object value) {
+		return value == null ? "" : value.toString().trim();
 	}
 
 	/** App đọc phần này để biết bấm vào thông báo thì mở màn nào. */
@@ -136,6 +174,10 @@ public class NotificationPushListener {
 		data.put("eventType", event.eventType().getValue());
 		if (event.tournamentId() != null) {
 			data.put("tournamentId", event.tournamentId());
+		}
+		// Có matchId thì app mở thẳng trận đó thay vì chỉ mở màn giải đấu.
+		if (event.matchId() != null) {
+			data.put("matchId", event.matchId());
 		}
 		return data;
 	}

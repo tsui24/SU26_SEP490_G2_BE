@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,6 +26,8 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class MailContextBuilder {
+
+	private static final DateTimeFormatter DATE_TIME_VN = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
 	private final MailProperties mailProperties;
 	private final TournamentRepository tournamentRepository;
@@ -72,13 +75,19 @@ public class MailContextBuilder {
 
 	public void putMatch(Map<String, Object> ctx, Match match) {
 		if (match == null) return;
-		String player1Name = match.getPlayer1() != null ? match.getPlayer1().getDisplayName() : "";
-		String player2Name = match.getPlayer2() != null ? match.getPlayer2().getDisplayName() : "";
-		ctx.put("match", Map.of(
-				"roundNo", String.valueOf(match.getRoundNo()),
-				"player1Name", player1Name,
-				"player2Name", player2Name,
-				"score", match.getPlayer1Score() + " - " + match.getPlayer2Score()));
+		Map<String, Object> map = new HashMap<>();
+		map.put("roundNo", String.valueOf(match.getRoundNo()));
+		map.put("player1Name", match.getPlayer1() != null ? match.getPlayer1().getDisplayName() : "");
+		map.put("player2Name", match.getPlayer2() != null ? match.getPlayer2().getDisplayName() : "");
+		map.put("score", match.getPlayer1Score() + " - " + match.getPlayer2Score());
+		/* Mã trận, bàn và giờ: ba thứ giúp phân biệt các thông báo với nhau. Một trọng
+		 * tài phụ trách nhiều trận cùng lúc sẽ nhận nhiều thông báo, mà nếu chỉ có tên
+		 * hai cơ thủ và số vòng thì họ không biết đứng bàn nào, lúc nào. */
+		map.put("code", match.getMatchCode() != null ? match.getMatchCode() : "");
+		map.put("tableNo", match.getTableNo() != null ? String.valueOf(match.getTableNo()) : "chưa gán");
+		String scheduledAt = formatInstantDateTime(match.getScheduledAt());
+		map.put("scheduledAt", scheduledAt.isEmpty() ? "chưa xếp giờ" : scheduledAt);
+		ctx.put("match", map);
 		if (match.getTournament() != null) {
 			putTournament(ctx, match.getTournament());
 		}
@@ -97,7 +106,8 @@ public class MailContextBuilder {
 		ctx.put("user", Map.of("fullName", "Nguyễn Văn A", "email", "nguyenvana@example.com"));
 		ctx.put("tournament", Map.of("name", "Giải Bi-a Mở Rộng 2026", "startAt", "20/08/2026", "status", "DRAW_DONE"));
 		ctx.put("registration", Map.of("playerFullName", "Nguyễn Văn A", "status", "APPROVED"));
-		ctx.put("match", Map.of("roundNo", "1", "player1Name", "Nguyễn Văn A", "player2Name", "Trần Văn B", "score", "0 - 0"));
+		ctx.put("match", Map.of("roundNo", "1", "player1Name", "Nguyễn Văn A", "player2Name", "Trần Văn B",
+				"score", "0 - 0", "code", "R1-M3", "tableNo", "4", "scheduledAt", "20/08/2026 14:30"));
 		ctx.put("payment", Map.of("amount", "200,000 VNĐ", "checkoutUrl", "https://pay.payos.vn/sample"));
 		ctx.put("custom", Map.of("otp", "123456", "subject", "Thông báo từ ban tổ chức", "message", "Nội dung thông báo mẫu."));
 		return ctx;
@@ -121,5 +131,11 @@ public class MailContextBuilder {
 	private String formatInstant(java.time.Instant instant) {
 		if (instant == null) return "";
 		return instant.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toLocalDate().toString();
+	}
+
+	/** Có cả giờ phút — giờ thi đấu của một trận không thể chỉ ghi ngày. */
+	private String formatInstantDateTime(java.time.Instant instant) {
+		if (instant == null) return "";
+		return DATE_TIME_VN.format(instant.atZone(ZoneId.of("Asia/Ho_Chi_Minh")));
 	}
 }
