@@ -89,8 +89,9 @@ public enum ErrorCode {
 	MATCH_SCHEDULE_BEFORE_FEEDER("MATCH_008", "Không thể xếp trận này trước khi các trận vòng trước (tứ kết/bán kết…) kết thúc", HttpStatus.CONFLICT),
 	MATCH_SCHEDULE_BEFORE_START("MATCH_010", "Không thể xếp giờ thi đấu trước thời gian bắt đầu giải", HttpStatus.BAD_REQUEST),
 	REFEREE_NOT_IN_BRANCH("MATCH_011", "Trọng tài phải thuộc chi nhánh tổ chức giải", HttpStatus.BAD_REQUEST),
-	REFEREE_BUSY_ONGOING("MATCH_012", "Trọng tài đang điều hành một trận khác chưa kết thúc — không thể phân công thêm", HttpStatus.CONFLICT),
-	REFEREE_TIME_CONFLICT("MATCH_013", "Trọng tài đã được phân công một trận khác trùng khung giờ", HttpStatus.CONFLICT),
+	/* MATCH_012 (REFEREE_BUSY_ONGOING) và MATCH_013 (REFEREE_TIME_CONFLICT) đã được gỡ:
+	 * một trọng tài giờ được phép phụ trách nhiều trận cùng lúc. Đừng dùng lại hai mã này
+	 * cho lỗi khác — client cũ có thể vẫn đang đối chiếu theo mã. */
 	MATCH_TABLE_TIME_CONFLICT("MATCH_009", "Bàn này đã có trận khác thi đấu trong khung giờ đó — hãy chọn bàn/giờ khác", HttpStatus.CONFLICT),
 	MATCH_EARLY_END_NOT_CONFIRMED("MATCH_014", "Chưa ai đạt điểm race-to — cần xác nhận kết thúc sớm (bỏ cuộc/chấn thương)", HttpStatus.CONFLICT),
 	MATCH_SCORE_BOTH_REACHED_TARGET("MATCH_015", "Không thể cả hai cơ thủ cùng đạt điểm race-to — chỉ một người thắng ván cuối. Sửa lại tỷ số, hoặc dùng Walkover nếu có cơ thủ bỏ cuộc", HttpStatus.CONFLICT),

@@ -140,13 +140,19 @@ public class MatchServiceImpl implements MatchService {
         if (request.getScheduledAt() != null && !Boolean.TRUE.equals(request.getResetToAuto())) {
             validateManualSchedule(match, Boolean.TRUE.equals(request.getIgnoreTableConflict()));
         }
-        // Validate trọng tài không trùng giờ / đang bận (khi thực sự gán trọng tài mới)
-        boolean assigningReferee = request.getAssignedStaffId() != null
-                && !Boolean.TRUE.equals(request.getResetToAuto())
-                && !Boolean.TRUE.equals(request.getClearAssignedStaff());
-        if (assigningReferee) {
-            validateRefereeAvailability(match);
-        }
+        /* KHÔNG kiểm tra trọng tài có "rảnh" hay không.
+         *
+         * Một trọng tài được phép phụ trách NHIỀU trận cùng lúc — đây là cách các giải
+         * thực tế vận hành: một người đứng giữa vài bàn kề nhau, chạy qua lại ghi tỉ số.
+         * Ràng buộc "một trọng tài một trận" trước đây (REFEREE_BUSY_ONGOING /
+         * REFEREE_TIME_CONFLICT) đã được bỏ theo yêu cầu nghiệp vụ.
+         *
+         * Việc cân tải chuyển sang cho người phân công tự quyết: FE hiện số trận mỗi
+         * trọng tài đang giữ và cảnh báo trận trùng giờ, nhưng không chặn.
+         *
+         * Lưu ý: bulkAssignMatches() vốn CHƯA từng gọi hàm kiểm tra này, nên trước đây
+         * gán hàng loạt đã lách được ràng buộc mà gán đơn thì không. Giờ hai đường đi
+         * hành xử giống nhau. */
         matchRepository.save(match);
         // Đồng bộ lại lịch xung quanh (tôn trọng trận đã khóa / trả về auto)
         matchSchedulingService.reschedule(match.getTournament().getId());
@@ -156,38 +162,6 @@ public class MatchServiceImpl implements MatchService {
             publishRefereeAssignedEvent(match);
         }
         return matchRepository.findById(matchId).orElse(match);
-    }
-
-    /**
-     * Trọng tài không thể giám sát 2 trận cùng lúc. Xét TOÀN CỤC mọi trận của trọng tài (mọi giải):
-     * - Đang có trận IN_PROGRESS (kể cả đã quá giờ dự kiến) → chặn.
-     * - Trùng khung giờ [start, end) với trận khác chưa kết thúc → chặn.
-     */
-    private void validateRefereeAvailability(Match match) {
-        User staff = match.getAssignedStaff();
-        if (staff == null) return;
-
-        List<Match> refMatches = matchRepository.findByAssignedStaffId(staff.getId(), null, null, null);
-        Instant mStart = match.getScheduledAt();
-        Instant mEnd = matchEnd(match);
-
-        for (Match other : refMatches) {
-            if (other.getId().equals(match.getId())) continue;
-            if (MatchStatus.valueOf(other.getStatus()).isResolved()) continue;
-
-            // Đang điều hành trận dở → không rảnh
-            if (MatchStatus.IN_PROGRESS.getValue().equals(other.getStatus())) {
-                throw new BusinessException(ErrorCode.REFEREE_BUSY_ONGOING);
-            }
-            // Trùng khung giờ với trận PENDING khác
-            if (mStart != null && mEnd != null) {
-                Instant oStart = other.getScheduledAt();
-                Instant oEnd = matchEnd(other);
-                if (oStart != null && oEnd != null && mStart.isBefore(oEnd) && oStart.isBefore(mEnd)) {
-                    throw new BusinessException(ErrorCode.REFEREE_TIME_CONFLICT);
-                }
-            }
-        }
     }
 
     private void publishRefereeAssignedEvent(Match match) {
@@ -201,6 +175,7 @@ public class MatchServiceImpl implements MatchService {
                 .variables(variables)
                 .explicitRecipients(List.of(new MailRecipient(staff.getId(), staff.getEmail())))
                 .entityKey("MATCH-REFEREE-" + match.getId() + "-" + staff.getId())
+                .matchId(match.getId())
                 .build());
     }
 
@@ -294,21 +269,42 @@ public class MatchServiceImpl implements MatchService {
     public List<Match> bulkAssignMatches(List<Long> matchIds, AssignMatchRequest request, Long updatedByUserId) {
         List<Match> matches = matchRepository.findAllById(matchIds);
         List<Match> updated = new ArrayList<>();
+        // Trọng tài cũ phải chụp TRƯỚC applyAssignment — sau đó match đã bị ghi đè, không đọc lại được.
+        Map<Long, Long> staffBeforeAssign = new HashMap<>();
         Long tournamentId = null;
         for (Match match : matches) {
             assertActorCanOperateOnMatch(updatedByUserId, match);
+            Long oldStaffId = match.getAssignedStaff() != null ? match.getAssignedStaff().getId() : null;
             try {
                 applyAssignment(match, request);
             } catch (BusinessException ex) {
                 // Trận đã resolved (COMPLETED/WALKOVER/BYE) không cho đổi bàn/giờ — bỏ qua, không fail cả batch.
                 continue;
             }
+            staffBeforeAssign.put(match.getId(), oldStaffId);
             updated.add(match);
             tournamentId = match.getTournament().getId();
         }
         List<Match> saved = matchRepository.saveAll(updated);
         if (tournamentId != null) {
             matchSchedulingService.reschedule(tournamentId);
+        }
+
+        /* MỘT thông báo cho MỖI trận — không gộp thành một thông báo chung.
+         *
+         * Trọng tài cần biết cụ thể từng trận: mã trận, bàn số mấy, mấy giờ. Một tin
+         * "bạn được phân công 5 trận" thì họ vẫn phải mở app tra lại từng trận.
+         *
+         * `entityKey` chứa matchId nên MailAutomationEventListener sinh idempotencyKey
+         * khác nhau cho từng trận → 5 trận ra đúng 5 thông báo, không bị chống-trùng gộp lại.
+         *
+         * Phát SAU reschedule() vì reschedule có thể đổi giờ thi đấu, mà giờ lại nằm
+         * trong nội dung thông báo. Cùng thứ tự với assignMatch(). */
+        for (Match match : saved) {
+            Long newStaffId = match.getAssignedStaff() != null ? match.getAssignedStaff().getId() : null;
+            if (newStaffId != null && !newStaffId.equals(staffBeforeAssign.get(match.getId()))) {
+                publishRefereeAssignedEvent(match);
+            }
         }
         return saved;
     }
@@ -561,6 +557,7 @@ public class MatchServiceImpl implements MatchService {
                 .variables(variables)
                 .explicitRecipients(recipients)
                 .entityKey("MATCH-" + match.getId())
+                .matchId(match.getId())
                 .build());
     }
 

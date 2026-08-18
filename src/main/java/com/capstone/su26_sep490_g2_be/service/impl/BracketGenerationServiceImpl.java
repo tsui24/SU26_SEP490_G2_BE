@@ -630,6 +630,32 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
     }
 
     /* ═══════════════════════════════════════════════════════════
+     *  CANCEL DRAW — DRAW_PREVIEW → REGISTRATION_CLOSED
+     * ═══════════════════════════════════════════════════════════ */
+
+    @Override
+    @Transactional
+    public void cancelDraw(Long tournamentId, Long actorUserId) {
+        // Cùng khoá PESSIMISTIC_WRITE với generate(): "huỷ" và "bốc lại" bắn gần nhau phải xếp
+        // hàng, không được xen nhau giữa lúc một bên đọc trạng thái và bên kia đang xoá.
+        Tournament t = tournamentRepository.findByIdWithLock(tournamentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        assertActorCanAccessTournament(actorUserId, t);
+
+        String currentStatus = t.getStatus();
+        if (!TournamentStatus.DRAW_PREVIEW.getValue().equals(currentStatus)) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION);
+        }
+
+        clearExistingBracket(tournamentId);
+
+        t.setStatus(TournamentStatus.REGISTRATION_CLOSED.getValue());
+        tournamentRepository.save(t);
+        tournamentAuditService.recordChange(t, currentStatus, TournamentStatus.REGISTRATION_CLOSED.getValue(),
+                actorUserId, "Huỷ bốc thăm — xoá bracket nháp");
+    }
+
+    /* ═══════════════════════════════════════════════════════════
      *  CONFIRM DRAW — DRAW_PREVIEW → DRAW_DONE
      * ═══════════════════════════════════════════════════════════ */
 
