@@ -22,7 +22,9 @@ public enum AnalyticsMetric {
 	AVG_FILL_RATE("Tỷ lệ lấp đầy TB (%)", FactKind.TOURNAMENT),
 	COMPLETION_RATE("Tỷ lệ hoàn thành trận đấu (%)", FactKind.TOURNAMENT),
 	PRIZE_POOL("Tổng tiền thưởng (cấu hình)", FactKind.TOURNAMENT),
-	NET_PROFIT("Lợi nhuận ròng (doanh thu - tiền thưởng)", FactKind.TOURNAMENT),
+	OTHER_INCOME("Thu khác (tài trợ, quyên góp...)", FactKind.TOURNAMENT),
+	EXPENSE("Chi phí phát sinh", FactKind.TOURNAMENT),
+	NET_PROFIT("Lợi nhuận ròng (doanh thu + thu khác - tiền thưởng - chi phí)", FactKind.TOURNAMENT),
 
 	REGISTRATION_COUNT("Số lượt đăng ký", FactKind.REGISTRATION),
 	APPROVAL_RATE("Tỷ lệ duyệt đăng ký (%)", FactKind.REGISTRATION),

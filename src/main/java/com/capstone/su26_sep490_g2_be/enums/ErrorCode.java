@@ -112,6 +112,7 @@ public enum ErrorCode {
 	PARTICIPANT_SEED_OUT_OF_RANGE("TOURNAMENT_016", "Số hạt giống vượt quá số người tối đa của giải", HttpStatus.BAD_REQUEST),
 	TOURNAMENT_NOT_ENOUGH_PARTICIPANTS("TOURNAMENT_014", "Cần tối thiểu 2 người tham gia mới có thể bốc thăm", HttpStatus.CONFLICT),
 	DRAW_SWAP_INVALID_SLOT("TOURNAMENT_015", "Tên ô không hợp lệ — chỉ nhận player1 hoặc player2", HttpStatus.BAD_REQUEST),
+	TOURNAMENT_FINANCE_LOCKED("TOURNAMENT_017", "Giải đã hoàn thành hoặc đã hủy — không thể thêm/sửa/xóa thu chi", HttpStatus.CONFLICT),
 
 	// Payment
 	PAYMENT_CREATE_FAILED("PAYMENT_001", "Tạo đơn thanh toán thất bại", HttpStatus.BAD_GATEWAY),

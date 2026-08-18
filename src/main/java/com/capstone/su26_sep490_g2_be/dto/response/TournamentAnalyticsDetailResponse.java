@@ -19,6 +19,8 @@ public class TournamentAnalyticsDetailResponse {
     private BigDecimal entryFee;
     private BigDecimal prizePool;
     private String prizeDescription;
+    private BigDecimal otherIncome;
+    private BigDecimal expense;
     private BigDecimal netProfit;
     private Integer maxParticipants;
     private Instant startAt;

@@ -58,6 +58,7 @@ import com.capstone.su26_sep490_g2_be.repository.TournamentFormatDefinitionRepos
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentResultRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.TournamentFinanceService;
 import com.capstone.su26_sep490_g2_be.service.AnalyticsService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -106,6 +107,12 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("dd/MM");
 	private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("MM/yyyy");
 	private static final String UNKNOWN_BRANCH_LABEL = "Không rõ chi nhánh";
+	/** Trạng thái mặc định cho bảng "Hiệu suất giải đấu" khi Owner/Manager chưa tự chọn lọc trạng
+	 * thái — mọi trạng thái trừ DRAFT (giải nháp chưa mở đăng ký thì không có gì để đánh giá). */
+	private static final List<String> DEFAULT_PERFORMANCE_STATUSES = Arrays.stream(TournamentStatus.values())
+			.filter(s -> s != TournamentStatus.DRAFT)
+			.map(TournamentStatus::name)
+			.toList();
 	/**
 	 * Ngưỡng "rủi ro rời bỏ": không có hoạt động (đăng ký) nào trong hơn N ngày tính đến hiện tại,
 	 * nhưng đã từng hoạt động ít nhất 1 lần với owner này. Con số 90 ngày (~1 quý) là lựa chọn sản
@@ -125,6 +132,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	private final TournamentFormatDefinitionRepository tournamentFormatDefinitionRepository;
 	private final UserRepository userRepository;
 	private final AnalyticsSavedViewRepository analyticsSavedViewRepository;
+	private final TournamentFinanceService tournamentFinanceService;
 	// Khởi tạo trực tiếp thay vì Spring bean — cùng convention với PayOSServiceImpl/PaymentController,
 	// tránh phụ thuộc vào ObjectMapper bean auto-config (không có sẵn trong project này).
 	private final ObjectMapper objectMapper = new ObjectMapper();
@@ -300,7 +308,13 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 		// Danh sách giải đấu KHÔNG lọc theo khoảng thời gian — "hiệu suất giải đấu" phải liệt kê đủ
 		// mọi giải của owner (trong phạm vi branch/loại bi/trạng thái đang lọc); chỉ riêng doanh thu
 		// mới scope theo [from,to] để khớp với phần còn lại của trang (KPI, xu hướng doanh thu...).
-		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds, gameTypes, statuses);
+		// Mặc định (chưa chọn trạng thái nào) ẩn giải NHÁP — chưa từng mở đăng ký thì không có VĐV/
+		// doanh thu/lợi nhuận gì để "đánh giá hiệu suất", chỉ là nhiễu. Chọn tường minh "Nháp" ở bộ
+		// lọc trạng thái thì vẫn hiện — chỉ default mới loại, không phải hành vi cứng.
+		List<String> effectiveStatuses = (statuses != null && !statuses.isEmpty())
+				? statuses
+				: DEFAULT_PERFORMANCE_STATUSES;
+		List<Tournament> allTournaments = ownerTournaments(ownerId, branchIds, gameTypes, effectiveStatuses);
 		List<Tournament> tournaments = allTournaments;
 		List<Long> tournamentIds = ids(allTournaments);
 
@@ -325,6 +339,10 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 			if (isResolved(m.getStatus())) counts[1]++;
 		}
 
+		// Thu khác (tài trợ...) và chi phí phát sinh (thuê bàn thêm, in ấn...) BQT tự nhập ở trang
+		// "Thu chi giải đấu" — cũng toàn thời gian như prizePool, không scope theo [from,to].
+		Map<Long, TournamentFinanceService.FinanceTotals> financeTotals = tournamentFinanceService.sumByTournamentIds(tournamentIds);
+
 		return tournaments.stream()
 				.map(t -> {
 					long participantCount = activeParticipantsByTournament.getOrDefault(t.getId(), 0L);
@@ -334,7 +352,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 					Double completionRate = mc[0] > 0 ? round1(mc[1] * 100.0 / mc[0]) : 0.0;
 					TournamentStatus statusEnum = safeStatus(t.getStatus());
 					BigDecimal prizePool = t.getPrizePool() != null ? t.getPrizePool() : BigDecimal.ZERO;
-					BigDecimal netProfit = allTimeRevenueByTournament.getOrDefault(t.getId(), BigDecimal.ZERO).subtract(prizePool);
+					TournamentFinanceService.FinanceTotals ft = financeTotals.get(t.getId());
+					BigDecimal otherIncome = ft != null ? ft.income() : BigDecimal.ZERO;
+					BigDecimal expense = ft != null ? ft.expense() : BigDecimal.ZERO;
+					BigDecimal netProfit = allTimeRevenueByTournament.getOrDefault(t.getId(), BigDecimal.ZERO)
+							.add(otherIncome).subtract(prizePool).subtract(expense);
 					return TournamentPerformanceItem.builder()
 							.id(t.getId())
 							.name(t.getName())
@@ -344,6 +366,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 							.fillRatePct(fillRate)
 							.revenue(revenueByTournament.getOrDefault(t.getId(), BigDecimal.ZERO))
 							.prizePool(prizePool)
+							.otherIncome(otherIncome)
+							.expense(expense)
 							.netProfit(netProfit)
 							.status(t.getStatus())
 							.statusLabel(statusEnum != null ? statusEnum.getDisplayName() : t.getStatus())
@@ -804,6 +828,12 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 		GameTypeDefinition gameTypeDef = gameTypeDefinitionRepository.findById(tournament.getGameType()).orElse(null);
 		TournamentFormatDefinition formatDef = tournamentFormatDefinitionRepository.findById(tournament.getFormat()).orElse(null);
 
+		TournamentFinanceService.FinanceTotals financeTotals = tournamentFinanceService
+				.sumByTournamentIds(List.of(tournamentId)).get(tournamentId);
+		BigDecimal otherIncome = financeTotals != null ? financeTotals.income() : BigDecimal.ZERO;
+		BigDecimal expense = financeTotals != null ? financeTotals.expense() : BigDecimal.ZERO;
+		BigDecimal prizePool = tournament.getPrizePool() != null ? tournament.getPrizePool() : BigDecimal.ZERO;
+
 		return TournamentAnalyticsDetailResponse.builder()
 				.id(tournament.getId())
 				.name(tournament.getName())
@@ -815,8 +845,9 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 				.entryFee(tournament.getEntryFee())
 				.prizePool(tournament.getPrizePool())
 				.prizeDescription(tournament.getPrizeDescription())
-				.netProfit(transactionStats.getTotalAmount().subtract(
-						tournament.getPrizePool() != null ? tournament.getPrizePool() : BigDecimal.ZERO))
+				.otherIncome(otherIncome)
+				.expense(expense)
+				.netProfit(transactionStats.getTotalAmount().add(otherIncome).subtract(prizePool).subtract(expense))
 				.maxParticipants(tournament.getMaxParticipants())
 				.startAt(tournament.getStartAt())
 				.endAt(tournament.getEndAt())
@@ -1203,6 +1234,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 		long matchTotal;
 		long matchCompleted;
 		BigDecimal prizePool = BigDecimal.ZERO;
+		BigDecimal otherIncome = BigDecimal.ZERO;
+		BigDecimal expense = BigDecimal.ZERO;
 		BigDecimal netProfit = BigDecimal.ZERO;
 	}
 
@@ -1227,6 +1260,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 			if (isResolved(m.getStatus())) c[1]++;
 		}
 
+		Map<Long, TournamentFinanceService.FinanceTotals> financeTotals = tournamentFinanceService.sumByTournamentIds(tournamentIds);
+
 		Map<List<String>, TournamentBucket> grouped = new LinkedHashMap<>();
 		TournamentBucket total = new TournamentBucket();
 		for (Tournament t : tournaments) {
@@ -1235,8 +1270,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 							? bucketLabel(t.getStartAt() != null ? t.getStartAt() : t.getCreatedAt(), granularity)
 							: tournamentDimensionValue(d, t, gameTypeNames))
 					.toList();
-			accumulateTournament(grouped.computeIfAbsent(key, k -> new TournamentBucket()), t, revenueByTournament, activeParticipantsByTournament, matchCounts);
-			accumulateTournament(total, t, revenueByTournament, activeParticipantsByTournament, matchCounts);
+			accumulateTournament(grouped.computeIfAbsent(key, k -> new TournamentBucket()), t, revenueByTournament, activeParticipantsByTournament, matchCounts, financeTotals);
+			accumulateTournament(total, t, revenueByTournament, activeParticipantsByTournament, matchCounts, financeTotals);
 		}
 
 		List<AnalyticsQueryResponse.Row> rows = grouped.entrySet().stream()
@@ -1249,7 +1284,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	}
 
 	private void accumulateTournament(TournamentBucket b, Tournament t, Map<Long, BigDecimal> revenueByTournament,
-			Map<Long, Long> activeParticipantsByTournament, Map<Long, long[]> matchCounts) {
+			Map<Long, Long> activeParticipantsByTournament, Map<Long, long[]> matchCounts,
+			Map<Long, TournamentFinanceService.FinanceTotals> financeTotals) {
 		b.count++;
 		if (t.getMaxParticipants() != null && t.getMaxParticipants() > 0) {
 			double fill = activeParticipantsByTournament.getOrDefault(t.getId(), 0L) * 100.0 / t.getMaxParticipants();
@@ -1261,8 +1297,13 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 		b.matchCompleted += mc[1];
 		BigDecimal prize = t.getPrizePool() != null ? t.getPrizePool() : BigDecimal.ZERO;
 		b.prizePool = b.prizePool.add(prize);
+		TournamentFinanceService.FinanceTotals ft = financeTotals.get(t.getId());
+		BigDecimal otherIncome = ft != null ? ft.income() : BigDecimal.ZERO;
+		BigDecimal expense = ft != null ? ft.expense() : BigDecimal.ZERO;
+		b.otherIncome = b.otherIncome.add(otherIncome);
+		b.expense = b.expense.add(expense);
 		BigDecimal revenue = revenueByTournament.getOrDefault(t.getId(), BigDecimal.ZERO);
-		b.netProfit = b.netProfit.add(revenue.subtract(prize));
+		b.netProfit = b.netProfit.add(revenue).add(otherIncome).subtract(prize).subtract(expense);
 	}
 
 	private Map<String, Object> finalizeTournamentMetrics(List<AnalyticsMetric> mets, TournamentBucket b) {
@@ -1273,6 +1314,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 				case AVG_FILL_RATE -> b.fillRateN > 0 ? round1(b.fillRateSum / b.fillRateN) : 0.0;
 				case COMPLETION_RATE -> b.matchTotal > 0 ? round1(b.matchCompleted * 100.0 / b.matchTotal) : 0.0;
 				case PRIZE_POOL -> b.prizePool;
+				case OTHER_INCOME -> b.otherIncome;
+				case EXPENSE -> b.expense;
 				case NET_PROFIT -> b.netProfit;
 				default -> null;
 			});

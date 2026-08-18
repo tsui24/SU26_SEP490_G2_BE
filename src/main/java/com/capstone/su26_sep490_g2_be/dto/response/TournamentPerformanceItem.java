@@ -16,6 +16,8 @@ public class TournamentPerformanceItem {
     private Double fillRatePct;
     private BigDecimal revenue;
     private BigDecimal prizePool;
+    private BigDecimal otherIncome;
+    private BigDecimal expense;
     private BigDecimal netProfit;
     private String status;
     private String statusLabel;

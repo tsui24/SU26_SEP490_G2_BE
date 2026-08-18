@@ -249,7 +249,8 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 		Sheet sheet = workbook.createSheet("Giải đấu");
 		Row head = sheet.createRow(0);
 		String[] cols = {"Tên giải đấu", "Chi nhánh", "Số VĐV", "Tối đa", "Tỷ lệ lấp đầy (%)",
-				"Doanh thu (VNĐ)", "Tiền thưởng (VNĐ)", "Lợi nhuận (VNĐ)", "Trạng thái", "Tỷ lệ hoàn thành (%)"};
+				"Doanh thu (VNĐ)", "Thu khác (VNĐ)", "Tiền thưởng (VNĐ)", "Chi phí (VNĐ)", "Lợi nhuận (VNĐ)",
+				"Trạng thái", "Tỷ lệ hoàn thành (%)"};
 		for (int i = 0; i < cols.length; i++) header(head, i, cols[i], headerStyle);
 
 		int r = 1;
@@ -261,10 +262,12 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 			row.createCell(3).setCellValue(item.getMaxParticipants() != null ? item.getMaxParticipants() : 0);
 			row.createCell(4).setCellValue(item.getFillRatePct() != null ? item.getFillRatePct() : 0);
 			row.createCell(5).setCellValue(item.getRevenue() != null ? item.getRevenue().doubleValue() : 0);
-			row.createCell(6).setCellValue(item.getPrizePool() != null ? item.getPrizePool().doubleValue() : 0);
-			row.createCell(7).setCellValue(item.getNetProfit() != null ? item.getNetProfit().doubleValue() : 0);
-			row.createCell(8).setCellValue(item.getStatusLabel());
-			row.createCell(9).setCellValue(item.getCompletionRatePct() != null ? item.getCompletionRatePct() : 0);
+			row.createCell(6).setCellValue(item.getOtherIncome() != null ? item.getOtherIncome().doubleValue() : 0);
+			row.createCell(7).setCellValue(item.getPrizePool() != null ? item.getPrizePool().doubleValue() : 0);
+			row.createCell(8).setCellValue(item.getExpense() != null ? item.getExpense().doubleValue() : 0);
+			row.createCell(9).setCellValue(item.getNetProfit() != null ? item.getNetProfit().doubleValue() : 0);
+			row.createCell(10).setCellValue(item.getStatusLabel());
+			row.createCell(11).setCellValue(item.getCompletionRatePct() != null ? item.getCompletionRatePct() : 0);
 		}
 		for (int i = 0; i < cols.length; i++) sheet.setColumnWidth(i, 22 * 256);
 	}
@@ -330,6 +333,8 @@ public class AnalyticsExcelServiceImpl implements AnalyticsExcelService {
 		r++;
 
 		r = kv(sheet, r, "Tổng doanh thu (VNĐ)", d.getTransactionStats().getTotalAmount());
+		r = kv(sheet, r, "Thu khác (VNĐ)", d.getOtherIncome());
+		r = kv(sheet, r, "Chi phí phát sinh (VNĐ)", d.getExpense());
 		r = kv(sheet, r, "Lợi nhuận (VNĐ)", d.getNetProfit());
 		r = kv(sheet, r, "Tổng số VĐV đang thi đấu", d.getParticipantStats().getActive());
 		r = kv(sheet, r, "Trận đã hoàn thành / tổng số trận", d.getMatchStats().getCompleted() + " / " + d.getMatchStats().getTotal());
