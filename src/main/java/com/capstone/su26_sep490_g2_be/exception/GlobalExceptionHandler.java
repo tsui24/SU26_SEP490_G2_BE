@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
@@ -100,6 +101,17 @@ public class GlobalExceptionHandler {
 						.success(false)
 						.code(ErrorCode.COMMON_INVALID_REQUEST.getCode())
 						.message("Thiếu tham số bắt buộc: " + ex.getParameterName())
+						.build());
+	}
+
+	@ExceptionHandler(MissingServletRequestPartException.class)
+	public ResponseEntity<ApiResponse<Void>> handleMissingPart(MissingServletRequestPartException ex) {
+		return ResponseEntity
+				.badRequest()
+				.body(ApiResponse.<Void>builder()
+						.success(false)
+						.code(ErrorCode.COMMON_INVALID_REQUEST.getCode())
+						.message("Thiếu phần bắt buộc: " + ex.getRequestPartName())
 						.build());
 	}
 

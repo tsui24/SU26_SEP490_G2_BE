@@ -622,7 +622,7 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 
 	private ConfigFieldDefinition getFieldDefinition(String fieldKey) {
 		return configFieldRepository.findById(fieldKey)
-				.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_FIELD_KEY));
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 	}
 
 	private static final Set<String> ALLOWED_DATA_TYPES = Set.of("INT", "BOOLEAN", "ENUM", "STRING");
