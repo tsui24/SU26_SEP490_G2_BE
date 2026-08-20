@@ -8,9 +8,13 @@ import com.capstone.su26_sep490_g2_be.dto.request.UpdateScoreRequest;
 import com.capstone.su26_sep490_g2_be.dto.response.StandingsEntryResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.*;
 import com.capstone.su26_sep490_g2_be.entity.MatchScoreEvent;
+import com.capstone.su26_sep490_g2_be.entity.Tournament;
+import com.capstone.su26_sep490_g2_be.entity.User;
 import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
 import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.UserRepository;
 import com.capstone.su26_sep490_g2_be.service.BracketGenerationService;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.MatchBroadcastService;
 import com.capstone.su26_sep490_g2_be.service.MatchService;
 import com.capstone.su26_sep490_g2_be.service.TournamentResultService;
@@ -39,6 +43,8 @@ public class MatchController {
     private final MatchBroadcastService broadcastService;
     private final TournamentResultService tournamentResultService;
     private final com.capstone.su26_sep490_g2_be.repository.TournamentRepository tournamentRepository;
+    private final UserRepository userRepository;
+    private final BranchAccessService branchAccessService;
 
     /* ─── Bracket generation ─────────────────────────────────── */
 
@@ -103,7 +109,8 @@ public class MatchController {
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/tournaments/{id}/draw/swap")
     public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> swapManager(
-            @PathVariable Long id, @Valid @RequestBody SwapPlayersRequest req) {
+            Authentication auth, @PathVariable Long id, @Valid @RequestBody SwapPlayersRequest req) {
+        assertManagerCanAccessTournament(auth, id);
         bracketGenerationService.swapPlayers(id, req.getMatchId1(), req.getSlot1(), req.getMatchId2(), req.getSlot2());
         return ResponseEntity.ok(ApiResponse.success("Đã đổi chỗ", buildStageResponse(id)));
     }
@@ -120,7 +127,9 @@ public class MatchController {
     @Operation(summary = "Danh sách stage + trận đấu (Manager)")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/tournaments/{id}/stages")
-    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> stagesManager(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> stagesManager(
+            Authentication auth, @PathVariable Long id) {
+        assertManagerCanAccessTournament(auth, id);
         return ResponseEntity.ok(ApiResponse.success(buildStageResponse(id)));
     }
 
@@ -182,7 +191,9 @@ public class MatchController {
     @Operation(summary = "[PROGRESSIVE] Chuyển sang giai đoạn tiếp theo (Manager)")
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/manager/tournaments/{id}/advance-stage")
-    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> advanceStageManager(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<StageWithMatchesResponse>>> advanceStageManager(
+            Authentication auth, @PathVariable Long id) {
+        assertManagerCanAccessTournament(auth, id);
         bracketGenerationService.advanceProgressiveStage(id);
         return ResponseEntity.ok(ApiResponse.success("Đã chuyển giai đoạn", buildStageResponse(id)));
     }
@@ -199,7 +210,8 @@ public class MatchController {
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/tournaments/{id}/stage-standings")
     public ResponseEntity<ApiResponse<List<StandingsEntryResponse>>> stageStandingsManager(
-            @PathVariable Long id, @RequestParam Long stageId) {
+            Authentication auth, @PathVariable Long id, @RequestParam Long stageId) {
+        assertManagerCanAccessTournament(auth, id);
         return ResponseEntity.ok(ApiResponse.success(bracketGenerationService.computeStageStandings(stageId)));
     }
 
@@ -285,7 +297,9 @@ public class MatchController {
     @Operation(summary = "Danh sách trọng tài khả dụng cho giải (Manager)")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/manager/tournaments/{id}/referees")
-    public ResponseEntity<ApiResponse<List<StaffBriefResponse>>> refereesManager(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<StaffBriefResponse>>> refereesManager(
+            Authentication auth, @PathVariable Long id) {
+        assertManagerCanAccessTournament(auth, id);
         return ResponseEntity.ok(ApiResponse.success(matchService.getRefereesForTournament(id)));
     }
 
@@ -511,5 +525,24 @@ public class MatchController {
             throw new BusinessException(ErrorCode.AUTH_INVALID_TOKEN);
         }
         return (Long) auth.getCredentials();
+    }
+
+    /**
+     * Manager chỉ được xem/thao tác các route con của giải đấu (stages, stage-standings, referees,
+     * đổi chỗ R1, chuyển giai đoạn) nếu giải thuộc chi nhánh mình được cấp quyền. Draw/confirm/
+     * populate-final-bracket tự chặn đúng vì service nhận actorUserId (xem
+     * BracketGenerationServiceImpl.assertActorCanAccessTournament) — nhưng nhóm route này gọi
+     * thẳng xuống service không nhận actorUserId nên trước đây chưa được chặn ở tầng nào cả, lộ dữ
+     * liệu (và cho phép thao tác) của giải đấu chi nhánh khác. Owner giữ nguyên full-access.
+     */
+    private void assertManagerCanAccessTournament(Authentication auth, Long tournamentId) {
+        User actor = userRepository.findById(extractUserId(auth))
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        Long branchId = tournament.getBranch() != null ? tournament.getBranch().getId() : null;
+        if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
     }
 }
