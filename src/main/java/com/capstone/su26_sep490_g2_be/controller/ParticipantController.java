@@ -7,6 +7,7 @@ import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ImportParticipantResultResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ParticipantImportPreviewResponse;
 import com.capstone.su26_sep490_g2_be.dto.response.ParticipantResponse;
+import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.Participant;
 import com.capstone.su26_sep490_g2_be.entity.Registration;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
@@ -24,6 +25,7 @@ import com.capstone.su26_sep490_g2_be.repository.ParticipantMemberRepository;
 import com.capstone.su26_sep490_g2_be.repository.ParticipantRepository;
 import com.capstone.su26_sep490_g2_be.repository.RegistrationRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.impl.MailContextBuilder;
 import com.capstone.su26_sep490_g2_be.util.ParticipantMemberFactory;
 import com.capstone.su26_sep490_g2_be.util.SecurityUtil;
@@ -66,6 +68,7 @@ public class ParticipantController {
     private final SecurityUtil securityUtil;
     private final ApplicationEventPublisher eventPublisher;
     private final MailContextBuilder mailContextBuilder;
+    private final BranchAccessService branchAccessService;
 
     /* ── Shared: list participants ── */
     @Operation(summary = "Danh sách người tham gia (Owner)")
@@ -168,8 +171,11 @@ public class ParticipantController {
 
     @Operation(summary = "Rút lui khỏi giải (Manager)")
     @PatchMapping("/api/v1/manager/participants/{participantId}/withdraw")
-    public ResponseEntity<ApiResponse<ParticipantResponse>> withdrawManager(@PathVariable Long participantId) {
-        return ResponseEntity.ok(ApiResponse.success(withdraw(participantId)));
+    public ResponseEntity<ApiResponse<ParticipantResponse>> withdrawManager(
+            @PathVariable Long participantId, Authentication authentication) {
+        Participant participant = findParticipantWithDetails(participantId);
+        assertManagerCanAccessParticipant(authentication, participant);
+        return ResponseEntity.ok(ApiResponse.success(withdraw(participant)));
     }
 
     /* ── Sửa lại số hạt giống (VD import/nhập tay bị sai) ── */
@@ -187,8 +193,26 @@ public class ParticipantController {
     @PatchMapping("/api/v1/manager/participants/{participantId}/seed-no")
     @Transactional
     public ResponseEntity<ApiResponse<ParticipantResponse>> updateSeedNoManager(
-            @PathVariable Long participantId, @Valid @RequestBody UpdateSeedNoRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(updateSeedNo(participantId, request)));
+            @PathVariable Long participantId, @Valid @RequestBody UpdateSeedNoRequest request,
+            Authentication authentication) {
+        Participant participant = findParticipantWithDetails(participantId);
+        assertManagerCanAccessParticipant(authentication, participant);
+        return ResponseEntity.ok(ApiResponse.success(updateSeedNo(participant, request)));
+    }
+
+    /**
+     * Manager chỉ được thao tác participant thuộc chi nhánh mình được cấp quyền — trước đây
+     * withdraw/seed-no (Manager) gọi thẳng helper dùng chung với route Owner, không hề kiểm tra
+     * chi nhánh, nên 1 Manager rút/đổi hạt giống được cả participant của chi nhánh khác không do
+     * mình quản lý. Owner không bị chặn ở đây (canActorAccessBranch cho Owner tự kiểm tra sở hữu).
+     */
+    private void assertManagerCanAccessParticipant(Authentication authentication, Participant participant) {
+        User actor = securityUtil.resolveCurrentUser(authentication);
+        Branch branch = participant.getTournament().getBranch();
+        Long branchId = branch != null ? branch.getId() : null;
+        if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
     }
 
     /* ─────────────────── Private helpers ─────────────────── */
@@ -330,7 +354,10 @@ public class ParticipantController {
      * seeding chỉ đọc lúc bốc thăm, để tránh Owner tưởng nhầm là sửa xong bracket sẽ đổi theo.
      */
     private ParticipantResponse updateSeedNo(Long participantId, UpdateSeedNoRequest request) {
-        Participant participant = findParticipantWithDetails(participantId);
+        return updateSeedNo(findParticipantWithDetails(participantId), request);
+    }
+
+    private ParticipantResponse updateSeedNo(Participant participant, UpdateSeedNoRequest request) {
         Tournament tournament = participant.getTournament();
 
         if (!TournamentStatus.isRosterEditable(tournament.getStatus())) {
@@ -343,7 +370,7 @@ public class ParticipantController {
             throw new BusinessException(ErrorCode.PARTICIPANT_SEED_OUT_OF_RANGE);
         }
         if (newSeedNo != null && participantRepository.existsByTournamentIdAndSeedNoAndStatusAndIdNot(
-                tournament.getId(), newSeedNo, ParticipantStatus.ACTIVE.getValue(), participantId)) {
+                tournament.getId(), newSeedNo, ParticipantStatus.ACTIVE.getValue(), participant.getId())) {
             throw new BusinessException(ErrorCode.PARTICIPANT_SEED_DUPLICATE);
         }
 
@@ -353,7 +380,10 @@ public class ParticipantController {
     }
 
     private ParticipantResponse withdraw(Long participantId) {
-        Participant participant = findParticipantWithDetails(participantId);
+        return withdraw(findParticipantWithDetails(participantId));
+    }
+
+    private ParticipantResponse withdraw(Participant participant) {
         participant.setStatus(ParticipantStatus.WITHDRAWN.getValue());
         // Giải phóng số hạt giống ngay khi rút lui — nếu không, ràng buộc unique
         // (tournament_id, seed_no) ở DB vẫn giữ chỗ vì nó không phân biệt theo status, khiến

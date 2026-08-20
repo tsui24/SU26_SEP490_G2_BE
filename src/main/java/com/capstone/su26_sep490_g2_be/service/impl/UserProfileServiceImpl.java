@@ -64,24 +64,38 @@ public class UserProfileServiceImpl implements UserProfileService {
 					"Hạng cơ thủ không hợp lệ — chỉ nhận CN, A đến L, hoặc UNKNOWN");
 		}
 
+		// Cập nhật kiểu PATCH: trường nào client không gửi lên (null) thì giữ nguyên giá trị cũ.
+		// Trước đây mọi trường bị ghi thẳng xuống profile/user kể cả khi null, nên 1 request chỉ
+		// sửa 1-2 trường (cách gọi API phổ biến nhất — chỉ gửi trường vừa đổi) sẽ vô tình xóa sạch
+		// mọi trường còn lại về null/mặc định. fullName là trường bắt buộc (@NotBlank) nên luôn ghi.
 		profile.setFullName(request.getFullName());
-		profile.setDisplayName(request.getDisplayName());
-		profile.setAvatarUrl(AvatarUrlResolver.normalizeForStorage(
-				request.getAvatarUrl(), minioProperties.getBucket()));
-		profile.setDateOfBirth(request.getDateOfBirth());
-		profile.setGender(request.getGender());
-		profile.setBio(request.getBio());
+		if (request.getDisplayName() != null) {
+			profile.setDisplayName(request.getDisplayName());
+		}
+		if (request.getAvatarUrl() != null) {
+			profile.setAvatarUrl(AvatarUrlResolver.normalizeForStorage(
+					request.getAvatarUrl(), minioProperties.getBucket()));
+		}
+		if (request.getDateOfBirth() != null) {
+			profile.setDateOfBirth(request.getDateOfBirth());
+		}
+		if (request.getGender() != null) {
+			profile.setGender(request.getGender());
+		}
+		if (request.getBio() != null) {
+			profile.setBio(request.getBio());
+		}
 
-		// Chỉ cập nhật billiardRank nếu là PLAYER (chuẩn hoá rỗng → UNKNOWN)
-		if (isPlayer) {
+		// Chỉ cập nhật billiardRank nếu là PLAYER và có gửi lên (chuẩn hoá rỗng → UNKNOWN)
+		if (isPlayer && request.getBilliardRank() != null) {
 			profile.setBilliardRank(BilliardRank.fromNullable(request.getBilliardRank()).name());
 		}
-		user.setEmail(user.getEmail());
-		if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())
-				&& userRepository.existsByPhone(request.getPhone())) {
-			throw new BusinessException(ErrorCode.AUTH_PHONE_ALREADY_EXISTS);
+		if (request.getPhone() != null) {
+			if (!request.getPhone().equals(user.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
+				throw new BusinessException(ErrorCode.AUTH_PHONE_ALREADY_EXISTS);
+			}
+			user.setPhone(request.getPhone());
 		}
-		user.setPhone(request.getPhone());
 		User savedUser = userRepository.save(user);
 
 		profile = userProfileRepository.save(profile);
