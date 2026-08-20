@@ -332,7 +332,10 @@ public class AccountServiceImpl implements AccountService {
 	@Override
 	@Transactional(readOnly = true)
 	public EmployeeAccountResponse getStaffDetailForManager(List<Long> branchIds, Long id) {
-		User user = userRepository.findByIdAndStatus(id, UserStatus.ACTIVE)
+		// findById (không lọc status) — trước đây dùng findByIdAndStatus(ACTIVE) nên Manager xem chi
+		// tiết 1 staff đang LOCKED sẽ nhận 404 dù staff vẫn tồn tại, chỉ đang bị khóa (list/khóa/mở
+		// khóa vẫn thao tác đúng trên cùng bản ghi, chỉ riêng API xem chi tiết lọc nhầm).
+		User user = userRepository.findById(id)
 				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
 		if (!"STAFF".equals(user.getRole().getCode())) {
 			throw new BusinessException(ErrorCode.INVALID_EMPLOYEE_ROLE);
@@ -378,7 +381,10 @@ public class AccountServiceImpl implements AccountService {
 	@Override
 	@Transactional(readOnly = true)
 	public EmployeeAccountResponse getEmployeeDetail(Long ownerId, Long id) {
-		User user = userRepository.findByIdAndStatus(id, UserStatus.ACTIVE)
+		// findById (không lọc status) — trước đây dùng findByIdAndStatus(ACTIVE) nên Owner xem chi
+		// tiết 1 nhân viên đang LOCKED sẽ nhận 404 dù nhân viên vẫn tồn tại, chỉ đang bị khóa
+		// (deactivate/reactivate/list bên dưới đều đúng đắn dùng findById, không lọc status).
+		User user = userRepository.findById(id)
 				.orElseThrow(() -> new BusinessException(ErrorCode.EMPLOYEE_NOT_FOUND));
 		validateEmployeeRole(user);
 		if (ownerId != null && (user.getOwner() == null || !ownerId.equals(user.getOwner().getId()))) {

@@ -194,16 +194,24 @@ public class BracketGenerationServiceImpl implements BracketGenerationService {
         // Xếp vòng 1 theo thuật toán seeding chuẩn (seed cao được ưu tiên BYE, seed 1&2 tách 2 nửa...)
         assignSeededRound1(grid[1], participants, bracketSize);
 
-        // Optional third-place match
+        // Optional third-place match — CHỈ tạo khi cả 2 "bán kết" đều là trận thật (đủ 2 người).
+        // Nếu 1 trong 2 là BYE (n lẻ dồn hết byes vào R1, và với bracketSize=4 thì R1 chính là vòng
+        // bán kết), trận đó không có "người thua" thật, khiến trận 3RD vĩnh viễn thiếu 1 người —
+        // không ai start/complete được và chặn luôn việc kết thúc giải (phải walkover thủ công mới
+        // gỡ). Bỏ qua tạo trận 3RD trong trường hợp này; TournamentResultServiceImpl đã có sẵn
+        // fallback xếp đồng hạng 3-4 cho người thua bán kết khi không có trận 3RD.
         if (resolveThirdPlaceEnabled(t.getId(), t.getFormat()) && totalRounds >= 2) {
             int sfRound = totalRounds - 1;
-            Match thirdPlace = matchRepository.save(Match.builder()
-                    .tournament(t).stage(stage).bracketType("KNOCKOUT")
-                    .roundNo(totalRounds).positionNo(2).matchCode("3RD")
-                    .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "third_place"))
-                    .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
             int sfMc = bracketSize >> sfRound;
-            if (sfMc >= 2) {
+            boolean bothSemisPlayable = sfMc >= 2
+                    && !Boolean.TRUE.equals(grid[sfRound][1].getIsBye())
+                    && !Boolean.TRUE.equals(grid[sfRound][2].getIsBye());
+            if (bothSemisPlayable) {
+                Match thirdPlace = matchRepository.save(Match.builder()
+                        .tournament(t).stage(stage).bracketType("KNOCKOUT")
+                        .roundNo(totalRounds).positionNo(2).matchCode("3RD")
+                        .raceTo(safeResolveRaceTo(t.getId(), t.getFormat(), "third_place"))
+                        .status(MatchStatus.PENDING.getValue()).isBye(false).player1Score(0).player2Score(0).build());
                 grid[sfRound][1].setNextMatchLose(thirdPlace); grid[sfRound][1].setLoseSlot("player1");
                 grid[sfRound][2].setNextMatchLose(thirdPlace); grid[sfRound][2].setLoseSlot("player2");
                 matchRepository.save(grid[sfRound][1]);
