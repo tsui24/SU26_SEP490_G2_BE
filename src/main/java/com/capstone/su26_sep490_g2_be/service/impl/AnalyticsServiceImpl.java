@@ -1860,6 +1860,9 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 	private static final long MAX_RANGE_DAYS = 366L * 3;
 
 	private Instant clampRangeStart(Instant from, Instant to) {
+		if (from.isAfter(to)) {
+			throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST, "Ngày bắt đầu (from) phải trước hoặc bằng ngày kết thúc (to).");
+		}
 		if (java.time.Duration.between(from, to).toDays() > MAX_RANGE_DAYS) {
 			return to.minus(MAX_RANGE_DAYS, java.time.temporal.ChronoUnit.DAYS);
 		}

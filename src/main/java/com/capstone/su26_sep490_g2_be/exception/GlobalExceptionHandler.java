@@ -13,8 +13,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.format.DateTimeParseException;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -100,6 +102,37 @@ public class GlobalExceptionHandler {
 						.success(false)
 						.code(ErrorCode.COMMON_INVALID_REQUEST.getCode())
 						.message("Thiếu tham số bắt buộc: " + ex.getParameterName())
+						.build());
+	}
+
+	/**
+	 * "abc" ở 1 path variable/query param kiểu Long|Integer (vd /tournaments/{id}, ?branchId=)
+	 * khiến Spring không convert được — trước đây rơi về handleUnexpected() -> 500, dù bản chất
+	 * là lỗi input của client (400), giống hệt cách MissingServletRequestParameterException xử lý.
+	 */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+		return ResponseEntity
+				.badRequest()
+				.body(ApiResponse.<Void>builder()
+						.success(false)
+						.code(ErrorCode.COMMON_INVALID_REQUEST.getCode())
+						.message("Giá trị không hợp lệ cho tham số: " + ex.getName())
+						.build());
+	}
+
+	/**
+	 * from/to (hoặc YearMonth) sai định dạng ở các endpoint thống kê/phân tích — LocalDate.parse()/
+	 * YearMonth.parse() ném thẳng exception này, trước đây cũng rơi về handleUnexpected() -> 500.
+	 */
+	@ExceptionHandler(DateTimeParseException.class)
+	public ResponseEntity<ApiResponse<Void>> handleDateTimeParse(DateTimeParseException ex) {
+		return ResponseEntity
+				.badRequest()
+				.body(ApiResponse.<Void>builder()
+						.success(false)
+						.code(ErrorCode.COMMON_INVALID_REQUEST.getCode())
+						.message("Định dạng ngày/tháng không hợp lệ: " + ex.getParsedString())
 						.build());
 	}
 
