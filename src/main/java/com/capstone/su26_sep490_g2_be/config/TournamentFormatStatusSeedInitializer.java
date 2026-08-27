@@ -75,6 +75,26 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 		}
 		Branch branch = branchRepository.findByOwnerId(owner.getId()).stream().findFirst().orElse(null);
 
+		// Tên giải cũ từng lộ thẳng trạng thái ra tên ("...Hủy Vì Thiếu Người", "...Đang Thi Đấu"...)
+		// — không tự nhiên, dễ lộ ra đây là dữ liệu demo dàn dựng. Đổi sang tên bình thường, trạng
+		// thái vẫn giữ nguyên đúng như code bên dưới đã set. DB đã seed sẵn theo tên cũ từ lần chạy
+		// trước (tournamentExists() bên dưới khớp theo NAME) nên phải đổi tên tại chỗ ở đây trước,
+		// nếu không mỗi seedXxx() sẽ tưởng "tên mới chưa từng có" rồi tạo thêm 1 giải trùng lặp thay
+		// vì sửa giải cũ.
+		renameTournamentIfExists("Giải Loại Kép Sơ Khởi Xuân 2026", "Cúp Loại Kép Xuân Golden Break 2026");
+		renameTournamentIfExists("Cúp Loại Kép Mùa Hè Mở Rộng 2026", "Cúp Loại Kép Hè Rực Rỡ 2026");
+		renameTournamentIfExists("Giải Loại Kép Thu Đông Các Câu Lạc Bộ 2026", "Giải Loại Kép Liên Câu Lạc Bộ Thu Đông 2026");
+		renameTournamentIfExists("Cúp Loại Kép Tân Niên Chờ Xác Nhận 2026", "Cúp Loại Kép Tân Niên 2026");
+		renameTournamentIfExists("Giải Loại Kép Trung Thu Đang Thi Đấu 2026", "Giải Loại Kép Trung Thu Bi-a 2026");
+		renameTournamentIfExists("Cúp Loại Kép Hủy Vì Thiếu Người 2026", "Cúp Loại Kép Ngọc Bích 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Sơ Khởi Đông Xuân 2026", "Giải Vòng Tròn Đông Xuân Golden Break 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Mùa Hè Đang Mở Đăng Ký 2026", "Giải Vòng Tròn Mùa Hè Sôi Động 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Thu Đông Đã Đóng Đăng Ký 2026", "Giải Vòng Tròn Thu Đông Liên Câu Lạc Bộ 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Tân Niên Chờ Xác Nhận Lịch 2026", "Giải Vòng Tròn Tân Niên Cúp Vàng 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Trung Thu Vừa Xác Nhận Lịch 2026", "Giải Vòng Tròn Trung Thu Cây Cơ Đồng 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Cây Cơ Đồng Đang Thi Đấu 2026", "Giải Vòng Tròn Phong Trào Bi-a Xanh 2026");
+		renameTournamentIfExists("Giải Vòng Tròn Hủy Vì Mưa Bão 2026", "Giải Vòng Tròn Mưa Ngâu 2026");
+
 		// DOUBLE_ELIMINATION — 6 giải, phủ nốt các trạng thái còn thiếu
 		seedDeDraft(owner, branch);
 		seedDeOpenForRegistration(owner, branch);
@@ -101,7 +121,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedDeDraft(User owner, Branch branch) {
-		final String name = "Giải Loại Kép Sơ Khởi Xuân 2026";
+		final String name = "Cúp Loại Kép Xuân Golden Break 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -115,7 +135,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedDeOpenForRegistration(User owner, Branch branch) {
-		final String name = "Cúp Loại Kép Mùa Hè Mở Rộng 2026";
+		final String name = "Cúp Loại Kép Hè Rực Rỡ 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -135,7 +155,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedDeRegistrationClosed(User owner, Branch branch) {
-		final String name = "Giải Loại Kép Thu Đông Các Câu Lạc Bộ 2026";
+		final String name = "Giải Loại Kép Liên Câu Lạc Bộ Thu Đông 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -156,7 +176,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedDeDrawPreview(User owner, Branch branch) {
-		final String name = "Cúp Loại Kép Tân Niên Chờ Xác Nhận 2026";
+		final String name = "Cúp Loại Kép Tân Niên 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -179,7 +199,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedDeDrawDoneMidPlay(User owner, Branch branch) {
-		final String name = "Giải Loại Kép Trung Thu Đang Thi Đấu 2026";
+		final String name = "Giải Loại Kép Trung Thu Bi-a 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -212,7 +232,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedDeCancelled(User owner, Branch branch) {
-		final String name = "Cúp Loại Kép Hủy Vì Thiếu Người 2026";
+		final String name = "Cúp Loại Kép Ngọc Bích 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -234,7 +254,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	// ══════════════════════════════════════════════════════════════════════
 
 	private void seedPrrDraft(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Sơ Khởi Đông Xuân 2026";
+		final String name = "Giải Vòng Tròn Đông Xuân Golden Break 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -248,7 +268,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedPrrOpenForRegistration(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Mùa Hè Đang Mở Đăng Ký 2026";
+		final String name = "Giải Vòng Tròn Mùa Hè Sôi Động 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -268,7 +288,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedPrrRegistrationClosed(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Thu Đông Đã Đóng Đăng Ký 2026";
+		final String name = "Giải Vòng Tròn Thu Đông Liên Câu Lạc Bộ 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -289,7 +309,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedPrrDrawPreview(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Tân Niên Chờ Xác Nhận Lịch 2026";
+		final String name = "Giải Vòng Tròn Tân Niên Cúp Vàng 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -312,7 +332,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedPrrDrawDone(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Trung Thu Vừa Xác Nhận Lịch 2026";
+		final String name = "Giải Vòng Tròn Trung Thu Cây Cơ Đồng 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -340,7 +360,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedPrrInProgress(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Cây Cơ Đồng Đang Thi Đấu 2026";
+		final String name = "Giải Vòng Tròn Phong Trào Bi-a Xanh 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -374,7 +394,7 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	}
 
 	private void seedPrrCancelled(User owner, Branch branch) {
-		final String name = "Giải Vòng Tròn Hủy Vì Mưa Bão 2026";
+		final String name = "Giải Vòng Tròn Mưa Ngâu 2026";
 		if (tournamentExists(name)) return;
 
 		Tournament t = createTournament(name,
@@ -623,6 +643,22 @@ public class TournamentFormatStatusSeedInitializer implements CommandLineRunner 
 	private boolean tournamentExists(String name) {
 		return tournamentRepository.findAll().stream()
 				.anyMatch(t -> name.equals(t.getName()));
+	}
+
+	/**
+	 * Đổi tên giải đã seed từ lần chạy trước ({@code oldName}) sang tên mới ({@code newName}) —
+	 * chỉ khi tên hiện tại khớp CHÍNH XÁC {@code oldName}, để không đè lên tên admin đã tự sửa tay.
+	 * Cùng kiểu "migrate on boot" với {@code DataInitializer#migrateBranchIfRenamed}.
+	 */
+	private void renameTournamentIfExists(String oldName, String newName) {
+		tournamentRepository.findAll().stream()
+				.filter(t -> oldName.equals(t.getName()))
+				.findFirst()
+				.ifPresent(t -> {
+					t.setName(newName);
+					tournamentRepository.save(t);
+					log.info("Migrated tournament name '{}' -> '{}'", oldName, newName);
+				});
 	}
 
 	private static boolean isFinished(Match match) {
