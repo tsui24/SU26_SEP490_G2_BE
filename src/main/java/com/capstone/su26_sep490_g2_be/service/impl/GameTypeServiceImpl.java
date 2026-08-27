@@ -19,7 +19,7 @@ public class GameTypeServiceImpl implements GameTypeService {
 
 	@Override
 	public List<GameTypeDefinition> getActiveGameTypes() {
-		return repository.findByIsActiveTrueOrderByCreatedAtAsc();
+		return repository.findByIsActiveTrueOrderBySortOrderAscCreatedAtAsc();
 	}
 
 	@Override

@@ -199,7 +199,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 		Map<String, Long> counts = rows.stream()
 				.collect(Collectors.groupingBy(r -> (String) r[2], Collectors.counting()));
 
-		return gameTypeDefinitionRepository.findAllByOrderByCreatedAtAsc().stream()
+		return gameTypeDefinitionRepository.findAllByOrderBySortOrderAscCreatedAtAsc().stream()
 				.map(g -> StatusCountItem.builder()
 						.status(g.getCode())
 						.label(g.getName())

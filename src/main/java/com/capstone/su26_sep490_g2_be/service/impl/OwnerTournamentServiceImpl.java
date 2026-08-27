@@ -160,7 +160,7 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 
 	@Override
 	public OwnerGameTypeListResponse listGameTypes() {
-		List<OwnerGameTypeListItemResponse> items = gameTypeRepository.findByIsActiveTrueOrderByCreatedAtAsc().stream()
+		List<OwnerGameTypeListItemResponse> items = gameTypeRepository.findByIsActiveTrueOrderBySortOrderAscCreatedAtAsc().stream()
 				.sorted(Comparator.comparing(GameTypeDefinition::getSortOrder))
 				.map(gt -> OwnerGameTypeListItemResponse.builder()
 						.code(gt.getCode())
@@ -487,13 +487,21 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	@Override
 	@Transactional(readOnly = true)
 	public TournamentConfigFormResponse getConfigForm(Long userId, Long tournamentId, boolean enforceOwnership) {
+		return getConfigForm(userId, tournamentId, enforceOwnership, null);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public TournamentConfigFormResponse getConfigForm(Long userId, Long tournamentId, boolean enforceOwnership,
+			Integer sePhaseSizePreview) {
 		Tournament tournament = loadTournament(userId, tournamentId, enforceOwnership);
 		TournamentFormatDefinition format = getFormatDefinition(tournament.getFormat());
 		TournamentConfig config = getConfig(tournamentId);
 		List<FormatConfigField> formatFields = formatConfigFieldRepository
 				.findByFormatCodeAndIsVisibleToOwnerTrueOrderByIdAsc(tournament.getFormat());
 		List<FormatRaceToRule> formatRules = filterRealizedRaceToRules(tournament,
-				formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(tournament.getFormat()));
+				formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc(tournament.getFormat()),
+				sePhaseSizePreview);
 
 		List<TournamentConfigFormResponse.ConfigFieldItem> fields = formatFields.stream()
 				.map(ff -> toConfigFieldItem(tournamentId, ff))
@@ -718,6 +726,22 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		Set<String> allowed = STATUS_TRANSITIONS.getOrDefault(previousStatus, Set.of());
 		if (!allowed.contains(newStatus)) {
 			throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION);
+		}
+
+		/*
+		 * DOUBLE_ELIMINATION (CUT_TO_SE) không bao giờ đi qua IN_PROGRESS — assertMatchPlayable()
+		 * đã cho phép chấm điểm trận Nhánh Thắng/Thua ngay từ DRAW_DONE, và populateFinalBracket()
+		 * ("Điền bracket Last X") đòi status PHẢI đúng bằng DRAW_DONE mới chạy được. Bấm "Bắt đầu
+		 * giải đấu" (DRAW_DONE→IN_PROGRESS) giữa chừng sẽ khoá cứng, không còn cách nào điền được
+		 * bracket Last X nữa vì STATUS_TRANSITIONS không có đường lùi IN_PROGRESS→DRAW_DONE — dữ
+		 * liệu vẫn còn nhưng giải kẹt vĩnh viễn ở đó. Chặn thẳng ở đây để lỡ có UI nào khác quên ẩn
+		 * nút này thì vẫn không bấm hỏng được.
+		 */
+		if (TournamentStatus.IN_PROGRESS.getValue().equals(newStatus)
+				&& TournamentFormat.DOUBLE_ELIMINATION.getValue().equals(tournament.getFormat())) {
+			throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION,
+					"Giải Loại kép không cần bấm \"Bắt đầu giải đấu\" — các trận Nhánh Thắng/Thua đã "
+							+ "chấm điểm được ngay. Đợi 2 nhánh đấu xong rồi bấm \"Điền bracket Last X\".");
 		}
 
 		if (TournamentStatus.OPEN_FOR_REGISTRATION.getValue().equals(newStatus)) {
@@ -1371,6 +1395,16 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 	 * nguyên catalog gốc.
 	 */
 	private List<FormatRaceToRule> filterRealizedRaceToRules(Tournament tournament, List<FormatRaceToRule> formatRules) {
+		return filterRealizedRaceToRules(tournament, formatRules, null);
+	}
+
+	/**
+	 * @param sePhaseSizeOverride ghi đè giá trị {@code se_phase_size} đã lưu — dùng cho xem trước
+	 *   trước khi lưu (wizard bước 2, xem {@link OwnerTournamentService#getConfigForm(Long, Long,
+	 *   boolean, Integer)}). {@code null} thì đọc từ DB như trước.
+	 */
+	private List<FormatRaceToRule> filterRealizedRaceToRules(Tournament tournament, List<FormatRaceToRule> formatRules,
+			Integer sePhaseSizeOverride) {
 		if (!"DOUBLE_ELIMINATION".equals(tournament.getFormat())) {
 			return formatRules;
 		}
@@ -1378,16 +1412,17 @@ public class OwnerTournamentServiceImpl implements OwnerTournamentService {
 		if (participantCount <= 0) {
 			participantCount = tournament.getMaxParticipants() != null ? tournament.getMaxParticipants() : 8;
 		}
-		int sePhaseSize = configValueService.getByTournamentAndField(tournament.getId(), "se_phase_size")
-				.map(TournamentConfigValue::getValue)
-				.map(v -> {
-					try {
-						return Integer.parseInt(v);
-					} catch (NumberFormatException e) {
-						return 8;
-					}
-				})
-				.orElse(8);
+		int sePhaseSize = sePhaseSizeOverride != null ? sePhaseSizeOverride
+				: configValueService.getByTournamentAndField(tournament.getId(), "se_phase_size")
+						.map(TournamentConfigValue::getValue)
+						.map(v -> {
+							try {
+								return Integer.parseInt(v);
+							} catch (NumberFormatException e) {
+								return 8;
+							}
+						})
+						.orElse(8);
 		Set<String> realized = DoubleEliminationBracketMath.realizedRoundKeys(participantCount, sePhaseSize);
 		return formatRules.stream().filter(r -> realized.contains(r.getRoundKey())).toList();
 	}

@@ -20,5 +20,13 @@ public interface FacebookPostRepository extends JpaRepository<FacebookPost, Long
 	@EntityGraph(attributePaths = { "tournament" })
 	Page<FacebookPost> findAllByOrderByPostedAtDesc(Pageable pageable);
 
+	/**
+	 * Danh sách bài đăng giới hạn theo chi nhánh actor được cấp quyền — bài không gắn giải
+	 * (tournament null) không có tín hiệu chi nhánh nào để lọc nên vẫn hiện cho mọi Owner/Manager.
+	 */
+	@EntityGraph(attributePaths = { "tournament" })
+	Page<FacebookPost> findByTournament_Branch_IdInOrTournamentIsNullOrderByPostedAtDesc(
+			List<Long> branchIds, Pageable pageable);
+
 	Optional<FacebookPost> findByFacebookPostId(String facebookPostId);
 }

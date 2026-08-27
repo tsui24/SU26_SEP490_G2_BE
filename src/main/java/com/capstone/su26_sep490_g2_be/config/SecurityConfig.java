@@ -41,6 +41,10 @@ public class SecurityConfig {
 						.requestMatchers("/api/v1/profile/**").authenticated()
 
 						// Shared endpoints (Owner + Manager)
+						// Token của Facebook Page dùng chung cho toàn chuỗi — Manager sửa được thì có
+						// thể phá vỡ/chiếm quyền đăng bài của mọi chi nhánh khác, nên khoá riêng về OWNER,
+						// phải khai TRƯỚC rule /shared/facebook/** rộng hơn để có hiệu lực (match đầu tiên thắng).
+						.requestMatchers("/api/v1/shared/facebook/token/**").hasRole("OWNER")
 						.requestMatchers("/api/v1/shared/facebook/**").hasAnyRole("OWNER", "MANAGER")
 						.requestMatchers("/api/v1/shared/news/**").hasAnyRole("OWNER", "MANAGER")
 

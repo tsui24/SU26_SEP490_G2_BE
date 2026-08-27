@@ -7,6 +7,7 @@ import com.capstone.su26_sep490_g2_be.enums.BranchStatus;
 import com.capstone.su26_sep490_g2_be.enums.RoleCode;
 import com.capstone.su26_sep490_g2_be.enums.UserStatus;
 import com.capstone.su26_sep490_g2_be.repository.*;
+import com.capstone.su26_sep490_g2_be.service.MatchService;
 import com.capstone.su26_sep490_g2_be.util.JsonParseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -108,6 +109,7 @@ public class DataInitializer implements CommandLineRunner {
 	private final BranchRepository branchRepository;
 	private final BranchManagerRepository branchManagerRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final MatchService matchService;
 
 	@Override
 	@Transactional
@@ -126,6 +128,7 @@ public class DataInitializer implements CommandLineRunner {
 		seedBranches();
 		seedRegistrationFieldCatalog();
 		seedRegistrationFormTemplates();
+		matchService.reconcileDeadLoserSlots();
 
 		log.info("DataInitializer completed — roles, catalog, accounts, branches, registration templates");
 	}
@@ -187,15 +190,29 @@ public class DataInitializer implements CommandLineRunner {
 		if (relabeled > 0) log.info("Relabeled config_field_definitions: {} rows", relabeled);
 	}
 
+	/**
+	 * Sửa lại `sortOrder` cho hàng ĐÃ có sẵn ngoài việc chèn hàng mới — trước đây chỉ insert-if-missing
+	 * nên môi trường đã seed từ trước (VD prod) giữ nguyên `sortOrder=0` cho mọi hàng mãi mãi dù
+	 * sửa lại `DatabaseSeedData`, vì code chỉ chạy qua nhánh insert khi hàng chưa tồn tại. Đây là
+	 * field duy nhất được đồng bộ lại — không đụng name/description vì Admin có thể đã tự sửa qua
+	 * `AdminGameTypeController`, còn `sortOrder` thì chưa có màn nào cho sửa cả.
+	 */
 	private void seedGameTypes() {
 		int seeded = 0;
+		int resorted = 0;
 		for (GameTypeDefinition gameType : DatabaseSeedData.gameTypes()) {
-			if (!gameTypeRepository.existsById(gameType.getCode())) {
+			GameTypeDefinition existing = gameTypeRepository.findById(gameType.getCode()).orElse(null);
+			if (existing == null) {
 				gameTypeRepository.save(gameType);
 				seeded++;
+			} else if (!gameType.getSortOrder().equals(existing.getSortOrder())) {
+				existing.setSortOrder(gameType.getSortOrder());
+				gameTypeRepository.save(existing);
+				resorted++;
 			}
 		}
 		if (seeded > 0) log.info("Seeded game_type_definitions: {} rows", seeded);
+		if (resorted > 0) log.info("Re-sorted game_type_definitions: {} rows", resorted);
 	}
 
 	private void seedTournamentFormats() {
@@ -244,6 +261,32 @@ public class DataInitializer implements CommandLineRunner {
 			seeded++;
 		}
 		if (seeded > 0) log.info("Seeded format_race_to_rules: {} rows", seeded);
+		relabelWinnersLosersRaceToRules();
+	}
+
+	/**
+	 * Chỉ đổi nhãn "Tứ kết/Bán kết/Chung kết nhánh" cũ của NT/NTh (WINNERS/LOSERS) sang "Vòng N" —
+	 * seedFormatRaceToRules() ở trên chỉ insert-nếu-chưa-có nên 4 dòng này đã tồn tại sẵn trên DB
+	 * đã deploy, sửa lại DatabaseSeedData không tự áp dụng lại được. Chỉ đổi khi label HIỆN TẠI
+	 * đúng bằng nhãn cũ (không đổi hàng loạt theo roundKey) để không đè mất label Admin đã tự tay
+	 * sửa thành thứ khác qua màn "Sửa thể thức giải".
+	 */
+	private void relabelWinnersLosersRaceToRules() {
+		Map<String, String> oldToNew = Map.of(
+				"NT — Tứ kết", "NT — Vòng 2",
+				"NT — Bán kết", "NT — Vòng 3",
+				"NT — Chung kết nhánh", "NT — Vòng 4",
+				"NTh — Chung kết nhánh", "NTh — Vòng 4");
+		int relabeled = 0;
+		for (FormatRaceToRule rule : formatRaceToRuleRepository.findByFormatCodeOrderByIdAsc("DOUBLE_ELIMINATION")) {
+			String newLabel = oldToNew.get(rule.getLabel());
+			if (newLabel != null) {
+				rule.setLabel(newLabel);
+				formatRaceToRuleRepository.save(rule);
+				relabeled++;
+			}
+		}
+		if (relabeled > 0) log.info("Relabeled format_race_to_rules (WINNERS/LOSERS, dropped tứ/bán/chung kết wording): {} rows", relabeled);
 	}
 
 	private void cleanupRemovedConfigFields() {
@@ -433,11 +476,26 @@ public class DataInitializer implements CommandLineRunner {
 		User owner = userRepository.findByEmail("owner@gmail.com").orElse(null);
 		if (owner == null) return;
 
-		Branch branch1 = seedBranch(owner,
+		// CN Thủ Đức (TP.HCM) đổi thành CN Đống Đa (Hà Nội) — cả 2 chi nhánh giờ đều ở Hà Nội. Đổi
+		// tên trực tiếp thì seedBranch() bên dưới (khớp theo NAME) sẽ không nhận ra chi nhánh cũ, tạo
+		// thêm 1 hàng mới thay vì sửa hàng đã deploy — migrateBranchIfRenamed() sửa tại chỗ theo tên
+		// cũ trước, để lần chạy tiếp theo mới khớp đúng tên mới.
+		migrateBranchIfRenamed(owner,
 				"Golden Break Billiards — CN Thủ Đức",
-				"Số 68 Đường Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP. Hồ Chí Minh",
-				"028 3722 5588",
-				"Chi nhánh trung tâm của hệ thống Golden Break Billiards tại TP.HCM — 12 bàn Pool "
+				"Golden Break Billiards — CN Đống Đa",
+				"Số 25 Phố Tây Sơn, Phường Quang Trung, Quận Đống Đa, TP. Hà Nội",
+				"024 3851 2299",
+				"Chi nhánh trung tâm của hệ thống Golden Break Billiards tại Hà Nội — 12 bàn Pool "
+						+ "thi đấu chuẩn Rasson/Diamond, hệ thống đèn LED chuyên dụng cho truyền hình trực "
+						+ "tiếp, khu khán đài 80 chỗ và màn hình lớn phục vụ các giải đấu quy mô CLB/liên CLB. "
+						+ "Mở cửa 08:00 – 24:00 tất cả các ngày trong tuần, có bãi giữ xe riêng và quầy "
+						+ "phục vụ đồ uống.");
+
+		Branch branch1 = seedBranch(owner,
+				"Golden Break Billiards — CN Đống Đa",
+				"Số 25 Phố Tây Sơn, Phường Quang Trung, Quận Đống Đa, TP. Hà Nội",
+				"024 3851 2299",
+				"Chi nhánh trung tâm của hệ thống Golden Break Billiards tại Hà Nội — 12 bàn Pool "
 						+ "thi đấu chuẩn Rasson/Diamond, hệ thống đèn LED chuyên dụng cho truyền hình trực "
 						+ "tiếp, khu khán đài 80 chỗ và màn hình lớn phục vụ các giải đấu quy mô CLB/liên CLB. "
 						+ "Mở cửa 08:00 – 24:00 tất cả các ngày trong tuần, có bãi giữ xe riêng và quầy "
@@ -469,6 +527,31 @@ public class DataInitializer implements CommandLineRunner {
 			staff.setBranch(branch);
 			userRepository.save(staff);
 		}
+	}
+
+	/**
+	 * Đổi tên/địa chỉ 1 chi nhánh ĐÃ deploy — {@code seedBranch()} bên dưới chỉ insert-nếu-chưa-có
+	 * (khớp theo NAME), nên chỉ sửa tên trong code không tự áp dụng lại được cho DB đã seed từ
+	 * trước; không có bước này, DB cũ giữ nguyên chi nhánh tên cũ VÀ có thêm 1 chi nhánh tên mới —
+	 * trùng lặp thay vì đổi tại chỗ. Không làm gì nếu chi nhánh tên cũ không còn tồn tại (đã đổi ở
+	 * lần chạy trước, hoặc DB mới tinh chưa từng có).
+	 */
+	private void migrateBranchIfRenamed(User owner, String oldName, String newName,
+			String newAddress, String newPhone, String newDescription) {
+		branchRepository.findByOwnerId(owner.getId()).stream()
+				.filter(b -> oldName.equals(b.getName()))
+				.findFirst()
+				.ifPresent(b -> {
+					b.setName(newName);
+					b.setAddress(newAddress);
+					b.setPhone(newPhone);
+					b.setDescription(newDescription);
+					b.setImageKeys(JsonParseUtil.toJson(List.of(
+							SeedImages.branchImageKey(newName, 0),
+							SeedImages.branchImageKey(newName, 1))));
+					branchRepository.save(b);
+					log.info("Migrated branch '{}' -> '{}'", oldName, newName);
+				});
 	}
 
 	private Branch seedBranch(User owner, String name, String address, String phone, String description) {

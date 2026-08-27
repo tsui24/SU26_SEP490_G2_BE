@@ -56,9 +56,9 @@ public class DatabaseSeedData {
 
 	public static List<GameTypeDefinition> gameTypes() {
 		return List.of(
-				gameType("9_BALL", "9-Ball (Bida lỗ 9 bi)", "Race-to, alternate break.", 7, "[\"POOL\"]"),
-				gameType("8_BALL", "8-Ball (Bida lỗ 8 bi)", "Race-to phổ biến quán pool.", 5, "[\"POOL\"]"),
-				gameType("10_BALL", "10-Ball (Bida lỗ 10 bi)", "Race-to, luật WPA.", 7, "[\"POOL\"]")
+				gameType("8_BALL", "8-Ball (Bida lỗ 8 bi)", "Race-to phổ biến quán pool.", 5, "[\"POOL\"]", 1),
+				gameType("9_BALL", "9-Ball (Bida lỗ 9 bi)", "Race-to, alternate break.", 7, "[\"POOL\"]", 2),
+				gameType("10_BALL", "10-Ball (Bida lỗ 10 bi)", "Race-to, luật WPA.", 7, "[\"POOL\"]", 3)
 		);
 	}
 
@@ -114,14 +114,23 @@ public class DatabaseSeedData {
 				// DOUBLE_ELIMINATION (13) — winners_r1/qf/sf/final và losers_r1/r2/r3/final dùng
 				// chung cho cả FULL_DE lẫn CUT_TO_SE (xem resolveWinnersRoundKey/resolveLosersRoundKey
 				// trong BracketGenerationServiceImpl); se_* dành riêng cho bracket Last-X của CUT_TO_SE.
+				//
+				// Nhãn NT/NTh (WINNERS/LOSERS) CỐ TÌNH không dùng chữ "Tứ kết/Bán kết/Chung kết" — 2
+				// nhánh này ở chế độ CUT_TO_SE không bao giờ tự kết thúc bằng 1 trận chung kết thật,
+				// chúng chỉ bị cắt ngang rồi gộp vào Last-X (bracket FINAL_BRACKET mới thật sự có
+				// tứ/bán/chung kết). Trước đây nhãn NT/NTh vẫn ghi "Tứ kết"/"Bán kết"/"Chung kết
+				// nhánh" — cùng đúng lỗi đã sửa ở màn hiển thị bracket public/owner
+				// (MatchesTab.jsx/BracketDiagram.jsx) nhưng lại nằm ở một nguồn khác (label lưu cứng
+				// trong DB) nên sửa chỗ kia không kéo theo chỗ này — Owner vẫn thấy "NT — Bán kết" ở
+				// màn cấu hình dù bracket thật không có bán kết nào của riêng Nhánh Thắng cả.
 				raceTo("DOUBLE_ELIMINATION", "winners_r1", "NT — Vòng 1", "WINNERS", 5),
-				raceTo("DOUBLE_ELIMINATION", "winners_qf", "NT — Tứ kết", "WINNERS", 7),
-				raceTo("DOUBLE_ELIMINATION", "winners_sf", "NT — Bán kết", "WINNERS", 7),
-				raceTo("DOUBLE_ELIMINATION", "winners_final", "NT — Chung kết nhánh", "WINNERS", 9),
+				raceTo("DOUBLE_ELIMINATION", "winners_qf", "NT — Vòng 2", "WINNERS", 7),
+				raceTo("DOUBLE_ELIMINATION", "winners_sf", "NT — Vòng 3", "WINNERS", 7),
+				raceTo("DOUBLE_ELIMINATION", "winners_final", "NT — Vòng 4", "WINNERS", 9),
 				raceTo("DOUBLE_ELIMINATION", "losers_r1", "NTh — Vòng 1", "LOSERS", 5),
 				raceTo("DOUBLE_ELIMINATION", "losers_r2", "NTh — Vòng 2", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "losers_r3", "NTh — Vòng 3", "LOSERS", 7),
-				raceTo("DOUBLE_ELIMINATION", "losers_final", "NTh — Chung kết nhánh", "LOSERS", 7),
+				raceTo("DOUBLE_ELIMINATION", "losers_final", "NTh — Vòng 4", "LOSERS", 7),
 				raceTo("DOUBLE_ELIMINATION", "grand_final", "Chung kết lớn", "GRAND_FINAL", 9),
 				raceTo("DOUBLE_ELIMINATION", "se_round_1", "Last X — Vòng đầu", "FINAL_BRACKET", 5),
 				raceTo("DOUBLE_ELIMINATION", "se_quarter_final", "Last X — Tứ kết", "FINAL_BRACKET", 7),
@@ -167,7 +176,7 @@ public class DatabaseSeedData {
 	}
 
 	private static GameTypeDefinition gameType(
-			String code, String name, String description, int defaultRaceTo, String tableTypes) {
+			String code, String name, String description, int defaultRaceTo, String tableTypes, int sortOrder) {
 		return GameTypeDefinition.builder()
 				.code(code)
 				.name(name)
@@ -175,6 +184,7 @@ public class DatabaseSeedData {
 				.defaultRaceTo(defaultRaceTo)
 				.compatibleTableTypes(tableTypes)
 				.isActive(true)
+				.sortOrder(sortOrder)
 				.build();
 	}
 

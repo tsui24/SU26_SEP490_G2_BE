@@ -42,4 +42,13 @@ public interface MatchService {
     Match walkover(Long matchId, Long winnerParticipantId, Long updatedByUserId);
 
     List<MatchScoreEvent> getScoreEvents(Long matchId);
+
+    /**
+     * Quét toàn hệ thống, tự xử thắng cho các trận L-R1 (Nhánh Thua vòng 1) đang kẹt vì ô còn lại
+     * không bao giờ có người (do trận W-R1 song hành là BYE — xem
+     * {@code autoResolveIfOtherLoserSlotIsDead}). Chỉ ảnh hưởng dữ liệu đã sinh TRƯỚC khi fix này
+     * tồn tại; trận hoàn thành sau khi có fix đã tự chạy đúng qua {@link #completeMatch}/{@link #walkover}.
+     * Chạy 1 lần lúc khởi động app — gọi từ {@code DataInitializer}.
+     */
+    void reconcileDeadLoserSlots();
 }

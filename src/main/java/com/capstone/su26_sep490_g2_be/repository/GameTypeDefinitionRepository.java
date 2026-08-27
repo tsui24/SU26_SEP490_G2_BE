@@ -9,7 +9,7 @@ import java.util.List;
 public interface GameTypeDefinitionRepository extends JpaRepository<GameTypeDefinition, String>,
 		JpaSpecificationExecutor<GameTypeDefinition> {
 
-	List<GameTypeDefinition> findByIsActiveTrueOrderByCreatedAtAsc();
+	List<GameTypeDefinition> findByIsActiveTrueOrderBySortOrderAscCreatedAtAsc();
 
-	List<GameTypeDefinition> findAllByOrderByCreatedAtAsc();
+	List<GameTypeDefinition> findAllByOrderBySortOrderAscCreatedAtAsc();
 }

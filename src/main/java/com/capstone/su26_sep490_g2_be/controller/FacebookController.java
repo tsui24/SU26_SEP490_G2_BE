@@ -2,12 +2,17 @@ package com.capstone.su26_sep490_g2_be.controller;
 
 import com.capstone.su26_sep490_g2_be.config.MailProperties;
 import com.capstone.su26_sep490_g2_be.dto.response.ApiResponse;
+import com.capstone.su26_sep490_g2_be.entity.Branch;
 import com.capstone.su26_sep490_g2_be.entity.FacebookPost;
 import com.capstone.su26_sep490_g2_be.entity.Tournament;
 import com.capstone.su26_sep490_g2_be.entity.User;
+import com.capstone.su26_sep490_g2_be.enums.ErrorCode;
+import com.capstone.su26_sep490_g2_be.exception.BusinessException;
+import com.capstone.su26_sep490_g2_be.repository.BranchRepository;
 import com.capstone.su26_sep490_g2_be.repository.FacebookPostRepository;
 import com.capstone.su26_sep490_g2_be.repository.TournamentRepository;
 import com.capstone.su26_sep490_g2_be.repository.UserRepository;
+import com.capstone.su26_sep490_g2_be.service.BranchAccessService;
 import com.capstone.su26_sep490_g2_be.service.FacebookInsightsService;
 import com.capstone.su26_sep490_g2_be.service.FacebookPublishService;
 import com.capstone.su26_sep490_g2_be.service.impl.FacebookTokenManager;
@@ -21,8 +26,7 @@ import lombok.Setter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,21 +48,24 @@ public class FacebookController {
 	private final TournamentRepository tournamentRepository;
 	private final UserRepository userRepository;
 	private final MailProperties mailProperties;
+	private final BranchAccessService branchAccessService;
+	private final BranchRepository branchRepository;
 
 	// ─── Publish endpoints ──────────────────────────────────────────────
 
 	@PostMapping("/post/text")
 	@Operation(summary = "Đăng bài text / link lên Facebook Page")
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishTextPost(
-			@AuthenticationPrincipal UserDetails principal,
+			Authentication authentication,
 			@Valid @RequestBody TextPostRequest request) {
+		assertTournamentAccess(resolveActor(authentication), request.getTournamentId());
 		String tournamentUrl = tournamentPublicUrl(request.getTournamentId());
 		String message = appendTournamentLink(request.getMessage(), tournamentUrl);
 		String link = (request.getLink() != null && !request.getLink().isBlank())
 				? request.getLink()
 				: tournamentUrl;
 		String postId = facebookPublishService.publishTextPost(message, link);
-		savePost(postId, message, "TEXT", request.getTournamentId(), principal);
+		savePost(postId, message, "TEXT", request.getTournamentId(), authentication);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -66,11 +73,12 @@ public class FacebookController {
 	@PostMapping("/post/photo")
 	@Operation(summary = "Đăng bài kèm 1 ảnh (URL) lên Facebook Page")
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishPhotoPost(
-			@AuthenticationPrincipal UserDetails principal,
+			Authentication authentication,
 			@Valid @RequestBody PhotoPostRequest request) {
+		assertTournamentAccess(resolveActor(authentication), request.getTournamentId());
 		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
 		String postId = facebookPublishService.publishPhotoPost(message, request.getImageUrl());
-		savePost(postId, message, "PHOTO", request.getTournamentId(), principal);
+		savePost(postId, message, "PHOTO", request.getTournamentId(), authentication);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (có ảnh) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -78,11 +86,12 @@ public class FacebookController {
 	@PostMapping("/post/photos")
 	@Operation(summary = "Đăng bài kèm nhiều ảnh (URL) lên Facebook Page")
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishMultiPhotoPost(
-			@AuthenticationPrincipal UserDetails principal,
+			Authentication authentication,
 			@Valid @RequestBody MultiPhotoPostRequest request) {
+		assertTournamentAccess(resolveActor(authentication), request.getTournamentId());
 		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
 		String postId = facebookPublishService.publishMultiPhotoPost(message, request.getImageUrls());
-		savePost(postId, message, "MULTI_PHOTO", request.getTournamentId(), principal);
+		savePost(postId, message, "MULTI_PHOTO", request.getTournamentId(), authentication);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (nhiều ảnh) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -90,12 +99,13 @@ public class FacebookController {
 	@PostMapping("/post/minio-photo")
 	@Operation(summary = "Đăng bài kèm 1 ảnh từ MinIO (BE upload binary)")
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishMinioPhoto(
-			@AuthenticationPrincipal UserDetails principal,
+			Authentication authentication,
 			@Valid @RequestBody MinioPhotoPostRequest request) {
+		assertTournamentAccess(resolveActor(authentication), request.getTournamentId());
 		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
 		String postId = facebookPublishService.publishPhotoFromMinio(
 				message, request.getMinioObjectKey());
-		savePost(postId, message, "PHOTO", request.getTournamentId(), principal);
+		savePost(postId, message, "PHOTO", request.getTournamentId(), authentication);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (ảnh MinIO) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -103,12 +113,13 @@ public class FacebookController {
 	@PostMapping("/post/minio-photos")
 	@Operation(summary = "Đăng bài kèm nhiều ảnh từ MinIO (BE upload binary)")
 	public ResponseEntity<ApiResponse<Map<String, String>>> publishMinioPhotos(
-			@AuthenticationPrincipal UserDetails principal,
+			Authentication authentication,
 			@Valid @RequestBody MinioMultiPhotoPostRequest request) {
+		assertTournamentAccess(resolveActor(authentication), request.getTournamentId());
 		String message = appendTournamentLink(request.getMessage(), tournamentPublicUrl(request.getTournamentId()));
 		String postId = facebookPublishService.publishMultiPhotoFromMinio(
 				message, request.getMinioObjectKeys());
-		savePost(postId, message, "MULTI_PHOTO", request.getTournamentId(), principal);
+		savePost(postId, message, "MULTI_PHOTO", request.getTournamentId(), authentication);
 		return ResponseEntity.ok(ApiResponse.success("Đăng bài Facebook (nhiều ảnh MinIO) thành công",
 				Map.of("facebookPostId", postId)));
 	}
@@ -119,10 +130,12 @@ public class FacebookController {
 	@Operation(summary = "Danh sách bài đã đăng (phân trang)")
 	@Transactional(readOnly = true)
 	public ResponseEntity<ApiResponse<Page<Map<String, Object>>>> listPosts(
+			Authentication authentication,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size) {
+		List<Long> branchIds = resolveAccessibleBranchIds(resolveActor(authentication));
 		Page<Map<String, Object>> result = facebookPostRepository
-				.findAllByOrderByPostedAtDesc(PageRequest.of(page, size))
+				.findByTournament_Branch_IdInOrTournamentIsNullOrderByPostedAtDesc(branchIds, PageRequest.of(page, size))
 				.map(this::toPostSummary);
 		return ResponseEntity.ok(ApiResponse.success(result));
 	}
@@ -131,7 +144,9 @@ public class FacebookController {
 	@Operation(summary = "Danh sách bài đã đăng cho 1 giải đấu")
 	@Transactional(readOnly = true)
 	public ResponseEntity<ApiResponse<List<Map<String, Object>>>> listPostsByTournament(
+			Authentication authentication,
 			@PathVariable Long tournamentId) {
+		assertTournamentAccess(resolveActor(authentication), tournamentId);
 		List<Map<String, Object>> result = facebookPostRepository
 				.findByTournamentIdOrderByPostedAtDesc(tournamentId)
 				.stream().map(this::toPostSummary).toList();
@@ -142,9 +157,11 @@ public class FacebookController {
 	@Operation(summary = "Chi tiết 1 bài đăng trong hệ thống (full content)")
 	@Transactional(readOnly = true)
 	public ResponseEntity<ApiResponse<Map<String, Object>>> getPost(
+			Authentication authentication,
 			@PathVariable Long postRecordId) {
 		FacebookPost record = facebookPostRepository.findById(postRecordId)
 				.orElseThrow(() -> new RuntimeException("Bài đăng không tồn tại trong hệ thống"));
+		assertPostAccess(resolveActor(authentication), record);
 		return ResponseEntity.ok(ApiResponse.success(toPostDetail(record)));
 	}
 
@@ -152,10 +169,12 @@ public class FacebookController {
 	@Operation(summary = "Lấy lượt tương tác — mặc định từ cache DB; refresh=true để gọi Facebook")
 	@Transactional
 	public ResponseEntity<ApiResponse<Map<String, Object>>> getEngagement(
+			Authentication authentication,
 			@PathVariable Long postRecordId,
 			@RequestParam(defaultValue = "false") boolean refresh) {
 		FacebookPost record = facebookPostRepository.findById(postRecordId)
 				.orElseThrow(() -> new RuntimeException("Bài đăng không tồn tại trong hệ thống"));
+		assertPostAccess(resolveActor(authentication), record);
 
 		if (!refresh && record.getStatsSyncedAt() != null) {
 			return ResponseEntity.ok(ApiResponse.success(cachedEngagement(record)));
@@ -173,10 +192,12 @@ public class FacebookController {
 	@Operation(summary = "Lấy insights — mặc định từ cache nếu có; refresh=true để gọi Facebook")
 	@Transactional
 	public ResponseEntity<ApiResponse<Map<String, Object>>> getInsights(
+			Authentication authentication,
 			@PathVariable Long postRecordId,
 			@RequestParam(defaultValue = "false") boolean refresh) {
 		FacebookPost record = facebookPostRepository.findById(postRecordId)
 				.orElseThrow(() -> new RuntimeException("Bài đăng không tồn tại trong hệ thống"));
+		assertPostAccess(resolveActor(authentication), record);
 
 		Map<String, Object> response = new LinkedHashMap<>(toPostDetail(record));
 
@@ -231,6 +252,60 @@ public class FacebookController {
 		return mailProperties.tournamentPublicUrl(tournamentId);
 	}
 
+	/**
+	 * {@code JwtAuthenticationFilter} gán {@code principal = email} (String) và
+	 * {@code credentials = userId} (Long) — KHÔNG phải {@code UserDetails}, nên
+	 * {@code @AuthenticationPrincipal UserDetails} không bao giờ bind được ở đây (âm thầm null,
+	 * Spring không ném lỗi vì kiểu không khớp). Lấy userId thẳng từ credentials, đúng cách mọi
+	 * controller khác trong hệ thống đang làm (VD {@code extractUserId(Authentication)}).
+	 */
+	private User resolveActor(Authentication authentication) {
+		if (authentication == null || !(authentication.getCredentials() instanceof Long userId)) {
+			throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+		}
+		return userRepository.findById(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.AUTH_USER_NOT_FOUND));
+	}
+
+	/**
+	 * Bài đăng gắn với 1 giải cụ thể chỉ được xem/tạo bởi actor có quyền trên chi nhánh của giải đó
+	 * — cùng logic {@code canActorAccessBranch} dùng khắp hệ thống (Owner theo chuỗi sở hữu, Manager
+	 * theo chi nhánh được cấp quyền). Không truyền tournamentId (bài đăng chung, không gắn giải) thì
+	 * bỏ qua vì không có tín hiệu chi nhánh nào để kiểm tra.
+	 */
+	private void assertTournamentAccess(User actor, Long tournamentId) {
+		if (tournamentId == null) {
+			return;
+		}
+		Tournament tournament = tournamentRepository.findById(tournamentId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+		Branch branch = tournament.getBranch();
+		Long branchId = branch != null ? branch.getId() : null;
+		if (!branchAccessService.canActorAccessBranch(actor, branchId)) {
+			throw new BusinessException(ErrorCode.BRANCH_ACCESS_DENIED);
+		}
+	}
+
+	private void assertPostAccess(User actor, FacebookPost record) {
+		Tournament tournament = record.getTournament();
+		if (tournament == null) {
+			return;
+		}
+		assertTournamentAccess(actor, tournament.getId());
+	}
+
+	/** Owner thấy (các) chi nhánh mình sở hữu; Manager thấy (các) chi nhánh được cấp quyền. */
+	private List<Long> resolveAccessibleBranchIds(User actor) {
+		String roleCode = actor.getRole().getCode();
+		if ("OWNER".equals(roleCode)) {
+			return branchRepository.findByOwnerId(actor.getId()).stream().map(Branch::getId).toList();
+		}
+		if ("MANAGER".equals(roleCode)) {
+			return branchAccessService.getAccessibleBranchIds(actor);
+		}
+		throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+	}
+
 	/** Gắn URL trang giải vào nội dung nếu bài gắn tournament và chưa có sẵn link đó. */
 	private String appendTournamentLink(String message, String tournamentUrl) {
 		if (tournamentUrl == null || tournamentUrl.isBlank()) {
@@ -243,8 +318,12 @@ public class FacebookController {
 		return body + "\n\n🔗 Xem thông tin giải đấu:\n" + tournamentUrl;
 	}
 
+	/**
+	 * `postedBy` trước đây KHÔNG BAO GIỜ được ghi — cùng nguyên nhân ở {@link #resolveActor}:
+	 * `principal` (UserDetails) luôn null nên nhánh gán postedBy luôn bị bỏ qua trong im lặng.
+	 */
 	private void savePost(String facebookPostId, String content, String postType,
-			Long tournamentId, UserDetails principal) {
+			Long tournamentId, Authentication authentication) {
 		FacebookPost post = FacebookPost.builder()
 				.facebookPostId(facebookPostId)
 				.content(content)
@@ -255,8 +334,8 @@ public class FacebookController {
 		if (tournamentId != null) {
 			tournamentRepository.findById(tournamentId).ifPresent(post::setTournament);
 		}
-		if (principal != null) {
-			userRepository.findByEmail(principal.getUsername()).ifPresent(post::setPostedBy);
+		if (authentication != null && authentication.getCredentials() instanceof Long userId) {
+			userRepository.findById(userId).ifPresent(post::setPostedBy);
 		}
 
 		facebookPostRepository.save(post);

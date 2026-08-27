@@ -36,6 +36,17 @@ public interface OwnerTournamentService {
 
 	TournamentConfigFormResponse getConfigForm(Long userId, Long tournamentId, boolean enforceOwnership);
 
+	/**
+	 * {@code sePhaseSizePreview} (DOUBLE_ELIMINATION) — ghi đè tạm thời giá trị {@code se_phase_size}
+	 * ĐÃ LƯU khi lọc "Số ván thắng theo vòng đấu" chỉ còn đúng vòng giải thật sự đấu. Cho phép Owner
+	 * xem trước danh sách vòng đổi ngay khi gõ số vào ô "Số người vào vòng loại trực tiếp" ở wizard
+	 * bước 2, mà KHÔNG cần lưu config trước — trước đây danh sách chỉ đổi sau khi bấm lưu, vì
+	 * {@code getConfigForm} chỉ đọc được giá trị đã lưu trong DB. {@code null} = dùng giá trị đã lưu
+	 * (hoặc mặc định 8) như cũ.
+	 */
+	TournamentConfigFormResponse getConfigForm(Long userId, Long tournamentId, boolean enforceOwnership,
+			Integer sePhaseSizePreview);
+
 	SaveTournamentConfigResponse saveConfig(Long userId, Long tournamentId, SaveTournamentConfigRequest request,
 	                                        boolean enforceOwnership);
 

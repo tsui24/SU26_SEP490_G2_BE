@@ -9,8 +9,14 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface MatchRepository extends JpaRepository<Match, Long> {
+
+	Optional<Match> findByTournamentIdAndBracketTypeAndRoundNoAndPositionNo(
+			Long tournamentId, String bracketType, Integer roundNo, Integer positionNo);
+
+	List<Match> findByBracketTypeAndRoundNoAndIsBye(String bracketType, Integer roundNo, Boolean isBye);
 
 	@Query("""
 		SELECT m FROM Match m

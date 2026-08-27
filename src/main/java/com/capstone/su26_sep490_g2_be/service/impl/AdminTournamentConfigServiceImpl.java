@@ -39,13 +39,19 @@ public class AdminTournamentConfigServiceImpl implements AdminTournamentConfigSe
 	private final TournamentRepository tournamentRepository;
 
 	private static final List<String> FORMAT_EDIT_ALLOWED_STATUSES = List.of(
-			TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue());
+			TournamentStatus.DRAFT.getValue(), TournamentStatus.CANCELLED.getValue(),
+			TournamentStatus.COMPLETED.getValue());
 
 	/**
 	 * Chặn sửa default config-field/race-to của 1 format nếu đang có giải đấu dùng format đó mà
-	 * chưa DRAFT/CANCELLED — nếu không, giải đang chạy dở sẽ âm thầm đổi cấu hình giữa chừng vì mọi
-	 * field/race-to không có override riêng đều resolve về default hiện tại của format (xem
-	 * {@code OwnerTournamentServiceImpl#resolveFieldValue}, {@code TournamentRaceToRuleServiceImpl#resolveRaceTo}).
+	 * còn "sống" (đã publish nhưng chưa COMPLETED/CANCELLED) — nếu không, giải đang chạy dở sẽ âm
+	 * thầm đổi cấu hình giữa chừng vì mọi field/race-to không có override riêng đều resolve về
+	 * default hiện tại của format (xem {@code OwnerTournamentServiceImpl#resolveFieldValue},
+	 * {@code TournamentRaceToRuleServiceImpl#resolveRaceTo}).
+	 *
+	 * COMPLETED được coi là an toàn để sửa tiếp: race-to của từng trận đã được chụp (snapshot)
+	 * thẳng vào cột {@code Match.raceTo} ngay lúc bốc thăm, không tra lại default khi hiển thị —
+	 * nên đổi default sau khi giải đã hoàn thành không làm sai lệch dữ liệu/kết quả của giải đó.
 	 */
 	private void assertFormatNotInUse(String formatCode) {
 		if (tournamentRepository.existsByFormatAndStatusNotIn(formatCode, FORMAT_EDIT_ALLOWED_STATUSES)) {

@@ -611,11 +611,12 @@ public class MatchServiceImpl implements MatchService {
         }
         // Advance loser (Double Elimination)
         if (match.getNextMatchLose() != null && loser != null) {
-            placeInNextMatch(match.getNextMatchLose(), match.getLoseSlot(), loser);
+            Match lMatch = placeInNextMatch(match.getNextMatchLose(), match.getLoseSlot(), loser);
+            autoResolveIfOtherLoserSlotIsDead(lMatch);
         }
     }
 
-    private void placeInNextMatch(Match nextMatch, String slot, Participant participant) {
+    private Match placeInNextMatch(Match nextMatch, String slot, Participant participant) {
         Match m = matchRepository.findById(nextMatch.getId()).orElse(nextMatch);
         if ("player1".equals(slot)) {
             m.setPlayer1(participant);
@@ -625,6 +626,70 @@ public class MatchServiceImpl implements MatchService {
         // If both players assigned and both are BYE-less, match is ready
         matchRepository.save(m);
         log.info("Placed {} into match {} slot {}", participant.getDisplayName(), m.getId(), slot);
+        return m;
+    }
+
+    /**
+     * L-R1 (Nhánh Thua vòng 1) ghép loser của 2 trận W-R1 liền kề (position 2k-1, 2k) — xem
+     * {@code BracketGenerationServiceImpl#wireWtoL}. Nếu MỘT trong 2 trận W-R1 đó là BYE (không ai
+     * thua thật), {@code wireWtoL} cố ý KHÔNG nối dây từ trận đó xuống — nên ô L-R1 tương ứng
+     * KHÔNG BAO GIỜ có người thứ 2. Không tự xử thắng người vừa rớt xuống thì họ kẹt vĩnh viễn ở
+     * "Chờ" cạnh 1 ô trống không ai lấp được (bug quan sát được: giải 12 người/bracketSize 16 có 4
+     * BYE, mọi cặp L-R1 đều dính đúng 1 BYE → cả nhánh Thua đứng hình).
+     *
+     * Chỉ áp dụng cho đúng L-R1 — các vòng L sau nhận người rớt xuống 1-1 (không ghép cặp 2 nguồn),
+     * không rơi vào tình huống này.
+     */
+    private void autoResolveIfOtherLoserSlotIsDead(Match lMatch) {
+        if (lMatch == null || Boolean.TRUE.equals(lMatch.getIsBye())
+                || lMatch.getRoundNo() == null || lMatch.getRoundNo() != 1
+                || !"LOSERS".equals(lMatch.getBracketType())) {
+            return;
+        }
+        if (lMatch.getPlayer1() != null && lMatch.getPlayer2() != null) {
+            return; // Đã đủ 2 người thật — không phải trường hợp này
+        }
+        Participant lonePlayer = lMatch.getPlayer1() != null ? lMatch.getPlayer1() : lMatch.getPlayer2();
+        if (lonePlayer == null) {
+            return;
+        }
+
+        Long tournamentId = lMatch.getTournament().getId();
+        int lPos = lMatch.getPositionNo();
+        boolean w1Bye = matchRepository
+                .findByTournamentIdAndBracketTypeAndRoundNoAndPositionNo(tournamentId, "WINNERS", 1, 2 * lPos - 1)
+                .map(m -> Boolean.TRUE.equals(m.getIsBye())).orElse(false);
+        boolean w2Bye = matchRepository
+                .findByTournamentIdAndBracketTypeAndRoundNoAndPositionNo(tournamentId, "WINNERS", 1, 2 * lPos)
+                .map(m -> Boolean.TRUE.equals(m.getIsBye())).orElse(false);
+        if (w1Bye == w2Bye) {
+            // Cả 2 nguồn đều BYE (không ai từng rớt xuống được, không tới đây) hoặc cả 2 đều thật
+            // (ô còn lại vẫn đang chờ trận thật kia đấu xong, không phải kẹt vĩnh viễn) — bỏ qua.
+            return;
+        }
+
+        lMatch.setIsBye(true);
+        lMatch.setStatus(MatchStatus.BYE.getValue());
+        lMatch.setWinner(lonePlayer);
+        matchRepository.save(lMatch);
+        log.info("Auto-advanced {} past dead L-R1 slot (match {})", lonePlayer.getDisplayName(), lMatch.getId());
+        advanceParticipants(lMatch, lonePlayer, null);
+    }
+
+    @Override
+    @Transactional
+    public void reconcileDeadLoserSlots() {
+        List<Match> candidates = matchRepository.findByBracketTypeAndRoundNoAndIsBye("LOSERS", 1, false);
+        int fixed = 0;
+        for (Match m : candidates) {
+            boolean hasExactlyOnePlayer = (m.getPlayer1() != null) != (m.getPlayer2() != null);
+            if (!hasExactlyOnePlayer) continue;
+            autoResolveIfOtherLoserSlotIsDead(m);
+            if (Boolean.TRUE.equals(m.getIsBye())) fixed++;
+        }
+        if (fixed > 0) {
+            log.info("Reconciled {} dead L-R1 loser slot(s) stuck from before this fix existed", fixed);
+        }
     }
 
     private Participant determineLoser(Match match, Participant winner) {

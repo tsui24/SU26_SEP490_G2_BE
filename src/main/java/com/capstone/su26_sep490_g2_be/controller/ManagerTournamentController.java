@@ -94,9 +94,10 @@ public class ManagerTournamentController {
 	@GetMapping("/tournaments/{id}/config-form")
 	public ResponseEntity<ApiResponse<TournamentConfigFormResponse>> getConfigForm(
 			Authentication authentication,
-			@PathVariable Long id) {
+			@PathVariable Long id,
+			@RequestParam(required = false) Integer sePhaseSizePreview) {
 		return ResponseEntity.ok(ApiResponse.success(
-				ownerTournamentService.getConfigForm(extractUserId(authentication), id, true)));
+				ownerTournamentService.getConfigForm(extractUserId(authentication), id, true, sePhaseSizePreview)));
 	}
 
 	@Operation(summary = "Lưu config giải")
